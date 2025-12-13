@@ -98,7 +98,7 @@
   --secondary-foreground: oklch(0.21 0.006 285.885); /* Dark purple-gray - secondary button text */
 
   /* ===== MUTED COLORS ===== */
-  /* Used by: Ghost button hover, Input placeholder text */
+  /* Used by: Ghost button hover, Secondary button hover, Input placeholder text */
   --muted: oklch(0.97 0 0);                /* Very light gray - subtle backgrounds */
   --muted-foreground: oklch(0.556 0 0);    /* Medium gray - placeholder text, less important text */
 
@@ -160,6 +160,7 @@
    */
   --primary-hover: oklch(0.82 0.195 91.936);      /* Darker yellow - default button hover */
   --primary-dark: oklch(0.7 0.195 91.936);        /* UNUSED - was for links, now using focus color */
+  --secondary-hover: oklch(0.93 0.001 286.375);   /* Darker purple-gray - secondary button hover */
   --destructive-hover: oklch(0.54 0.21 27);       /* Darker red - destructive button hover */
 }
 
@@ -194,6 +195,7 @@
   --secondary-foreground: oklch(0.985 0 0);    /* Very light - secondary button text */
 
   /* ===== MUTED COLORS ===== */
+  /* Used by: Ghost button hover, Secondary button hover, Input placeholder text */
   --muted: oklch(0.269 0 0);                   /* Dark gray - subtle backgrounds */
   --muted-foreground: oklch(0.708 0 0);        /* Light gray - placeholder text */
 
@@ -237,6 +239,7 @@
   /* Hover states adjusted for dark mode */
   --primary-hover: oklch(0.76 0.18 86.047);      /* Slightly darker yellow on hover */
   --primary-dark: oklch(0.72 0.18 86.047);       /* UNUSED - was for links */
+  --secondary-hover: oklch(0.32 0.008 286.033);  /* Lighter purple-gray - secondary button hover */
   --destructive-hover: oklch(0.64 0.18 22.216);  /* Slightly darker red on hover */
 }
 
