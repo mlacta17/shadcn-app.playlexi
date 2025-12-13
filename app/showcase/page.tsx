@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -27,15 +28,32 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { PlusIcon, Trash2Icon, MoreVerticalIcon } from "lucide-react"
+import { ThemeSwitcher } from "@/components/kibo-ui/theme-switcher"
 
 export default function ShowcasePage() {
+  const handleThemeChange = (theme: "light" | "dark" | "system") => {
+    const root = document.documentElement
+
+    if (theme === "system") {
+      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+      root.classList.remove("light", "dark")
+      root.classList.add(systemTheme)
+    } else {
+      root.classList.remove("light", "dark")
+      root.classList.add(theme)
+    }
+  }
+
   return (
     <div className="container mx-auto p-8 space-y-12">
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Component Showcase</h1>
-        <p className="text-muted-foreground">
-          All component variants with increased padding, Poppins font, and custom styling
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Component Showcase</h1>
+          <p className="text-muted-foreground">
+            All component variants with increased padding, Poppins font, and custom styling
+          </p>
+        </div>
+        <ThemeSwitcher onChange={handleThemeChange} defaultValue="system" />
       </div>
 
       {/* Buttons Section */}
