@@ -45,6 +45,10 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
+
+  /* Focus ring colors */
+  --color-focus: var(--focus-ring-color);
+  --color-focus-offset: var(--focus-ring-color);
 }
 
 :root {
@@ -80,6 +84,16 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /*
+   * Focus ring system
+   * Blue outline (2px) with 2px offset for all interactive elements.
+   * Change these values to customize globally.
+   * Red outline for error/destructive states (automatic).
+   */
+  --focus-ring-color: oklch(0.5 0.25 252);
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
 }
 
 .dark {
@@ -114,13 +128,65 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  /* Focus ring: slightly lighter blue for dark mode */
+  --focus-ring-color: oklch(0.6 0.25 252);
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/*
+ * ============================================================================
+ * FOCUS RING SYSTEM
+ * ============================================================================
+ *
+ * Automatically applies blue outline to ALL interactive elements on focus.
+ * Error/destructive states get red outline instead.
+ *
+ * To customize: Change CSS variables in :root above
+ * To disable on specific element: Add class "focus-ring-none"
+ * Works with any component library (shadcn, Base UI, etc.)
+ *
+ * ============================================================================
+ */
+:is(button, input, textarea, select, a):focus-visible,
+:is([role="button"], [role="tab"], [role="option"], [role="menuitem"]):focus-visible,
+:is([role="checkbox"], [role="radio"], [role="switch"], [role="combobox"]):focus-visible,
+:is([tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Red outline for errors/destructive actions */
+:is(button, input, textarea, select)[aria-invalid="true"]:focus-visible,
+:is(button, input, textarea, select)[data-invalid]:focus-visible,
+button.destructive:focus-visible,
+:is(button, [role="button"])[data-variant="destructive"]:focus-visible {
+  outline-color: var(--destructive);
+}
+
+@layer utilities {
+  /* Manual focus ring (rarely needed) */
+  .focus-ring:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  /* Force destructive focus ring */
+  .focus-ring-destructive:focus-visible {
+    outline: var(--focus-ring-width) solid var(--destructive);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  /* Disable focus ring (use sparingly!) */
+  .focus-ring-none:focus-visible {
+    outline: none !important;
   }
 }
