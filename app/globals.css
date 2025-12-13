@@ -204,7 +204,7 @@
   --accent-foreground: oklch(0.985 0 0);       /* Very light - text on accent */
 
   /* ===== DESTRUCTIVE COLORS (Red) ===== */
-  --destructive: oklch(0.704 0.191 22.216);    /* Brighter red for dark mode */
+  --destructive: oklch(0.58 0.22 27);          /* Dark red - destructive button bg (same as light mode) */
   --destructive-foreground: oklch(1 0 0);      /* White - text on destructive background */
 
   /* ===== BORDER & INPUT COLORS ===== */
@@ -240,7 +240,7 @@
   --primary-hover: oklch(0.76 0.18 86.047);      /* Slightly darker yellow on hover */
   --primary-dark: oklch(0.72 0.18 86.047);       /* UNUSED - was for links */
   --secondary-hover: oklch(0.32 0.008 286.033);  /* Lighter purple-gray - secondary button hover */
-  --destructive-hover: oklch(0.64 0.18 22.216);  /* Slightly darker red on hover */
+  --destructive-hover: oklch(0.54 0.21 27);      /* Darker red - destructive button hover (same as light mode) */
 }
 
 @layer base {
