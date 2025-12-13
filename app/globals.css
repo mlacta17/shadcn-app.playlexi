@@ -100,6 +100,7 @@
    * Darker shades for hover states on primary and destructive buttons.
    */
   --primary-hover: oklch(0.82 0.195 91.936); /* Darker primary */
+  --primary-dark: oklch(0.7 0.195 91.936); /* Darker primary for links/text */
   --destructive-hover: oklch(0.54 0.21 27); /* Darker destructive */
 }
 
@@ -141,6 +142,7 @@
 
   /* Hover state colors for dark mode */
   --primary-hover: oklch(0.76 0.18 86.047); /* Darker primary in dark mode */
+  --primary-dark: oklch(0.72 0.18 86.047); /* Darker primary for links/text in dark mode */
   --destructive-hover: oklch(0.64 0.18 22.216); /* Darker destructive in dark mode */
 }
 
