@@ -2,6 +2,12 @@
 
 import * as React from "react"
 
+import { 
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/components/ui/avatar"
+
 import {
   Example,
   ExampleWrapper,
@@ -150,6 +156,10 @@ function FormExample() {
     <Example title="Form">
       <Card className="w-full max-w-md">
         <CardHeader>
+          <Avatar>
+            <AvatarImage src="https://github.com/shadcn.png" />
+            <AvatarFallback>CN</AvatarFallback>
+          </Avatar>
           <CardTitle>User Information</CardTitle>
           <CardDescription>Please fill in your details below</CardDescription>
           <CardAction>
