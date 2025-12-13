@@ -99,8 +99,8 @@
    * Hover state colors
    * Darker shades for hover states on primary and destructive buttons.
    */
-  --primary-hover: oklch(0.75 0.18 91.936); /* Darker primary */
-  --destructive-hover: oklch(0.52 0.20 27); /* Darker destructive */
+  --primary-hover: oklch(0.82 0.195 91.936); /* Darker primary */
+  --destructive-hover: oklch(0.56 0.215 27); /* Darker destructive */
 }
 
 .dark {
@@ -140,8 +140,8 @@
   --focus-ring-color: oklch(0.6 0.25 252);
 
   /* Hover state colors for dark mode */
-  --primary-hover: oklch(0.7 0.17 86.047); /* Darker primary in dark mode */
-  --destructive-hover: oklch(0.62 0.17 22.216); /* Darker destructive in dark mode */
+  --primary-hover: oklch(0.76 0.18 86.047); /* Darker primary in dark mode */
+  --destructive-hover: oklch(0.675 0.185 22.216); /* Darker destructive in dark mode */
 }
 
 @layer base {
