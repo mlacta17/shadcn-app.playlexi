@@ -94,6 +94,13 @@
   --focus-ring-color: oklch(0.5 0.25 252);
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
+
+  /*
+   * Hover state colors
+   * Darker shades for hover states on primary and destructive buttons.
+   */
+  --primary-hover: oklch(0.75 0.18 91.936); /* Darker primary */
+  --destructive-hover: oklch(0.52 0.20 27); /* Darker destructive */
 }
 
 .dark {
@@ -131,6 +138,10 @@
 
   /* Focus ring: slightly lighter blue for dark mode */
   --focus-ring-color: oklch(0.6 0.25 252);
+
+  /* Hover state colors for dark mode */
+  --primary-hover: oklch(0.7 0.17 86.047); /* Darker primary in dark mode */
+  --destructive-hover: oklch(0.62 0.17 22.216); /* Darker destructive in dark mode */
 }
 
 @layer base {
