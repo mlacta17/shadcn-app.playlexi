@@ -26,6 +26,7 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -51,99 +52,182 @@
   --color-focus-offset: var(--focus-ring-color);
 }
 
+/*
+ * ============================================================================
+ * SEMANTIC COLOR SYSTEM - LIGHT MODE
+ * ============================================================================
+ *
+ * Pattern: Each color has a background + foreground pair for proper contrast.
+ * Format: OKLCH (Lightness Chroma Hue) - perceptually uniform color space
+ *
+ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.852 0.199 91.936);
-  --primary-foreground: oklch(0.421 0.095 57.708);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.58 0.22 27);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.905 0.182 98.111);
-  --chart-2: oklch(0.795 0.184 86.047);
-  --chart-3: oklch(0.681 0.162 75.834);
-  --chart-4: oklch(0.554 0.135 66.442);
-  --chart-5: oklch(0.476 0.114 61.907);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.681 0.162 75.834);
-  --sidebar-primary-foreground: oklch(0.987 0.026 102.212);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* ===== BASE COLORS ===== */
+  /* Used by: body, main containers */
+  --background: oklch(1 0 0);              /* White - main page background */
+  --foreground: oklch(0.145 0 0);          /* Near-black - main text color, link buttons */
 
+  /* ===== CARD COLORS ===== */
+  /* Used by: Card component */
+  --card: oklch(1 0 0);                    /* White - card backgrounds */
+  --card-foreground: oklch(0.145 0 0);     /* Near-black - text on cards */
+
+  /* ===== POPOVER COLORS ===== */
+  /* Used by: Popover, Dropdown, Select content, Combobox dropdown */
+  --popover: oklch(1 0 0);                 /* White - dropdown/popover background */
+  --popover-foreground: oklch(0.145 0 0);  /* Near-black - text in dropdowns */
+
+  /* ===== PRIMARY COLORS (Yellow) ===== */
+  /* Used by: Default button background, default button hover */
+  --primary: oklch(0.852 0.199 91.936);         /* Light yellow - primary button bg */
+  --primary-foreground: oklch(0.421 0.095 57.708); /* Brown/olive - text ON primary bg (NOT USED - kept for compatibility) */
+
+  /* ===== SECONDARY COLORS (Purple/Gray) ===== */
+  /* Used by: Secondary button */
+  --secondary: oklch(0.967 0.001 286.375);      /* Light purple-gray - secondary button bg */
+  --secondary-foreground: oklch(0.21 0.006 285.885); /* Dark purple-gray - secondary button text */
+
+  /* ===== MUTED COLORS ===== */
+  /* Used by: Ghost button hover, Input placeholder text */
+  --muted: oklch(0.97 0 0);                /* Very light gray - subtle backgrounds */
+  --muted-foreground: oklch(0.556 0 0);    /* Medium gray - placeholder text, less important text */
+
+  /* ===== ACCENT COLORS ===== */
+  /* Used by: Outline button hover, Select items on hover/focus, Dropdown items on hover/focus */
+  --accent: oklch(0.97 0 0);               /* Very light gray - hover state background */
+  --accent-foreground: oklch(0.205 0 0);   /* Very dark gray - text on accent background */
+
+  /* ===== DESTRUCTIVE COLORS (Red) ===== */
+  /* Used by: Destructive button, destructive dropdown items, error focus rings */
+  --destructive: oklch(0.58 0.22 27);           /* Dark red - destructive button bg */
+  --destructive-foreground: oklch(1 0 0);       /* White - text on destructive background */
+
+  /* ===== BORDER & INPUT COLORS ===== */
+  /* Used by: All borders, Input backgrounds */
+  --border: oklch(0.922 0 0);              /* Light gray - borders on buttons, inputs, cards */
+  --input: oklch(0.922 0 0);               /* Light gray - input backgrounds (used at 30% opacity) */
+
+  /* ===== RING COLOR ===== */
+  /* UNUSED - kept for shadcn compatibility */
+  --ring: oklch(0.708 0 0);                /* Medium gray - NOT USED (we use custom focus-ring-color) */
+
+  /* ===== CHART COLORS ===== */
+  /* Used by: Chart components (if you use them) */
+  --chart-1: oklch(0.905 0.182 98.111);    /* Lightest yellow - chart color 1 */
+  --chart-2: oklch(0.795 0.184 86.047);    /* Light yellow - chart color 2 */
+  --chart-3: oklch(0.681 0.162 75.834);    /* Medium yellow - chart color 3 */
+  --chart-4: oklch(0.554 0.135 66.442);    /* Darker yellow - chart color 4 */
+  --chart-5: oklch(0.476 0.114 61.907);    /* Darkest yellow - chart color 5 */
+
+  /* ===== BORDER RADIUS ===== */
+  --radius: 0.625rem;                      /* Base radius - 10px (components use rounded-4xl = radius + 16px) */
+
+  /* ===== SIDEBAR COLORS ===== */
+  /* Used by: Sidebar component (if you use it) */
+  --sidebar: oklch(0.985 0 0);                        /* Very light gray - sidebar background */
+  --sidebar-foreground: oklch(0.145 0 0);             /* Near-black - sidebar text */
+  --sidebar-primary: oklch(0.681 0.162 75.834);       /* Medium yellow - active sidebar item */
+  --sidebar-primary-foreground: oklch(0.987 0.026 102.212); /* Very light - text on active item */
+  --sidebar-accent: oklch(0.97 0 0);                  /* Light gray - sidebar hover state */
+  --sidebar-accent-foreground: oklch(0.205 0 0);      /* Dark gray - text on hover */
+  --sidebar-border: oklch(0.922 0 0);                 /* Light gray - sidebar borders */
+  --sidebar-ring: oklch(0.708 0 0);                   /* Medium gray - sidebar focus ring */
+
+  /* ===== CUSTOM INTERACTIVE COLORS ===== */
   /*
    * Focus ring system
-   * Blue outline (2px) with 2px offset for all interactive elements.
-   * Change these values to customize globally.
-   * Red outline for error/destructive states (automatic).
+   * Used by: ALL interactive elements on keyboard focus (buttons, inputs, links, etc.)
+   * Blue outline (2px) with 2px offset for accessibility.
+   * Also used by: Link button text color (text-focus)
    */
-  --focus-ring-color: oklch(0.5 0.25 252);
+  --focus-ring-color: oklch(0.5 0.25 252);  /* Blue - focus outlines & link button text */
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
 
   /*
-   * Hover state colors
-   * Darker shades for hover states on primary and destructive buttons.
+   * Hover state colors (Custom semantic tokens for darker shades)
+   * Used by: Button hover states to create darker versions on interaction
    */
-  --primary-hover: oklch(0.82 0.195 91.936); /* Darker primary */
-  --primary-dark: oklch(0.7 0.195 91.936); /* Darker primary for links/text */
-  --destructive-hover: oklch(0.54 0.21 27); /* Darker destructive */
+  --primary-hover: oklch(0.82 0.195 91.936);      /* Darker yellow - default button hover */
+  --primary-dark: oklch(0.7 0.195 91.936);        /* UNUSED - was for links, now using focus color */
+  --destructive-hover: oklch(0.54 0.21 27);       /* Darker red - destructive button hover */
 }
 
+/*
+ * ============================================================================
+ * SEMANTIC COLOR SYSTEM - DARK MODE
+ * ============================================================================
+ *
+ * Same semantic token names, different values for dark backgrounds.
+ * Lightness values are inverted: backgrounds are darker, text is lighter.
+ *
+ */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.795 0.184 86.047);
-  --primary-foreground: oklch(0.421 0.095 57.708);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.371 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  /* ===== BASE COLORS ===== */
+  --background: oklch(0.145 0 0);              /* Very dark gray - main dark background */
+  --foreground: oklch(0.985 0 0);              /* Very light - main text on dark bg */
+
+  /* ===== CARD COLORS ===== */
+  --card: oklch(0.205 0 0);                    /* Dark gray - card backgrounds */
+  --card-foreground: oklch(0.985 0 0);         /* Very light - text on cards */
+
+  /* ===== POPOVER COLORS ===== */
+  --popover: oklch(0.205 0 0);                 /* Dark gray - dropdown/popover background */
+  --popover-foreground: oklch(0.985 0 0);      /* Very light - text in dropdowns */
+
+  /* ===== PRIMARY COLORS (Yellow) ===== */
+  --primary: oklch(0.795 0.184 86.047);             /* Lighter yellow for dark mode */
+  --primary-foreground: oklch(0.421 0.095 57.708);  /* Brown/olive - NOT USED */
+
+  /* ===== SECONDARY COLORS (Purple/Gray) ===== */
+  --secondary: oklch(0.274 0.006 286.033);     /* Dark purple-gray */
+  --secondary-foreground: oklch(0.985 0 0);    /* Very light - secondary button text */
+
+  /* ===== MUTED COLORS ===== */
+  --muted: oklch(0.269 0 0);                   /* Dark gray - subtle backgrounds */
+  --muted-foreground: oklch(0.708 0 0);        /* Light gray - placeholder text */
+
+  /* ===== ACCENT COLORS ===== */
+  --accent: oklch(0.371 0 0);                  /* Medium-dark gray - hover backgrounds */
+  --accent-foreground: oklch(0.985 0 0);       /* Very light - text on accent */
+
+  /* ===== DESTRUCTIVE COLORS (Red) ===== */
+  --destructive: oklch(0.704 0.191 22.216);    /* Brighter red for dark mode */
+  --destructive-foreground: oklch(1 0 0);      /* White - text on destructive background */
+
+  /* ===== BORDER & INPUT COLORS ===== */
+  --border: oklch(1 0 0 / 10%);                /* White at 10% opacity - subtle borders */
+  --input: oklch(1 0 0 / 15%);                 /* White at 15% opacity - input backgrounds */
+
+  /* ===== RING COLOR ===== */
+  --ring: oklch(0.556 0 0);                    /* UNUSED - kept for shadcn compatibility */
+
+  /* ===== CHART COLORS ===== */
+  /* Same as light mode - chart colors work in both themes */
   --chart-1: oklch(0.905 0.182 98.111);
   --chart-2: oklch(0.795 0.184 86.047);
   --chart-3: oklch(0.681 0.162 75.834);
   --chart-4: oklch(0.554 0.135 66.442);
   --chart-5: oklch(0.476 0.114 61.907);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.795 0.184 86.047);
-  --sidebar-primary-foreground: oklch(0.987 0.026 102.212);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
 
-  /* Focus ring: slightly lighter blue for dark mode */
-  --focus-ring-color: oklch(0.6 0.25 252);
+  /* ===== SIDEBAR COLORS ===== */
+  --sidebar: oklch(0.205 0 0);                        /* Dark gray - sidebar background */
+  --sidebar-foreground: oklch(0.985 0 0);             /* Very light - sidebar text */
+  --sidebar-primary: oklch(0.795 0.184 86.047);       /* Lighter yellow - active item */
+  --sidebar-primary-foreground: oklch(0.987 0.026 102.212); /* Very light - text on active */
+  --sidebar-accent: oklch(0.269 0 0);                 /* Dark gray - sidebar hover */
+  --sidebar-accent-foreground: oklch(0.985 0 0);      /* Very light - text on hover */
+  --sidebar-border: oklch(1 0 0 / 10%);               /* White at 10% - sidebar borders */
+  --sidebar-ring: oklch(0.556 0 0);                   /* Medium gray - sidebar focus ring */
 
-  /* Hover state colors for dark mode */
-  --primary-hover: oklch(0.76 0.18 86.047); /* Darker primary in dark mode */
-  --primary-dark: oklch(0.72 0.18 86.047); /* Darker primary for links/text in dark mode */
-  --destructive-hover: oklch(0.64 0.18 22.216); /* Darker destructive in dark mode */
+  /* ===== CUSTOM INTERACTIVE COLORS (Dark Mode) ===== */
+  /* Lighter blue for better visibility on dark backgrounds */
+  --focus-ring-color: oklch(0.6 0.25 252);       /* Lighter blue - focus outlines & link text */
+
+  /* Hover states adjusted for dark mode */
+  --primary-hover: oklch(0.76 0.18 86.047);      /* Slightly darker yellow on hover */
+  --primary-dark: oklch(0.72 0.18 86.047);       /* UNUSED - was for links */
+  --destructive-hover: oklch(0.64 0.18 22.216);  /* Slightly darker red on hover */
 }
 
 @layer base {
