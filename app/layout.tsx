@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Inter } from "next/font/google";
+import { Geist, Geist_Mono, Poppins } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({subsets:['latin'],variable:'--font-sans'});
+const poppins = Poppins({
+  weight: ['400', '500', '600', '700'], //600 and 700 not being used by comopnents
+  subsets: ['latin'],
+  variable: '--font-sans'
+});
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,7 +29,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={poppins.variable}>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
