@@ -48,6 +48,19 @@ import {
   InputGroupInput,
   InputGroupText,
 } from "@/components/ui/input-group"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { IconCircleCheckOutline24, IconAlertWarningOutline24 } from "nucleo-core-outline-24"
 import { useState } from "react"
 
 export default function ShowcasePage() {
@@ -118,10 +131,13 @@ export default function ShowcasePage() {
                 Save
                 <IconPlusOutline24 data-icon="inline-end" />
               </Button>
-              <Button size="icon">
+              <Button size="icon-xs" variant="secondary">
                 <IconPlusOutline24 />
               </Button>
               <Button size="icon-sm" variant="ghost">
+                <IconPlusOutline24 />
+              </Button>
+              <Button size="icon">
                 <IconPlusOutline24 />
               </Button>
               <Button size="icon-lg" variant="outline">
@@ -255,11 +271,26 @@ export default function ShowcasePage() {
       {/* Badges Section */}
       <section className="space-y-4">
         <h2 className="text-2xl font-semibold">Badges</h2>
-        <div className="flex flex-wrap gap-3">
-          <Badge>Default Badge</Badge>
-          <Badge variant="secondary">Secondary</Badge>
-          <Badge variant="outline">Outline</Badge>
-          <Badge variant="destructive">Destructive</Badge>
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Standard Variants (from shadcn)</h3>
+            <div className="flex flex-wrap gap-3">
+              <Badge>Default Badge</Badge>
+              <Badge variant="secondary">Secondary</Badge>
+              <Badge variant="outline">Outline</Badge>
+              <Badge variant="destructive">Destructive</Badge>
+            </div>
+          </div>
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Custom Variants (project-specific)</h3>
+            <div className="flex flex-wrap gap-3">
+              <Badge variant="ghost">Ghost</Badge>
+              <Badge variant="link">Link</Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Note: Ghost and Link variants are custom additions not in the official shadcn Badge component.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -308,6 +339,134 @@ export default function ShowcasePage() {
               </Button>
             </CardContent>
           </Card>
+        </div>
+      </section>
+
+      {/* Alert Dialog Section */}
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold">Alert Dialogs</h2>
+
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Default Size</h3>
+            <div className="flex flex-wrap gap-3">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline">Delete Account</Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action cannot be undone. This will permanently delete your account
+                      and remove your data from our servers.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction variant="destructive">Continue</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Small Size</h3>
+            <div className="flex flex-wrap gap-3">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button>Confirm Action</Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent size="sm">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Confirm</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to proceed?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction>Continue</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">With Icon (Success)</h3>
+            <div className="flex flex-wrap gap-3">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="secondary">Show Success</Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogMedia>
+                      <IconCircleCheckOutline24 className="text-green-600" />
+                    </AlertDialogMedia>
+                    <AlertDialogTitle>Success!</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Your changes have been saved successfully.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogAction>Close</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">With Icon (Warning)</h3>
+            <div className="flex flex-wrap gap-3">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive">Show Warning</Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogMedia>
+                      <IconAlertWarningOutline24 className="text-destructive" />
+                    </AlertDialogMedia>
+                    <AlertDialogTitle>Warning</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action requires your attention. Please review carefully before proceeding.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Go Back</AlertDialogCancel>
+                    <AlertDialogAction variant="destructive">I Understand</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Button Variants</h3>
+            <div className="flex flex-wrap gap-3">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost">Secondary Action</Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent size="sm">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Secondary Action</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This dialog uses secondary button styling.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel variant="ghost">Cancel</AlertDialogCancel>
+                    <AlertDialogAction variant="secondary">Confirm</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
         </div>
       </section>
 
