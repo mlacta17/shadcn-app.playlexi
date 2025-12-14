@@ -4,7 +4,11 @@ import * as React from "react"
 import { Select as SelectPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
-import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
+import {
+  IconChevronDownOutline24 as ChevronDownIcon,
+  IconCheckOutline24 as CheckIcon,
+  IconChevronUpOutline24 as ChevronUpIcon,
+} from "nucleo-core-outline-24"
 
 function Select({
   ...props

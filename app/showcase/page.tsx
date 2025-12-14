@@ -1,6 +1,5 @@
 "use client"
 
-import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -27,7 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { PlusIcon, Trash2Icon, MoreVerticalIcon } from "lucide-react"
+import { IconPlusOutline24, IconTrashOutline24, IconDotsVerticalOutline24 } from "nucleo-core-outline-24"
 import { ThemeSwitcher } from "@/components/kibo-ui/theme-switcher"
 
 export default function ShowcasePage() {
@@ -87,25 +86,25 @@ export default function ShowcasePage() {
             <h3 className="text-sm font-medium mb-3 text-muted-foreground">With Icons</h3>
             <div className="flex flex-wrap gap-3">
               <Button>
-                <PlusIcon data-icon="inline-start" />
+                <IconPlusOutline24 data-icon="inline-start" />
                 Add Item
               </Button>
               <Button variant="destructive">
-                <Trash2Icon data-icon="inline-start" />
+                <IconTrashOutline24 data-icon="inline-start" />
                 Delete
               </Button>
               <Button variant="outline">
                 Save
-                <PlusIcon data-icon="inline-end" />
+                <IconPlusOutline24 data-icon="inline-end" />
               </Button>
               <Button size="icon">
-                <PlusIcon />
+                <IconPlusOutline24 />
               </Button>
               <Button size="icon-sm" variant="ghost">
-                <PlusIcon />
+                <IconPlusOutline24 />
               </Button>
               <Button size="icon-lg" variant="outline">
-                <PlusIcon />
+                <IconPlusOutline24 />
               </Button>
             </div>
           </div>
@@ -225,7 +224,7 @@ export default function ShowcasePage() {
             <CardContent>
               <p className="text-sm mb-3">Click the button to test focus rings</p>
               <Button variant="destructive" className="w-full">
-                <Trash2Icon data-icon="inline-start" />
+                <IconTrashOutline24 data-icon="inline-start" />
                 Delete Item
               </Button>
             </CardContent>
@@ -240,7 +239,7 @@ export default function ShowcasePage() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
-                <MoreVerticalIcon data-icon="inline-start" />
+                <IconDotsVerticalOutline24 data-icon="inline-start" />
                 Open Menu
               </Button>
             </DropdownMenuTrigger>

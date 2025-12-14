@@ -1,7 +1,11 @@
 "use client";
 
 import { useControllableState } from "@radix-ui/react-use-controllable-state";
-import { Monitor, Moon, Sun } from "lucide-react";
+import {
+  IconMonitorOutline24 as Monitor,
+  IconMoonOutline24 as Moon,
+  IconSunOutline24 as Sun,
+} from "nucleo-core-outline-24";
 import { motion } from "motion/react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";

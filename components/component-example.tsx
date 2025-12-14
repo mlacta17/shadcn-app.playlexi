@@ -71,7 +71,36 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { PlusIcon, BluetoothIcon, MoreVerticalIcon, FileIcon, FolderIcon, FolderOpenIcon, FileCodeIcon, MoreHorizontalIcon, FolderSearchIcon, SaveIcon, DownloadIcon, EyeIcon, LayoutIcon, PaletteIcon, SunIcon, MoonIcon, MonitorIcon, UserIcon, CreditCardIcon, SettingsIcon, KeyboardIcon, LanguagesIcon, BellIcon, MailIcon, ShieldIcon, HelpCircleIcon, FileTextIcon, LogOutIcon } from "lucide-react"
+import {
+  IconPlusOutline24 as PlusIcon,
+  IconBluetoothOutline24 as BluetoothIcon,
+  IconDotsVerticalOutline24 as MoreVerticalIcon,
+  IconFileOutline24 as FileIcon,
+  IconFolderOutline24 as FolderIcon,
+  IconFolderOpenOutline24 as FolderOpenIcon,
+  IconFileCodeOutline24 as FileCodeIcon,
+  IconDotsOutline24 as MoreHorizontalIcon,
+  IconFolderSearchOutline24 as FolderSearchIcon,
+  IconFloppyDiskOutline24 as SaveIcon,
+  IconDownloadOutline24 as DownloadIcon,
+  IconEyeOutline24 as EyeIcon,
+  IconLayoutTopOutline24 as LayoutIcon,
+  IconPaletteOutline24 as PaletteIcon,
+  IconSunOutline24 as SunIcon,
+  IconMoonOutline24 as MoonIcon,
+  IconMonitorOutline24 as MonitorIcon,
+  IconUserOutline24 as UserIcon,
+  IconCreditCardOutline24 as CreditCardIcon,
+  IconGearOutline24 as SettingsIcon,
+  IconKeyboardOutline24 as KeyboardIcon,
+  IconLanguageOutline24 as LanguagesIcon,
+  IconBellOutline24 as BellIcon,
+  IconEnvelopeOutline24 as MailIcon,
+  IconShieldOutline24 as ShieldIcon,
+  IconCircleQuestionOutline24 as HelpCircleIcon,
+  IconFileTxtOutline24 as FileTextIcon,
+  IconCircleLogoutOutline24 as LogOutIcon,
+} from "nucleo-core-outline-24"
 
 export function ComponentExample() {
   return (
