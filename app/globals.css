@@ -88,9 +88,9 @@
   --popover-foreground: oklch(0.145 0 0);  /* Near-black - text in dropdowns */
 
   /* ===== PRIMARY COLORS (Yellow) ===== */
-  /* Used by: Default button background, default button hover */
+  /* Used by: Default button background, default button hover, default button text */
   --primary: oklch(0.852 0.199 91.936);         /* Light yellow - primary button bg */
-  --primary-foreground: oklch(0.421 0.095 57.708); /* Brown/olive - text ON primary bg (NOT USED - kept for compatibility) */
+  --primary-foreground: oklch(0.145 0 0);       /* Near-black - text on primary button */
 
   /* ===== SECONDARY COLORS (Purple/Gray) ===== */
   /* Used by: Secondary button */
@@ -98,7 +98,7 @@
   --secondary-foreground: oklch(0.21 0.006 285.885); /* Dark purple-gray - secondary button text */
 
   /* ===== MUTED COLORS ===== */
-  /* Used by: Ghost button hover, Secondary button hover, Input placeholder text */
+  /* Used by: Ghost button hover, Input placeholder text */
   --muted: oklch(0.97 0 0);                /* Very light gray - subtle backgrounds */
   --muted-foreground: oklch(0.556 0 0);    /* Medium gray - placeholder text, less important text */
 
@@ -188,14 +188,14 @@
 
   /* ===== PRIMARY COLORS (Yellow) ===== */
   --primary: oklch(0.795 0.184 86.047);             /* Lighter yellow for dark mode */
-  --primary-foreground: oklch(0.421 0.095 57.708);  /* Brown/olive - NOT USED */
+  --primary-foreground: oklch(0.145 0 0);           /* Near-black - text on primary button */
 
   /* ===== SECONDARY COLORS (Purple/Gray) ===== */
   --secondary: oklch(0.274 0.006 286.033);     /* Dark purple-gray */
   --secondary-foreground: oklch(0.985 0 0);    /* Very light - secondary button text */
 
   /* ===== MUTED COLORS ===== */
-  /* Used by: Ghost button hover, Secondary button hover, Input placeholder text */
+  /* Used by: Ghost button hover, Input placeholder text */
   --muted: oklch(0.269 0 0);                   /* Dark gray - subtle backgrounds */
   --muted-foreground: oklch(0.708 0 0);        /* Light gray - placeholder text */
 
