@@ -283,6 +283,30 @@ button.destructive:focus-visible,
   outline-color: var(--destructive);
 }
 
+/*
+ * ============================================================================
+ * FORM VALIDATION ERROR STATES
+ * ============================================================================
+ *
+ * Error state pattern for form components:
+ * 1. Red border: aria-invalid:border-destructive
+ * 2. Red focus ring: Applied automatically via aria-invalid:focus-visible above
+ *
+ * Components using this pattern:
+ * - Input (components/ui/input.tsx)
+ * - Textarea (components/ui/textarea.tsx)
+ * - Select trigger (components/ui/select.tsx)
+ * - InputGroup container (components/ui/input-group.tsx)
+ * - ComboboxChips container (components/ui/combobox.tsx)
+ *
+ * For container components (InputGroup, ComboboxChips):
+ * - Use focus-within:outline-[var(--focus-ring-color)] for normal state
+ * - Use aria-invalid:focus-within:outline-[var(--destructive)] for error state
+ * - Why focus-within? Container div doesn't receive focus, child input does
+ *
+ * ============================================================================
+ */
+
 @layer utilities {
   /* Manual focus ring (rarely needed) */
   .focus-ring:focus-visible {

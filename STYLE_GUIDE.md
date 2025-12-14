@@ -45,11 +45,27 @@ These are built into the codebase and apply automatically to all components:
 - **Destructive states:** Automatically use red outline
 - **Action:** None - automatically applied to all interactive elements
 
-### 4.1. Error States (Form Validation)
+### 4.1. Focus Ring for Container Components
+- **Pattern:** Use `focus-within` for containers that don't receive focus themselves
+- **Applies to:** InputGroup, ComboboxChips (containers wrapping focusable children)
+- **Implementation:**
+  ```
+  focus-within:outline
+  focus-within:outline-[length:var(--focus-ring-width)]
+  focus-within:outline-[var(--focus-ring-color)]
+  focus-within:outline-offset-[var(--focus-ring-offset)]
+  aria-invalid:focus-within:outline-[var(--destructive)]
+  ```
+- **Why?** Container `<div>` elements don't receive focus - their child `<input>` elements do. `focus-within` shows outline when any descendant is focused.
+- **Action:** Use this pattern for any new composite form components
+
+### 4.2. Error States (Form Validation)
 - **Pattern:** `aria-invalid:border-destructive dark:aria-invalid:border-destructive/50`
 - **Applies to:** Input, Textarea, Select, InputGroup, ComboboxChips
 - **Usage:** Add `aria-invalid="true"` to the component
-- **Visual effect:** Border changes to red (`--destructive` color)
+- **Visual effects:**
+  1. Border changes to red (`--destructive` color)
+  2. Focus ring changes to red (automatic via global CSS)
 - **Dark mode:** 50% opacity for better visibility
 - **Companion element:** Use `<p className="text-destructive text-sm">Error message</p>` below the input
 - **Action:** Set `aria-invalid="true"` on form fields with validation errors
@@ -129,6 +145,8 @@ When adding a new shadcn component:
 - [ ] Verify semantic color tokens are used (not arbitrary colors)
 - [ ] Confirm SVG sizing selector `[&_svg:not([class*='size-'])]:size-4` is present
 - [ ] Test keyboard navigation to verify focus rings appear
+- [ ] For form inputs: Add error state support (`aria-invalid:border-destructive dark:aria-invalid:border-destructive/50`)
+- [ ] For container components: Use `focus-within` pattern for focus rings (see 4.1 above)
 
 ## Reference Files
 
