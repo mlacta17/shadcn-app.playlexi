@@ -42,6 +42,12 @@ import {
   ComboboxList,
   useComboboxAnchor,
 } from "@/components/ui/combobox"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupText,
+} from "@/components/ui/input-group"
 import { useState } from "react"
 
 export default function ShowcasePage() {
@@ -219,6 +225,29 @@ export default function ShowcasePage() {
                 </SelectGroup>
               </SelectContent>
             </Select>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Input Group</h3>
+            <InputGroup>
+              <InputGroupAddon>
+                <InputGroupText>$</InputGroupText>
+              </InputGroupAddon>
+              <InputGroupInput placeholder="0.00" />
+            </InputGroup>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Input Group (error state)</h3>
+            <div className="space-y-2">
+              <InputGroup aria-invalid="true">
+                <InputGroupAddon>
+                  <InputGroupText>$</InputGroupText>
+                </InputGroupAddon>
+                <InputGroupInput placeholder="0.00" />
+              </InputGroup>
+              <p className="text-destructive text-sm">Amount must be greater than 0</p>
+            </div>
           </div>
         </div>
       </section>
