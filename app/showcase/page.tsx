@@ -28,6 +28,9 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { IconPlusOutline24, IconTrashOutline24, IconDotsVerticalOutline24 } from "nucleo-core-outline-24"
 import { ThemeSwitcher } from "@/components/kibo-ui/theme-switcher"
+import { Avatar, AvatarImage, AvatarFallback, AvatarBadge } from "@/components/ui/avatar"
+import { Progress } from "@/components/ui/progress"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 
 export default function ShowcasePage() {
   const handleThemeChange = (theme: "light" | "dark" | "system") => {
@@ -271,6 +274,156 @@ export default function ShowcasePage() {
               <SelectItem value="1">Option 1</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+      </section>
+
+      {/* Avatar Section */}
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold">Avatars</h2>
+
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Sizes</h3>
+            <div className="flex flex-wrap items-center gap-4">
+              <Avatar size="sm">
+                <AvatarImage src="https://github.com/shadcn.png" />
+                <AvatarFallback>CN</AvatarFallback>
+              </Avatar>
+              <Avatar>
+                <AvatarImage src="https://github.com/shadcn.png" />
+                <AvatarFallback>CN</AvatarFallback>
+              </Avatar>
+              <Avatar size="lg">
+                <AvatarImage src="https://github.com/shadcn.png" />
+                <AvatarFallback>CN</AvatarFallback>
+              </Avatar>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">With Fallback</h3>
+            <div className="flex flex-wrap items-center gap-4">
+              <Avatar>
+                <AvatarFallback>JD</AvatarFallback>
+              </Avatar>
+              <Avatar>
+                <AvatarFallback>AB</AvatarFallback>
+              </Avatar>
+              <Avatar>
+                <AvatarFallback>CD</AvatarFallback>
+              </Avatar>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">With Badge</h3>
+            <div className="flex flex-wrap items-center gap-4">
+              <Avatar>
+                <AvatarImage src="https://github.com/shadcn.png" />
+                <AvatarFallback>CN</AvatarFallback>
+                <AvatarBadge />
+              </Avatar>
+              <Avatar size="lg">
+                <AvatarImage src="https://github.com/shadcn.png" />
+                <AvatarFallback>CN</AvatarFallback>
+                <AvatarBadge />
+              </Avatar>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Progress Section */}
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold">Progress</h2>
+        <div className="space-y-4 max-w-md">
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Progress at 25%</h3>
+            <Progress value={25} />
+          </div>
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Progress at 50%</h3>
+            <Progress value={50} />
+          </div>
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Progress at 75%</h3>
+            <Progress value={75} />
+          </div>
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Progress at 100%</h3>
+            <Progress value={100} />
+          </div>
+        </div>
+      </section>
+
+      {/* Tabs Section */}
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold">Tabs</h2>
+
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Default Variant</h3>
+            <Tabs defaultValue="account">
+              <TabsList>
+                <TabsTrigger value="account">Account</TabsTrigger>
+                <TabsTrigger value="password">Password</TabsTrigger>
+                <TabsTrigger value="settings">Settings</TabsTrigger>
+              </TabsList>
+              <TabsContent value="account" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Account Settings</CardTitle>
+                    <CardDescription>Manage your account settings and preferences</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <p className="text-sm">Update your account information here.</p>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              <TabsContent value="password" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Password</CardTitle>
+                    <CardDescription>Change your password here</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <p className="text-sm">Update your password to keep your account secure.</p>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              <TabsContent value="settings" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Settings</CardTitle>
+                    <CardDescription>Configure your preferences</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <p className="text-sm">Customize your experience with various settings.</p>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Line Variant</h3>
+            <Tabs defaultValue="overview">
+              <TabsList variant="line">
+                <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="analytics">Analytics</TabsTrigger>
+                <TabsTrigger value="reports">Reports</TabsTrigger>
+              </TabsList>
+              <TabsContent value="overview" className="mt-4">
+                <p className="text-sm text-muted-foreground">View your overview dashboard here.</p>
+              </TabsContent>
+              <TabsContent value="analytics" className="mt-4">
+                <p className="text-sm text-muted-foreground">View your analytics data here.</p>
+              </TabsContent>
+              <TabsContent value="reports" className="mt-4">
+                <p className="text-sm text-muted-foreground">View your reports here.</p>
+              </TabsContent>
+            </Tabs>
+          </div>
         </div>
       </section>
 

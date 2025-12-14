@@ -16,10 +16,21 @@ These are built into the codebase and apply automatically to all components:
 - **Location:** [app/globals.css:52-58](app/globals.css:52-58)
 - **Base:** `--radius: 0.625rem` (10px)
 - **Available utilities:**
-  - `rounded-xl` = 14px (base + 4px) - for small items like dropdown items
-  - `rounded-2xl` = 18px (base + 8px) - for dropdowns, popovers
-  - `rounded-4xl` = 26px (base + 16px) - **PRIMARY** for buttons, inputs, cards
-- **Action:** Use `rounded-4xl` for main containers, `rounded-2xl` for dropdowns
+  - `rounded-md` = 6px (Tailwind default) - **for tab triggers**
+  - `rounded-lg` = 8px (Tailwind default) - **for inputs, dropdowns, menu items**
+  - `rounded-4xl` = 26px (base + 16px) - for buttons, cards, badges
+- **Visual hierarchy:**
+  - Extra Subtle (6px): Tab triggers - minimal, clean
+  - Subtle (8px): Form inputs, dropdown containers, menu items - cohesive, functional
+  - Bold (26px): Buttons, cards, badges - distinctive, prominent
+- **Action:**
+  - Use `rounded-md` for tab triggers
+  - Use `rounded-lg` for:
+    - Form inputs (input, textarea, select trigger, combobox chips container)
+    - Dropdown content (select dropdown, dropdown menu, combobox popup)
+    - Tab list containers
+    - All menu items (dropdown items, select items, combobox items)
+  - Use `rounded-4xl` for buttons, cards, badges, individual combobox chips
 
 ### 3. Component Padding Scale
 - **Pattern:** ~33% increase from shadcn defaults
@@ -103,9 +114,9 @@ NUCLEO_LICENSE_KEY=d6tpflas8rzd0l58ik7fiy1jt3wqti
 When adding a new shadcn component:
 
 - [ ] Replace all `lucide-react` imports with `nucleo-core-outline-24`
-- [ ] Use `rounded-4xl` for main containers (buttons, inputs, cards)
-- [ ] Use `rounded-2xl` for dropdowns/popovers
-- [ ] Use `rounded-xl` for dropdown items
+- [ ] Use `rounded-4xl` for buttons, cards, badges
+- [ ] Use `rounded-lg` for inputs, dropdowns, menu items
+- [ ] Use `rounded-md` for tab triggers
 - [ ] Verify semantic color tokens are used (not arbitrary colors)
 - [ ] Confirm SVG sizing selector `[&_svg:not([class*='size-'])]:size-4` is present
 - [ ] Test keyboard navigation to verify focus rings appear
