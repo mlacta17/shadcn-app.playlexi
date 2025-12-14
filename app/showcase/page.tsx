@@ -31,6 +31,18 @@ import { ThemeSwitcher } from "@/components/kibo-ui/theme-switcher"
 import { Avatar, AvatarImage, AvatarFallback, AvatarBadge } from "@/components/ui/avatar"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import {
+  Combobox,
+  ComboboxChips,
+  ComboboxChip,
+  ComboboxChipsInput,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxItem,
+  ComboboxList,
+  useComboboxAnchor,
+} from "@/components/ui/combobox"
+import { useState } from "react"
 
 export default function ShowcasePage() {
   const handleThemeChange = (theme: "light" | "dark" | "system") => {
@@ -427,6 +439,33 @@ export default function ShowcasePage() {
         </div>
       </section>
 
+      {/* Combobox Demo */}
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold">Combobox with Chips</h2>
+        <div className="grid gap-6">
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Multi-Select with Chips (Normal State)</h3>
+            <p className="text-sm text-muted-foreground mb-3">
+              Select multiple items to see chips appear. Features:
+              <br />• Blue focus ring around entire container when focused
+              <br />• Chips with remove buttons (X icon)
+              <br />• Click items to add/remove from selection
+            </p>
+            <ComboboxNormalDemo />
+          </div>
+
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Error State (aria-invalid=&quot;true&quot;)</h3>
+            <p className="text-sm text-muted-foreground mb-3">
+              When <code className="bg-muted px-1 py-0.5 rounded text-xs">aria-invalid=&quot;true&quot;</code> is set on ComboboxChips:
+              <br />• Red destructive border and focus ring
+              <br />• Same multi-select functionality with chips
+            </p>
+            <ComboboxErrorDemo />
+          </div>
+        </div>
+      </section>
+
       {/* Typography Demo */}
       <section className="space-y-4">
         <h2 className="text-2xl font-semibold">Typography (Poppins Font)</h2>
@@ -437,6 +476,75 @@ export default function ShowcasePage() {
           <p className="text-sm font-bold">Font Weight 700 (Bold) - The quick brown fox jumps over the lazy dog</p>
         </div>
       </section>
+    </div>
+  )
+}
+
+function ComboboxNormalDemo() {
+  const anchor = useComboboxAnchor()
+  const [selectedItems, setSelectedItems] = useState<string[]>(["React", "TypeScript"])
+
+  return (
+    <Combobox
+      items={["React", "Vue", "Angular", "Svelte", "TypeScript", "JavaScript"]}
+      multiple
+      value={selectedItems}
+      onValueChange={(details) => setSelectedItems(Array.from(details.values()))}
+    >
+      <ComboboxChips ref={anchor}>
+        {selectedItems.map((item) => (
+          <ComboboxChip key={item}>
+            {item}
+          </ComboboxChip>
+        ))}
+        <ComboboxChipsInput placeholder="Select frameworks..." />
+      </ComboboxChips>
+      <ComboboxContent anchor={anchor.current}>
+        <ComboboxEmpty>No results found</ComboboxEmpty>
+        <ComboboxList>
+          {(item) => (
+            <ComboboxItem key={item} value={item}>
+              {item}
+            </ComboboxItem>
+          )}
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
+  )
+}
+
+function ComboboxErrorDemo() {
+  const anchor = useComboboxAnchor()
+  const [selectedItems, setSelectedItems] = useState<string[]>([])
+
+  return (
+    <div className="space-y-2">
+      <Combobox
+        items={["React", "Vue", "Angular", "Svelte", "TypeScript", "JavaScript"]}
+        multiple
+        value={selectedItems}
+        onValueChange={(details) => setSelectedItems(Array.from(details.values()))}
+      >
+        <ComboboxChips ref={anchor} aria-invalid="true">
+          {selectedItems.map((item) => (
+            <ComboboxChip key={item}>
+              {item}
+            </ComboboxChip>
+          ))}
+          <ComboboxChipsInput placeholder="Select at least one framework..." />
+        </ComboboxChips>
+        <ComboboxContent anchor={anchor.current}>
+          <ComboboxEmpty>No results found</ComboboxEmpty>
+          <ComboboxList>
+            {(item) => (
+              <ComboboxItem key={item} value={item}>
+                {item}
+              </ComboboxItem>
+            )}
+          </ComboboxList>
+        </ComboboxContent>
+      </Combobox>
+      <p className="text-destructive text-sm">Please select at least one framework</p>
     </div>
   )
 }
