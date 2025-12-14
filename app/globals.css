@@ -108,8 +108,8 @@
   --accent-foreground: oklch(0.205 0 0);   /* Very dark gray - text on accent background */
 
   /* ===== DESTRUCTIVE COLORS (Red) ===== */
-  /* Used by: Destructive button, destructive dropdown items, error focus rings */
-  --destructive: oklch(0.58 0.22 27);           /* Dark red - destructive button bg */
+  /* Used by: Destructive button, destructive dropdown items, error focus rings, form validation error borders */
+  --destructive: oklch(0.58 0.22 27);           /* Dark red - destructive button bg, error borders */
   --destructive-foreground: oklch(1 0 0);       /* White - text on destructive background */
 
   /* ===== BORDER & INPUT COLORS ===== */
@@ -204,7 +204,8 @@
   --accent-foreground: oklch(0.985 0 0);       /* Very light - text on accent */
 
   /* ===== DESTRUCTIVE COLORS (Red) ===== */
-  --destructive: oklch(0.58 0.22 27);          /* Dark red - destructive button bg (same as light mode) */
+  /* Used by: Destructive button, destructive dropdown items, error focus rings, form validation error borders */
+  --destructive: oklch(0.58 0.22 27);          /* Dark red - destructive button bg, error borders (same as light mode) */
   --destructive-foreground: oklch(1 0 0);      /* White - text on destructive background */
 
   /* ===== BORDER & INPUT COLORS ===== */

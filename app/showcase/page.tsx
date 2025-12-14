@@ -150,8 +150,24 @@ export default function ShowcasePage() {
           </div>
 
           <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Input (error state)</h3>
+            <div className="space-y-2">
+              <Input placeholder="Enter your email..." aria-invalid="true" />
+              <p className="text-destructive text-sm">This field is required</p>
+            </div>
+          </div>
+
+          <div>
             <h3 className="text-sm font-medium mb-3 text-muted-foreground">Textarea</h3>
             <Textarea placeholder="Enter longer text here..." />
+          </div>
+
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Textarea (error state)</h3>
+            <div className="space-y-2">
+              <Textarea placeholder="Enter your message..." aria-invalid="true" />
+              <p className="text-destructive text-sm">Message must be at least 10 characters</p>
+            </div>
           </div>
 
           <div>
@@ -169,6 +185,25 @@ export default function ShowcasePage() {
                 </SelectGroup>
               </SelectContent>
             </Select>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Select (error state)</h3>
+            <div className="space-y-2">
+              <Select>
+                <SelectTrigger aria-invalid="true">
+                  <SelectValue placeholder="Select a country" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="us">United States</SelectItem>
+                    <SelectItem value="uk">United Kingdom</SelectItem>
+                    <SelectItem value="ca">Canada</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <p className="text-destructive text-sm">Please select a country</p>
+            </div>
           </div>
 
           <div>

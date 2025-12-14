@@ -45,6 +45,15 @@ These are built into the codebase and apply automatically to all components:
 - **Destructive states:** Automatically use red outline
 - **Action:** None - automatically applied to all interactive elements
 
+### 4.1. Error States (Form Validation)
+- **Pattern:** `aria-invalid:border-destructive dark:aria-invalid:border-destructive/50`
+- **Applies to:** Input, Textarea, Select, InputGroup, ComboboxChips
+- **Usage:** Add `aria-invalid="true"` to the component
+- **Visual effect:** Border changes to red (`--destructive` color)
+- **Dark mode:** 50% opacity for better visibility
+- **Companion element:** Use `<p className="text-destructive text-sm">Error message</p>` below the input
+- **Action:** Set `aria-invalid="true"` on form fields with validation errors
+
 ### 5. SVG Icon Sizing
 - **Pattern:** `[&_svg:not([class*='size-'])]:size-4`
 - **Default size:** 16px (size-4)
