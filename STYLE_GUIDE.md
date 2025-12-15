@@ -105,6 +105,47 @@ These are built into the codebase and apply automatically to all components:
 - **Implementation:** `hover:bg-[var(--primary-hover)]`
 - **Action:** None - already built into button component
 
+### 9. Icon Positioning System
+- **Pattern:** Automatic padding adjustment when icons are present in components
+- **Implementation:** `has-data-[icon=inline-start]:pl-3 has-data-[icon=inline-end]:pr-3`
+- **How it works:** Add `data-icon="inline-start"` or `data-icon="inline-end"` to SVG icons to reduce padding on that side
+- **Applies to:** Button, Badge, InputGroup
+- **Example:**
+  ```tsx
+  <Button>
+    <IconTrash data-icon="inline-start" />
+    Delete
+  </Button>
+  ```
+  The left padding automatically reduces because the icon is there.
+- **Action:** Add `data-icon` attribute to icons in Button/Badge components
+
+### 10. Data Attributes for Components
+- **Purpose:** Standardized attributes for component identification and styling hooks
+- **Standard attributes:**
+  - `data-slot="component-name"` - Identifies the component type (e.g., "button", "input", "card")
+  - `data-variant="variant-name"` - Tracks which variant is active (e.g., "destructive", "outline")
+  - `data-size="size-name"` - Tracks size variant (e.g., "sm", "default", "lg")
+- **Why use them:**
+  - CSS selectors can target specific components: `[data-slot="button"]`
+  - Parent components can style children: `[data-slot="card"] [data-slot="button"]`
+  - Debugging: Easy to identify components in DevTools
+- **Action:** Add these attributes to all new components following existing patterns
+
+### 11. Group Variants
+- **Pattern:** Parent-child state communication using Tailwind's group feature
+- **Implementation:** Add `group/component-name` to parent, use `group-*/` selectors in children
+- **Applies to:** Button (`group/button`), Card (`group/card`), Badge (`group/badge`), InputGroup (`group/input-group`)
+- **Example:**
+  ```tsx
+  // Parent has group/button
+  <button className="group/button">
+    // Child responds to parent hover
+    <svg className="group-hover/button:text-red-500" />
+  </button>
+  ```
+- **Action:** Use `group/component-name` pattern for components with interactive children
+
 ## Manual Implementation Required
 
 These require action when adding new components:
