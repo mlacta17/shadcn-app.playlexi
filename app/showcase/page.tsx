@@ -271,26 +271,11 @@ export default function ShowcasePage() {
       {/* Badges Section */}
       <section className="space-y-4">
         <h2 className="text-2xl font-semibold">Badges</h2>
-        <div className="space-y-4">
-          <div>
-            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Standard Variants (from shadcn)</h3>
-            <div className="flex flex-wrap gap-3">
-              <Badge>Default Badge</Badge>
-              <Badge variant="secondary">Secondary</Badge>
-              <Badge variant="outline">Outline</Badge>
-              <Badge variant="destructive">Destructive</Badge>
-            </div>
-          </div>
-          <div>
-            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Custom Variants (project-specific)</h3>
-            <div className="flex flex-wrap gap-3">
-              <Badge variant="ghost">Ghost</Badge>
-              <Badge variant="link">Link</Badge>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Note: Ghost and Link variants are custom additions not in the official shadcn Badge component.
-            </p>
-          </div>
+        <div className="flex flex-wrap gap-3">
+          <Badge>Default Badge</Badge>
+          <Badge variant="secondary">Secondary</Badge>
+          <Badge variant="outline">Outline</Badge>
+          <Badge variant="destructive">Destructive</Badge>
         </div>
       </section>
 

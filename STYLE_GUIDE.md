@@ -94,14 +94,6 @@ These are built into the codebase and apply automatically to all components:
 - **Implementation:** `hover:bg-[var(--primary-hover)]`
 - **Action:** None - already built into button component
 
-### 8. Custom Component Variants
-This project includes custom variants beyond shadcn defaults:
-
-#### Badge Component
-- **Shadcn variants:** default, secondary, outline, destructive (all use original shadcn styling)
-- **Custom additions:** ghost, link
-- **Action:** The ghost and link variants are project-specific and should be maintained
-
 ## Manual Implementation Required
 
 These require action when adding new components:
