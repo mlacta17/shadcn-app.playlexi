@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
 import {
   IconMicrophoneOutline24 as MicIcon,
   IconMediaStopOutline24 as StopIcon,
@@ -12,21 +11,6 @@ import {
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-
-const iconButtonVariants = cva(
-  "bg-background border-input size-9 border shadow-sm rounded-full [&_svg:not([class*='size-'])]:size-4",
-  {
-    variants: {
-      pressed: {
-        true: "bg-muted",
-        false: "",
-      },
-    },
-    defaultVariants: {
-      pressed: false,
-    },
-  }
-)
 
 export interface SpeechInputProps {
   /** Current state of the input - Default or Recording */
@@ -100,12 +84,12 @@ function SpeechInput({
       data-slot="speech-input"
       data-state={state}
       className={cn(
-        "bg-secondary border-input flex w-full max-w-[525px] flex-col items-start overflow-clip rounded-lg border shadow-sm",
+        "bg-secondary border-input flex w-full max-w-[525px] flex-col items-start overflow-clip rounded-lg border",
         className
       )}
     >
       {/* Main content area */}
-      <div className="bg-background border-input flex h-[138px] w-full flex-col gap-2.5 overflow-clip rounded-b-lg border p-3">
+      <div className="bg-transparent border-input flex h-[138px] w-full flex-col gap-2.5 overflow-clip rounded-b-lg border p-3">
         {/* Voice input display */}
         <p
           className={cn(
@@ -120,24 +104,26 @@ function SpeechInput({
         <div className="flex w-full shrink-0 items-center justify-between">
           {/* Left buttons - Sentence and Dictionary */}
           <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
+            <Button
+              variant="outline"
+              size="icon-sm"
               onClick={onSentenceClick}
-              className={cn(iconButtonVariants({ pressed: sentencePressed }))}
               aria-label="Use word in sentence"
               aria-pressed={sentencePressed}
+              className={cn(sentencePressed && "bg-muted")}
             >
-              <SentenceIcon className="size-4" />
-            </button>
-            <button
-              type="button"
+              <SentenceIcon />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon-sm"
               onClick={onDictionaryClick}
-              className={cn(iconButtonVariants({ pressed: dictionaryPressed }))}
               aria-label="Show definition"
               aria-pressed={dictionaryPressed}
+              className={cn(dictionaryPressed && "bg-muted")}
             >
-              <DictionaryIcon className="size-4" />
-            </button>
+              <DictionaryIcon />
+            </Button>
           </div>
 
           {/* Center button - Record/Stop */}
@@ -165,15 +151,16 @@ function SpeechInput({
 
           {/* Right button - Play */}
           <div className="flex min-w-[80px] shrink-0 items-center justify-end gap-2">
-            <button
-              type="button"
+            <Button
+              variant="outline"
+              size="icon-sm"
               onClick={onPlayClick}
-              className={cn(iconButtonVariants({ pressed: playPressed }))}
               aria-label="Play word"
               aria-pressed={playPressed}
+              className={cn(playPressed && "bg-muted")}
             >
-              <PlayIcon className="size-4" />
-            </button>
+              <PlayIcon />
+            </Button>
           </div>
         </div>
       </div>
