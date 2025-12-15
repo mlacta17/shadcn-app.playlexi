@@ -18,11 +18,13 @@ These are built into the codebase and apply automatically to all components:
 - **Available utilities:**
   - `rounded-md` = 6px (Tailwind default) - **for tab triggers**
   - `rounded-lg` = 8px (Tailwind default) - **for inputs, dropdowns, menu items**
-  - `rounded-4xl` = 26px (base + 16px) - for buttons, cards, badges
+  - `rounded-3xl` = 24px (Tailwind default) - **for cards**
+  - `rounded-full` = 9999px (Tailwind default) - **for buttons, badges**
 - **Visual hierarchy:**
   - Extra Subtle (6px): Tab triggers - minimal, clean
   - Subtle (8px): Form inputs, dropdown containers, menu items - cohesive, functional
-  - Bold (26px): Buttons, cards, badges - distinctive, prominent
+  - Medium (24px): Cards - structured, contained
+  - Bold (fully rounded): Buttons, badges - distinctive, pill-shaped
 - **Action:**
   - Use `rounded-md` for tab triggers
   - Use `rounded-lg` for:
@@ -30,7 +32,8 @@ These are built into the codebase and apply automatically to all components:
     - Dropdown content (select dropdown, dropdown menu, combobox popup)
     - Tab list containers
     - All menu items (dropdown items, select items, combobox items)
-  - Use `rounded-4xl` for buttons, cards, badges, individual combobox chips
+  - Use `rounded-3xl` for cards
+  - Use `rounded-full` for buttons, badges, individual combobox chips
 
 ### 3. Component Padding Scale
 - **Pattern:** ~33% increase from shadcn defaults
@@ -139,7 +142,8 @@ NUCLEO_LICENSE_KEY=d6tpflas8rzd0l58ik7fiy1jt3wqti
 When adding a new shadcn component:
 
 - [ ] Replace all `lucide-react` imports with `nucleo-core-outline-24`
-- [ ] Use `rounded-4xl` for buttons, cards, badges
+- [ ] Use `rounded-full` for buttons, badges
+- [ ] Use `rounded-3xl` for cards
 - [ ] Use `rounded-lg` for inputs, dropdowns, menu items
 - [ ] Use `rounded-md` for tab triggers
 - [ ] Verify semantic color tokens are used (not arbitrary colors)
