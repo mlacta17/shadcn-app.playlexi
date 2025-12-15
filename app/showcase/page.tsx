@@ -61,6 +61,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { IconCircleCheckOutline24, IconAlertWarningOutline24 } from "nucleo-core-outline-24"
+import { SpeechInput } from "@/components/ui/speech-input"
 import { useState } from "react"
 
 export default function ShowcasePage() {
@@ -674,6 +675,15 @@ export default function ShowcasePage() {
         </div>
       </section>
 
+      {/* Speech Input Section */}
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold">Speech Input</h2>
+        <p className="text-sm text-muted-foreground">
+          Voice input component for spelling bee / word practice. Click buttons to see different states.
+        </p>
+        <SpeechInputDemo />
+      </section>
+
       {/* Typography Demo */}
       <section className="space-y-4">
         <h2 className="text-2xl font-semibold">Typography (Poppins Font)</h2>
@@ -753,6 +763,83 @@ function ComboboxErrorDemo() {
         </ComboboxContent>
       </Combobox>
       <p className="text-destructive text-sm">Please select at least one framework</p>
+    </div>
+  )
+}
+
+function SpeechInputDemo() {
+  const [state, setState] = useState<"default" | "recording">("default")
+  const [playPressed, setPlayPressed] = useState(false)
+  const [dictionaryPressed, setDictionaryPressed] = useState(false)
+  const [sentencePressed, setSentencePressed] = useState(false)
+  const [inputText, setInputText] = useState("")
+
+  const handleRecord = () => {
+    setState("recording")
+    // Simulate voice input after 2 seconds
+    setTimeout(() => {
+      setInputText("boy")
+    }, 1000)
+  }
+
+  const handleStop = () => {
+    setState("default")
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Interactive Demo</h3>
+        <SpeechInput
+          state={state}
+          playPressed={playPressed}
+          dictionaryPressed={dictionaryPressed}
+          sentencePressed={sentencePressed}
+          inputText={inputText}
+          onRecordClick={handleRecord}
+          onStopClick={handleStop}
+          onPlayClick={() => setPlayPressed(!playPressed)}
+          onDictionaryClick={() => {
+            setDictionaryPressed(!dictionaryPressed)
+            setPlayPressed(false)
+            setSentencePressed(false)
+          }}
+          onSentenceClick={() => {
+            setSentencePressed(!sentencePressed)
+            setPlayPressed(false)
+            setDictionaryPressed(false)
+          }}
+          definition="Definition: a male child or young man"
+        />
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Default State (No Input)</h3>
+        <SpeechInput />
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Recording State</h3>
+        <SpeechInput state="recording" />
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">With Input + Dictionary</h3>
+        <SpeechInput
+          inputText="elephant"
+          dictionaryPressed={true}
+          definition="Definition: a very large animal with thick grey skin, large ears, two curved outer teeth called tusks and a long nose called a trunk"
+        />
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Recording + Play Active</h3>
+        <SpeechInput
+          state="recording"
+          inputText="magnificent"
+          playPressed={true}
+        />
+      </div>
     </div>
   )
 }
