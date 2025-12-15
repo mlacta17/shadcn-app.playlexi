@@ -125,15 +125,31 @@ These are built into the codebase and apply automatically to all components:
 
 ### 10. Data Attributes for Components
 - **Purpose:** Standardized attributes for component identification and styling hooks
+- **Source:** Part of shadcn/ui's component architecture (already included in all shadcn components)
 - **Standard attributes:**
   - `data-slot="component-name"` - Identifies the component type (e.g., "button", "input", "card")
   - `data-variant="variant-name"` - Tracks which variant is active (e.g., "destructive", "outline")
   - `data-size="size-name"` - Tracks size variant (e.g., "sm", "default", "lg")
+- **Real examples from your components:**
+  ```tsx
+  // Button component
+  <button data-slot="button" data-variant="destructive" data-size="lg">
+
+  // Card component
+  <div data-slot="card" data-size="sm">
+
+  // Input component
+  <input data-slot="input">
+  ```
 - **Why use them:**
-  - CSS selectors can target specific components: `[data-slot="button"]`
-  - Parent components can style children: `[data-slot="card"] [data-slot="button"]`
-  - Debugging: Easy to identify components in DevTools
-- **Action:** Add these attributes to all new components following existing patterns
+  - **CSS targeting**: `[data-slot="button"]` or `has-data-[slot=combobox-chip]`
+  - **Parent-child styling**: Style buttons inside cards differently
+  - **Debugging**: Instantly see component type in browser DevTools
+  - **Conditional styling**: `data-[size=sm]:gap-4` applies styles based on size
+- **Action:**
+  - shadcn components already have these - **keep them when updating**
+  - Add these attributes to custom components for consistency
+  - Never remove `data-slot`, `data-variant`, or `data-size` attributes
 
 ### 11. Group Variants
 - **Pattern:** Parent-child state communication using Tailwind's group feature
