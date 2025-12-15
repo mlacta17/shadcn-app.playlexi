@@ -79,7 +79,15 @@ These are built into the codebase and apply automatically to all components:
 - **Small buttons:** 12px (size-3)
 - **Action:** None - SVG sizing is automatic via CSS selectors
 
-### 6. Semantic Color System
+### 6. Form Input Backgrounds (Maia Style)
+- **Pattern:** `bg-input/30` for all form inputs (both light and dark mode)
+- **Source:** shadcn/ui Maia style preset
+- **Applies to:** Input, Textarea, Select trigger, InputGroup, ComboboxChips
+- **Effect:** Subtle tinted background at 30% opacity using the `--input` color token
+- **Why different from default shadcn?** This project uses the Maia style preset which provides a more defined visual hierarchy for form elements
+- **Action:** Use `bg-input/30` for all form-related components
+
+### 7. Semantic Color System
 - **Location:** [app/globals.css:63-233](app/globals.css:63-233)
 - **Format:** OKLCH color space
 - **Pattern:** Background + foreground pairs for proper contrast
@@ -92,7 +100,7 @@ These are built into the codebase and apply automatically to all components:
 - **Hover states:** `--primary-hover`, `--secondary-hover`, `--destructive-hover`
 - **Action:** Use semantic tokens instead of arbitrary colors
 
-### 7. Button Hover States
+### 8. Button Hover States
 - **Pattern:** Darker shades on hover (not lighter)
 - **Implementation:** `hover:bg-[var(--primary-hover)]`
 - **Action:** None - already built into button component
@@ -164,11 +172,14 @@ When adding a new shadcn component:
 
 **Goal:** Create a distinctive UI that feels cohesive and polished while maintaining compatibility with shadcn's component additions.
 
+**Base Style:** This project uses the **Maia** style preset from shadcn/ui, which provides a refined, modern aesthetic with subtle backgrounds and enhanced visual hierarchy.
+
 **Achieved through:**
-1. Scaled padding via border radius system (not hardcoded values)
-2. Custom font (Poppins) via CSS variables
-3. Nucleo icons for visual differentiation
-4. Consistent semantic color system
-5. Accessible focus ring system
+1. Maia style preset from shadcn/ui (form input backgrounds, color palette)
+2. Scaled padding via border radius system (not hardcoded values)
+3. Custom font (Poppins) via CSS variables
+4. Nucleo icons for visual differentiation
+5. Consistent semantic color system
+6. Accessible focus ring system
 
 **Result:** New shadcn components automatically inherit most styling. Only icon imports need manual updates.
