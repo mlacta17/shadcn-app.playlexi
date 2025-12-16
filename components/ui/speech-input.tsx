@@ -84,12 +84,12 @@ function SpeechInput({
       data-slot="speech-input"
       data-state={state}
       className={cn(
-        "bg-secondary border-input flex w-full max-w-[525px] flex-col items-start overflow-clip rounded-lg border",
+        "bg-secondary outline-input flex w-full max-w-[525px] flex-col items-start overflow-clip rounded-lg outline outline-1 -outline-offset-1",
         className
       )}
     >
       {/* Main content area */}
-      <div className="bg-transparent border-input flex h-[138px] w-full flex-col gap-2.5 overflow-clip rounded-b-lg border p-3">
+      <div className="bg-background border-input flex h-[138px] w-full flex-col gap-2.5 rounded-b-lg border p-3">
         {/* Voice input display */}
         <p
           className={cn(
@@ -109,8 +109,6 @@ function SpeechInput({
               size="icon-sm"
               onClick={onSentenceClick}
               aria-label="Use word in sentence"
-              aria-pressed={sentencePressed}
-              className={cn(sentencePressed && "bg-muted")}
             >
               <SentenceIcon />
             </Button>
@@ -119,8 +117,6 @@ function SpeechInput({
               size="icon-sm"
               onClick={onDictionaryClick}
               aria-label="Show definition"
-              aria-pressed={dictionaryPressed}
-              className={cn(dictionaryPressed && "bg-muted")}
             >
               <DictionaryIcon />
             </Button>
@@ -156,8 +152,6 @@ function SpeechInput({
               size="icon-sm"
               onClick={onPlayClick}
               aria-label="Play word"
-              aria-pressed={playPressed}
-              className={cn(playPressed && "bg-muted")}
             >
               <PlayIcon />
             </Button>
