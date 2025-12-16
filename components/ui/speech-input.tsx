@@ -77,13 +77,13 @@ function SpeechInput({
       data-slot="speech-input"
       data-state={state}
       className={cn(
-        "bg-secondary outline-input flex w-full max-w-[525px] flex-col items-start overflow-clip rounded-lg outline outline-1 -outline-offset-1",
+        "bg-input/30 outline-input flex w-full max-w-[525px] flex-col items-start overflow-clip rounded-lg outline outline-1 -outline-offset-1",
         className
       )}
       {...props}
     >
       {/* Main content area */}
-      <div className="bg-background border-input flex h-[138px] w-full flex-col gap-2.5 rounded-b-lg border p-3">
+      <div className="bg-background border-input flex h-[138px] w-full flex-col gap-2.5 rounded-lg border p-3">
         {/* Voice input display */}
         <p
           className={cn(
