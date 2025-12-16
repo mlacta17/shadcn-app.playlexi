@@ -148,11 +148,11 @@ function SpeechInput({
 
       {/* Footer text area - shows contextual info based on pressed button */}
       {footerText && (
-        <div className="flex w-full shrink-0 items-center justify-center p-3">
+        <div className="flex w-full items-center justify-center p-3">
           <p
             className={cn(
-              "text-muted-foreground w-full overflow-hidden text-ellipsis text-nowrap text-sm leading-5",
-              (playPressed || sentencePressed) && "italic"
+              "text-muted-foreground w-full text-sm leading-normal",
+              (playPressed || sentencePressed) && "italic text-nowrap"
             )}
           >
             {footerText}
