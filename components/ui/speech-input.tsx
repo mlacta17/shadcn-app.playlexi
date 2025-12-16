@@ -1,5 +1,3 @@
-"use client"
-
 import * as React from "react"
 import {
   IconMicrophoneOutline24 as MicIcon,
@@ -12,23 +10,21 @@ import {
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
-export interface SpeechInputProps {
+export interface SpeechInputProps extends React.ComponentProps<"div"> {
   /** Current state of the input - Default or Recording */
   state?: "default" | "recording"
-  /** Whether the play button is pressed */
+  /** Whether the play button is pressed - shows audio playback message in footer */
   playPressed?: boolean
-  /** Whether the dictionary button is pressed */
+  /** Whether the dictionary button is pressed - shows definition in footer */
   dictionaryPressed?: boolean
-  /** Whether the sentence button is pressed */
+  /** Whether the sentence button is pressed - shows sentence playback message in footer */
   sentencePressed?: boolean
   /** The current voice input text */
   inputText?: string
   /** Placeholder text when no input */
   placeholder?: string
-  /** Definition text to show in footer */
+  /** Definition text to show in footer when dictionary is pressed */
   definition?: string
-  /** Status text to show in footer (for play/sentence states) */
-  statusText?: string
   /** Callback when record button is clicked */
   onRecordClick?: () => void
   /** Callback when stop button is clicked */
@@ -39,8 +35,6 @@ export interface SpeechInputProps {
   onDictionaryClick?: () => void
   /** Callback when sentence button is clicked */
   onSentenceClick?: () => void
-  /** Additional class names */
-  className?: string
 }
 
 function SpeechInput({
@@ -51,33 +45,32 @@ function SpeechInput({
   inputText,
   placeholder = "no voice input...",
   definition,
-  statusText,
   onRecordClick,
   onStopClick,
   onPlayClick,
   onDictionaryClick,
   onSentenceClick,
   className,
+  ...props
 }: SpeechInputProps) {
   const isRecording = state === "recording"
   const hasInput = Boolean(inputText)
 
-  // Determine footer text
+  // Determine footer text based on which button is pressed
   const getFooterText = () => {
     if (playPressed) {
-      return statusText || "*Word being spoken out right now. Make sure volume is on*"
+      return "Word is being spoken. Make sure your volume is on."
     }
     if (sentencePressed) {
-      return statusText || "*Word being used in a sentence. Make sure volume is on*"
+      return "Word is being used in a sentence. Make sure your volume is on."
     }
-    if (dictionaryPressed || definition) {
-      return definition || "Definition: [insert definition of word, but not the word]"
+    if (dictionaryPressed && definition) {
+      return definition
     }
     return null
   }
 
   const footerText = getFooterText()
-  const showFooter = Boolean(footerText)
 
   return (
     <div
@@ -87,28 +80,30 @@ function SpeechInput({
         "bg-secondary outline-input flex w-full max-w-[525px] flex-col items-start overflow-clip rounded-lg outline outline-1 -outline-offset-1",
         className
       )}
+      {...props}
     >
       {/* Main content area */}
       <div className="bg-background border-input flex h-[138px] w-full flex-col gap-2.5 rounded-b-lg border p-3">
         {/* Voice input display */}
         <p
           className={cn(
-            "min-h-px min-w-px w-full grow shrink-0 basis-0 overflow-hidden text-ellipsis text-nowrap text-center text-xl leading-7 italic",
+            "w-full grow overflow-hidden text-ellipsis text-nowrap text-center text-xl leading-7 italic",
             hasInput ? "text-foreground" : "text-muted-foreground"
           )}
         >
           {hasInput ? `"${inputText}"` : `"${placeholder}"`}
         </p>
 
-        {/* Footer controls */}
+        {/* Controls row */}
         <div className="flex w-full shrink-0 items-center justify-between">
-          {/* Left buttons - Sentence and Dictionary */}
+          {/* Left buttons - Sentence and Dictionary (disabled while recording) */}
           <div className="flex shrink-0 items-center gap-2">
             <Button
               variant="outline"
               size="icon-sm"
               onClick={onSentenceClick}
               aria-label="Use word in sentence"
+              disabled={isRecording}
             >
               <SentenceIcon />
             </Button>
@@ -117,6 +112,7 @@ function SpeechInput({
               size="icon-sm"
               onClick={onDictionaryClick}
               aria-label="Show definition"
+              disabled={isRecording}
             >
               <DictionaryIcon />
             </Button>
@@ -124,34 +120,25 @@ function SpeechInput({
 
           {/* Center button - Record/Stop */}
           {isRecording ? (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={onStopClick}
-              className="h-9"
-            >
+            <Button variant="destructive" size="sm" onClick={onStopClick}>
               <StopIcon data-icon="inline-start" />
               Stop
             </Button>
           ) : (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={onRecordClick}
-              className="h-9"
-            >
+            <Button variant="default" size="sm" onClick={onRecordClick}>
               <MicIcon data-icon="inline-start" />
               Record
             </Button>
           )}
 
-          {/* Right button - Play */}
+          {/* Right button - Play (disabled while recording) */}
           <div className="flex min-w-[80px] shrink-0 items-center justify-end gap-2">
             <Button
               variant="outline"
               size="icon-sm"
               onClick={onPlayClick}
               aria-label="Play word"
+              disabled={isRecording}
             >
               <PlayIcon />
             </Button>
@@ -159,12 +146,12 @@ function SpeechInput({
         </div>
       </div>
 
-      {/* Footer text area */}
-      {showFooter && (
+      {/* Footer text area - shows contextual info based on pressed button */}
+      {footerText && (
         <div className="flex w-full shrink-0 items-center justify-center p-3">
           <p
             className={cn(
-              "text-muted-foreground min-h-px min-w-px h-full w-full overflow-hidden text-ellipsis text-nowrap text-sm leading-5",
+              "text-muted-foreground w-full overflow-hidden text-ellipsis text-nowrap text-sm leading-5",
               (playPressed || sentencePressed) && "italic"
             )}
           >
