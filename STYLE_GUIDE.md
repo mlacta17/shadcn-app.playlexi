@@ -108,6 +108,13 @@ These are built into the codebase and apply automatically to all components:
 - **Implementation:** `hover:bg-[var(--primary-hover)]`
 - **Action:** None - already built into button component
 
+### 8.1. Outline Button Background
+- **Pattern:** `bg-background` (matching original shadcn/ui)
+- **Light mode:** White background
+- **Dark mode:** Dark gray background (`oklch(0.145 0 0)`)
+- **Why?** Provides visual distinction from ghost buttons and ensures consistent appearance across different container backgrounds
+- **Action:** None - already built into button component
+
 ### 9. Icon Positioning System
 - **Pattern:** Automatic padding adjustment when icons are present in components
 - **Implementation:** `has-data-[icon=inline-start]:pl-3 has-data-[icon=inline-end]:pr-3`
