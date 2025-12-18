@@ -162,7 +162,7 @@ function Navbar({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="hidden md:block rounded-full">
-                  <Avatar size="sm">
+                  <Avatar>
                     {user.avatarUrl && <AvatarImage src={user.avatarUrl} />}
                     <AvatarFallback>{user.initials || user.name.slice(0, 2).toUpperCase()}</AvatarFallback>
                   </Avatar>
