@@ -16,27 +16,28 @@ These are built into the codebase and apply automatically to all components:
 - **Location:** [app/globals.css:52-58](app/globals.css:52-58)
 - **Base:** `--radius: 0.625rem` (10px)
 - **Available utilities:**
-  - `rounded-md` = 6px (Tailwind default) - **for tab triggers**
-  - `rounded-lg` = 8px (Tailwind default) - **for inputs, dropdowns, menu items**
+  - `rounded-md` = 6px (Tailwind default) - **for tab triggers, badges**
+  - `rounded-lg` = 8px (Tailwind default) - **for inputs, dropdowns, menu items, nav links**
   - `rounded-3xl` = 24px (Tailwind default) - **for cards**
   - `rounded-4xl` = 26px (`calc(var(--radius) + 16px)`) - **for individual combobox chips**
-  - `rounded-full` = 9999px (Tailwind default) - **for buttons, badges**
+  - `rounded-full` = 9999px (Tailwind default) - **for buttons**
 - **Visual hierarchy:**
-  - Extra Subtle (6px): Tab triggers - minimal, clean
-  - Subtle (8px): Form inputs, dropdown containers, menu items - cohesive, functional
+  - Extra Subtle (6px): Tab triggers, badges - minimal, clean
+  - Subtle (8px): Form inputs, dropdown containers, menu items, nav links - cohesive, functional
   - Medium (24px): Cards - structured, contained
   - Medium-Bold (26px): Individual combobox chips - prominent but not fully rounded
-  - Bold (fully rounded): Buttons, badges - distinctive, pill-shaped
+  - Bold (fully rounded): Buttons - distinctive, pill-shaped
 - **Action:**
-  - Use `rounded-md` for tab triggers
+  - Use `rounded-md` for tab triggers, badges
   - Use `rounded-lg` for:
     - Form inputs (input, textarea, select trigger, combobox chips container)
     - Dropdown content (select dropdown, dropdown menu, combobox popup)
     - Tab list containers
     - All menu items (dropdown items, select items, combobox items)
+    - Nav links (navbar navigation items)
   - Use `rounded-3xl` for cards
   - Use `rounded-4xl` for individual combobox chips (the pills inside ComboboxChips)
-  - Use `rounded-full` for buttons, badges
+  - Use `rounded-full` for buttons
 
 ### 3. Component Padding Scale
 - **Pattern:** ~33% increase from shadcn defaults
@@ -217,10 +218,11 @@ NUCLEO_LICENSE_KEY=d6tpflas8rzd0l58ik7fiy1jt3wqti
 When adding a new shadcn component:
 
 - [ ] Replace all `lucide-react` imports with `nucleo-core-outline-24`
-- [ ] Use `rounded-full` for buttons, badges
+- [ ] Use `rounded-full` for buttons
+- [ ] Use `rounded-md` for badges
 - [ ] Use `rounded-4xl` for individual combobox chips
 - [ ] Use `rounded-3xl` for cards
-- [ ] Use `rounded-lg` for inputs, dropdowns, menu items
+- [ ] Use `rounded-lg` for inputs, dropdowns, menu items, nav links
 - [ ] Use `rounded-md` for tab triggers
 - [ ] Verify semantic color tokens are used (not arbitrary colors)
 - [ ] Confirm SVG sizing selector `[&_svg:not([class*='size-'])]:size-4` is present
