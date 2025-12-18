@@ -62,6 +62,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { IconCircleCheckOutline24, IconAlertWarningOutline24 } from "nucleo-core-outline-24"
 import { SpeechInput } from "@/components/ui/speech-input"
+import { Navbar } from "@/components/ui/navbar"
 import { useState } from "react"
 
 export default function ShowcasePage() {
@@ -684,6 +685,15 @@ export default function ShowcasePage() {
         <SpeechInputDemo />
       </section>
 
+      {/* Navbar Section */}
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold">Navbar</h2>
+        <p className="text-sm text-muted-foreground">
+          Responsive navigation bar with desktop and mobile views. Supports logged-in and logged-out states.
+        </p>
+        <NavbarDemo />
+      </section>
+
       {/* Typography Demo */}
       <section className="space-y-4">
         <h2 className="text-2xl font-semibold">Typography (Poppins Font)</h2>
@@ -839,6 +849,71 @@ function SpeechInputDemo() {
           inputText="magnificent"
           playPressed={true}
         />
+      </div>
+    </div>
+  )
+}
+
+function NavbarDemo() {
+  return (
+    <div className="space-y-8">
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Logged Out (Default)</h3>
+        <div className="border rounded-lg overflow-hidden">
+          <Navbar
+            logo={
+              <div className="size-9 rounded-lg bg-foreground flex items-center justify-center text-background font-bold text-sm">
+                L
+              </div>
+            }
+            onSignUp={() => alert("Sign up clicked")}
+            onNotificationClick={() => alert("Notifications clicked")}
+          />
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Logged In (with notifications)</h3>
+        <div className="border rounded-lg overflow-hidden">
+          <Navbar
+            logo={
+              <div className="size-9 rounded-lg bg-foreground flex items-center justify-center text-background font-bold text-sm">
+                L
+              </div>
+            }
+            isLoggedIn={true}
+            user={{
+              name: "John Doe",
+              email: "john@example.com",
+              avatarUrl: "https://github.com/shadcn.png",
+              initials: "JD",
+            }}
+            notificationCount={2}
+            onNotificationClick={() => alert("Notifications clicked")}
+            onProfileClick={() => alert("Profile clicked")}
+            onSettingsClick={() => alert("Settings clicked")}
+            onSignOut={() => alert("Sign out clicked")}
+          />
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Custom Nav Links</h3>
+        <div className="border rounded-lg overflow-hidden">
+          <Navbar
+            logo={
+              <div className="size-9 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
+                P
+              </div>
+            }
+            navLinks={[
+              { label: "Home", href: "/", active: true },
+              { label: "Dashboard", href: "/dashboard" },
+              { label: "Settings", href: "/settings" },
+            ]}
+            onSignUp={() => alert("Sign up clicked")}
+          />
+        </div>
       </div>
     </div>
   )
