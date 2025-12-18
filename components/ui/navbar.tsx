@@ -82,26 +82,25 @@ function Navbar({
     <nav
       data-slot="navbar"
       className={cn(
-        "bg-background border-border flex h-16 w-full items-center justify-between border-b px-4 shadow-sm md:px-6",
+        "bg-background flex h-16 w-full items-center justify-between px-4 md:px-6",
         className
       )}
     >
       <div className="flex h-full w-full max-w-[1280px] items-center justify-between mx-auto">
         {/* Mobile: Menu button */}
-        <button
-          type="button"
+        <Button
+          variant={mobileMenuOpen ? "secondary" : "ghost"}
+          size="icon-sm"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="flex size-9 items-center justify-center rounded-lg md:hidden"
+          className="md:hidden"
           aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
         >
           {mobileMenuOpen ? (
-            <div className="bg-secondary flex size-9 items-center justify-center rounded-lg">
-              <XIcon className="size-5 text-foreground" />
-            </div>
+            <XIcon className="size-5" />
           ) : (
-            <MenuIcon className="size-5 text-muted-foreground" />
+            <MenuIcon className="size-5" />
           )}
-        </button>
+        </Button>
 
         {/* Desktop: Logo + Nav */}
         <div className="flex flex-1 items-center gap-6">
@@ -195,7 +194,7 @@ function Navbar({
 
       {/* Mobile Menu Dropdown */}
       {mobileMenuOpen && (
-        <div className="absolute left-0 right-0 top-14 z-50 border-b border-border bg-background shadow-sm md:hidden">
+        <div className="absolute left-0 right-0 top-14 z-50 bg-background md:hidden">
           {/* Nav Links */}
           <div className="flex flex-col p-2">
             {navLinks.map((link) => (
@@ -236,33 +235,36 @@ function Navbar({
                   </div>
                 </div>
                 {/* Account Links */}
-                <button
+                <Button
+                  variant="ghost"
                   onClick={() => {
                     onProfileClick?.()
                     setMobileMenuOpen(false)
                   }}
-                  className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-base font-medium text-muted-foreground text-left"
+                  className="justify-start px-3 py-2 text-base font-medium text-muted-foreground"
                 >
                   My profile
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="ghost"
                   onClick={() => {
                     onSettingsClick?.()
                     setMobileMenuOpen(false)
                   }}
-                  className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-base font-medium text-muted-foreground text-left"
+                  className="justify-start px-3 py-2 text-base font-medium text-muted-foreground"
                 >
                   Account settings
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="ghost"
                   onClick={() => {
                     onSignOut?.()
                     setMobileMenuOpen(false)
                   }}
-                  className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-base font-medium text-muted-foreground text-left"
+                  className="justify-start px-3 py-2 text-base font-medium text-muted-foreground"
                 >
                   Sign out
-                </button>
+                </Button>
               </>
             ) : (
               <Button onClick={onSignUp} className="w-full">
