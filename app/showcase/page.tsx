@@ -859,7 +859,7 @@ function NavbarDemo() {
     <div className="space-y-8">
       <div>
         <h3 className="text-sm font-medium mb-3 text-muted-foreground">Logged Out (Default)</h3>
-        <div className="border rounded-lg overflow-hidden">
+        <div className="border overflow-hidden">
           <Navbar
             logo={
               <div className="size-9 rounded-lg bg-foreground flex items-center justify-center text-background font-bold text-sm">
@@ -874,7 +874,7 @@ function NavbarDemo() {
 
       <div>
         <h3 className="text-sm font-medium mb-3 text-muted-foreground">Logged In (with notifications)</h3>
-        <div className="border rounded-lg overflow-hidden">
+        <div className="border overflow-hidden">
           <Navbar
             logo={
               <div className="size-9 rounded-lg bg-foreground flex items-center justify-center text-background font-bold text-sm">
@@ -899,7 +899,7 @@ function NavbarDemo() {
 
       <div>
         <h3 className="text-sm font-medium mb-3 text-muted-foreground">Custom Nav Links</h3>
-        <div className="border rounded-lg overflow-hidden">
+        <div className="border overflow-hidden">
           <Navbar
             logo={
               <div className="size-9 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
@@ -912,6 +912,33 @@ function NavbarDemo() {
               { label: "Settings", href: "/settings" },
             ]}
             onSignUp={() => alert("Sign up clicked")}
+          />
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Mobile View (resize browser or use dev tools)</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          The navbar shows a hamburger menu on mobile. Click the menu icon to expand. Below is a mobile-width preview:
+        </p>
+        <div className="border overflow-hidden max-w-[375px]">
+          <Navbar
+            logo={
+              <div className="size-9 rounded-lg bg-foreground flex items-center justify-center text-background font-bold text-sm">
+                L
+              </div>
+            }
+            isLoggedIn={true}
+            user={{
+              name: "Jane Smith",
+              email: "jane@example.com",
+              initials: "JS",
+            }}
+            notificationCount={5}
+            onNotificationClick={() => alert("Notifications clicked")}
+            onProfileClick={() => alert("Profile clicked")}
+            onSettingsClick={() => alert("Settings clicked")}
+            onSignOut={() => alert("Sign out clicked")}
           />
         </div>
       </div>
