@@ -3,20 +3,33 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
+/**
+ * Design System Tokens
+ *
+ * These map to the project's CSS variables defined in globals.css.
+ * Using CSS variables ensures the component respects theme changes (light/dark mode).
+ *
+ * Colors:
+ * - --foreground: Main text/icon color (near-black in light, near-white in dark)
+ *
+ * The component uses canvas for performance, so we read CSS variables
+ * at runtime rather than using Tailwind classes directly.
+ */
+
 export interface VoiceWaveformProps {
   /** Audio analyser node from useVoiceRecorder hook - when provided, shows active state */
   analyserNode?: AnalyserNode | null
-  /** Number of bars in the waveform */
+  /** Number of bars in the waveform (default: 34) */
   barCount?: number
-  /** Gap between bars in pixels */
+  /** Gap between bars - uses Tailwind spacing scale: 0.5 = 2px, 0.75 = 3px, 1 = 4px (default: 0.75 = 3px) */
   barGap?: number
-  /** Width of each bar in pixels */
+  /** Width of each bar - uses Tailwind spacing scale: 1.5 = 6px (default: 1.5 = 6px) */
   barWidth?: number
-  /** Minimum bar height (inactive state) */
+  /** Minimum bar height in px - shown in inactive state (default: 4px) */
   minBarHeight?: number
-  /** Maximum bar height (active state) */
+  /** Maximum bar height in px - peak height when active (default: 67px to match Figma) */
   maxBarHeight?: number
-  /** Sensitivity multiplier for audio input (0.5 - 3.0) */
+  /** Sensitivity multiplier for audio input - higher = more reactive (default: 1.5) */
   sensitivity?: number
   /** Additional class names */
   className?: string
@@ -25,20 +38,41 @@ export interface VoiceWaveformProps {
 /**
  * Voice waveform visualizer component.
  *
- * - **Inactive state**: Shows minimal, uniform short bars when no analyserNode is provided
- * - **Active state**: Reacts to audio input when analyserNode is provided
+ * A canvas-based audio visualizer that displays:
+ * - **Inactive state**: Minimal, uniform short bars when no analyserNode is provided
+ * - **Active state**: Dynamic bars that react to audio input, mirrored from center
+ *
+ * ## Design System Compliance
+ * - Uses `--foreground` CSS variable for bar color (respects light/dark mode)
+ * - Bars use fully-rounded ends (like buttons per STYLE_GUIDE.md)
+ * - Follows component patterns: data-slot, data-state attributes
+ *
+ * ## Architecture
+ * This is a **presentational component**. Audio capture logic should live in
+ * the `useVoiceRecorder` hook, which provides the analyserNode.
  *
  * @example
  * ```tsx
- * const { analyserNode } = useVoiceRecorder()
- * <VoiceWaveform analyserNode={analyserNode} />
+ * import { useVoiceRecorder } from "@/hooks/use-voice-recorder"
+ * import { VoiceWaveform } from "@/components/ui/voice-waveform"
+ *
+ * function MyComponent() {
+ *   const { analyserNode, startRecording, stopRecording } = useVoiceRecorder()
+ *
+ *   return (
+ *     <div className="flex flex-col items-center gap-6">
+ *       <VoiceWaveform analyserNode={analyserNode} />
+ *       <Button onClick={startRecording}>Record</Button>
+ *     </div>
+ *   )
+ * }
  * ```
  */
 function VoiceWaveform({
   analyserNode,
   barCount = 34,
-  barGap = 3,
-  barWidth = 6,
+  barGap = 3, // 0.75rem equivalent in px
+  barWidth = 6, // 1.5rem equivalent in px
   minBarHeight = 4,
   maxBarHeight = 67,
   sensitivity = 1.5,
@@ -47,21 +81,51 @@ function VoiceWaveform({
   const canvasRef = React.useRef<HTMLCanvasElement>(null)
   const animationRef = React.useRef<number | null>(null)
   const dataArrayRef = React.useRef<Uint8Array<ArrayBuffer> | null>(null)
+  const prevHeightsRef = React.useRef<number[]>([])
+  const randomOffsetsRef = React.useRef<number[]>([])
+
+  // Smoothing factor for transitions (0 = instant, 1 = no change)
+  // Creates fluid, natural-feeling animations
+  const smoothingFactor = 0.3
+
+  // Asymmetry factor - adds organic variation to break perfect symmetry
+  // ~12% variation makes it feel alive rather than robotic
+  const asymmetryFactor = 0.12
+
+  // Generate stable random offsets for each bar (only once per mount)
+  // This creates consistent "personality" for the waveform
+  if (randomOffsetsRef.current.length !== barCount) {
+    randomOffsetsRef.current = Array.from({ length: barCount }, () =>
+      1 + (Math.random() - 0.5) * 2 * asymmetryFactor
+    )
+  }
 
   // Calculate canvas dimensions
   const canvasWidth = barCount * barWidth + (barCount - 1) * barGap
   const canvasHeight = maxBarHeight
 
-  // Get the bar color from CSS variable (foreground = black in light mode)
+  /**
+   * Reads the --foreground CSS variable from the document root.
+   * This ensures the waveform respects the current theme (light/dark mode).
+   *
+   * Falls back to near-black (#0a0a0a) if variable is not found.
+   */
   const getBarColor = React.useCallback(() => {
-    if (typeof window !== "undefined") {
-      const styles = getComputedStyle(document.documentElement)
-      return styles.getPropertyValue("--foreground").trim() || "#0a0a0a"
-    }
-    return "#0a0a0a"
+    if (typeof window === "undefined") return "#0a0a0a"
+
+    const styles = getComputedStyle(document.documentElement)
+    const foreground = styles.getPropertyValue("--foreground").trim()
+
+    // Convert OKLCH to a usable color if needed, or use as-is
+    // Most browsers support OKLCH in canvas fillStyle
+    return foreground || "#0a0a0a"
   }, [])
 
-  // Draw inactive state - minimal uniform bars
+  /**
+   * Draws the inactive state - minimal uniform bars.
+   * All bars are the same height (minBarHeight), creating a flat "idle" look.
+   * Bars use fully-rounded ends (radius = barWidth/2) per STYLE_GUIDE.md button pattern.
+   */
   const drawInactive = React.useCallback(
     (ctx: CanvasRenderingContext2D) => {
       const color = getBarColor()
@@ -74,6 +138,7 @@ function VoiceWaveform({
 
         ctx.fillStyle = color
         ctx.beginPath()
+        // Fully-rounded ends (like buttons) - radius is half the width
         ctx.roundRect(x, y, barWidth, barHeight, barWidth / 2)
         ctx.fill()
       }
@@ -81,7 +146,15 @@ function VoiceWaveform({
     [barCount, barGap, barWidth, minBarHeight, canvasWidth, canvasHeight, getBarColor]
   )
 
-  // Draw active waveform from audio data
+  /**
+   * Draws the active state - dynamic bars responding to audio.
+   *
+   * Key behaviors:
+   * 1. Mirrors from center - animation expands outward symmetrically
+   * 2. Focuses on voice frequencies (100Hz-3000Hz) for better voice reactivity
+   * 3. Applies smoothing for fluid transitions
+   * 4. Adds subtle asymmetry (~12%) for organic feel
+   */
   const drawActive = React.useCallback(
     (ctx: CanvasRenderingContext2D) => {
       const color = getBarColor()
@@ -92,39 +165,69 @@ function VoiceWaveform({
       analyserNode.getByteFrequencyData(dataArray)
       ctx.clearRect(0, 0, canvasWidth, canvasHeight)
 
-      // Sample the frequency data to match our bar count
-      const bufferLength = analyserNode.frequencyBinCount
-      const step = Math.floor(bufferLength / barCount)
+      // Focus on voice frequencies (bins 2-40 ≈ 100Hz-3000Hz for human voice)
+      const voiceStartBin = 2
+      const voiceEndBin = 40
+      const voiceBins = voiceEndBin - voiceStartBin
 
-      for (let i = 0; i < barCount; i++) {
-        // Average a range of frequencies for smoother visualization
+      // Calculate heights for half the bars (will be mirrored)
+      const halfBars = Math.floor(barCount / 2)
+      const step = Math.floor(voiceBins / halfBars)
+      const heights: number[] = []
+
+      for (let i = 0; i < halfBars; i++) {
         let sum = 0
-        const startIndex = i * step
+        const startIndex = voiceStartBin + i * step
         for (let j = 0; j < step; j++) {
           sum += dataArray[startIndex + j] || 0
         }
         const average = sum / step
-
-        // Scale the value to bar height
         const normalizedValue = average / 255
         const barHeight = Math.max(
           minBarHeight,
           minBarHeight + normalizedValue * (maxBarHeight - minBarHeight) * sensitivity
         )
+        heights.push(barHeight)
+      }
+
+      // Initialize previous heights if needed
+      if (prevHeightsRef.current.length !== barCount) {
+        prevHeightsRef.current = new Array(barCount).fill(minBarHeight)
+      }
+
+      // Draw bars mirrored from center with smoothing and asymmetry
+      for (let i = 0; i < barCount; i++) {
+        const centerIndex = (barCount - 1) / 2
+        const distanceFromCenter = Math.abs(i - centerIndex)
+        const normalizedDistance = distanceFromCenter / centerIndex
+
+        // Map to heights array (center gets most energy)
+        const heightIndex = Math.min(Math.floor(normalizedDistance * halfBars), halfBars - 1)
+        const baseHeight = heights[heightIndex] || minBarHeight
+
+        // Apply asymmetry for organic feel
+        const randomOffset = randomOffsetsRef.current[i] || 1
+        const targetHeight = Math.min(maxBarHeight, Math.max(minBarHeight, baseHeight * randomOffset))
+
+        // Smooth transition (lerp toward target)
+        const prevHeight = prevHeightsRef.current[i] || minBarHeight
+        const barHeight = prevHeight + (targetHeight - prevHeight) * (1 - smoothingFactor)
+        prevHeightsRef.current[i] = barHeight
 
         const x = i * (barWidth + barGap)
         const y = (canvasHeight - barHeight) / 2
 
         ctx.fillStyle = color
         ctx.beginPath()
+        // Fully-rounded ends (like buttons) - radius is half the width
         ctx.roundRect(x, y, barWidth, barHeight, barWidth / 2)
         ctx.fill()
       }
     },
-    [analyserNode, barCount, barGap, barWidth, minBarHeight, maxBarHeight, sensitivity, canvasWidth, canvasHeight, getBarColor]
+    [analyserNode, barCount, barGap, barWidth, minBarHeight, maxBarHeight, sensitivity, smoothingFactor, canvasWidth, canvasHeight, getBarColor]
   )
 
-  // Animation loop
+  /** Animation loop - runs at 60fps when active */
   const animate = React.useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -140,12 +243,11 @@ function VoiceWaveform({
     }
   }, [analyserNode, drawActive, drawInactive])
 
-  // Initialize data array when analyser changes
+  // Initialize/cleanup data array when analyser changes
   React.useEffect(() => {
     if (analyserNode) {
       const bufferLength = analyserNode.frequencyBinCount
       dataArrayRef.current = new Uint8Array(new ArrayBuffer(bufferLength))
-      // Start animation when analyser is connected
       animationRef.current = requestAnimationFrame(animate)
     } else {
       dataArrayRef.current = null
@@ -153,9 +255,7 @@ function VoiceWaveform({
       const canvas = canvasRef.current
       if (canvas) {
         const ctx = canvas.getContext("2d")
-        if (ctx) {
-          drawInactive(ctx)
-        }
+        if (ctx) drawInactive(ctx)
       }
     }
 
@@ -166,14 +266,12 @@ function VoiceWaveform({
     }
   }, [analyserNode, animate, drawInactive])
 
-  // Initial draw
+  // Initial draw on mount
   React.useEffect(() => {
     const canvas = canvasRef.current
     if (canvas && !analyserNode) {
       const ctx = canvas.getContext("2d")
-      if (ctx) {
-        drawInactive(ctx)
-      }
+      if (ctx) drawInactive(ctx)
     }
   }, [analyserNode, drawInactive])
 
@@ -188,6 +286,7 @@ function VoiceWaveform({
         width={canvasWidth}
         height={canvasHeight}
         className="block"
+        aria-hidden="true"
         style={{ width: canvasWidth, height: canvasHeight }}
       />
     </div>

@@ -213,6 +213,63 @@ Add to environment variables (Vercel/Netlify/etc.):
 NUCLEO_LICENSE_KEY=d6tpflas8rzd0l58ik7fiy1jt3wqti
 ```
 
+## Canvas-Based Components
+
+Some components use HTML Canvas for performance-critical rendering. These can't use Tailwind classes directly but must still follow the design system.
+
+### Voice Waveform
+- **Location:** [components/ui/voice-waveform.tsx](components/ui/voice-waveform.tsx)
+- **Hook:** [hooks/use-voice-recorder.ts](hooks/use-voice-recorder.ts)
+- **Type:** Canvas-based audio visualizer
+
+#### Design System Integration:
+| Aspect | Implementation |
+|--------|----------------|
+| **Color** | Reads `--foreground` CSS variable at runtime via `getComputedStyle()` |
+| **Bar radius** | Fully-rounded ends (`barWidth / 2`) matching button pattern |
+| **Spacing** | `barWidth=6px` (1.5 spacing units), `barGap=3px` (0.75 spacing units) |
+| **Attributes** | `data-slot="voice-waveform"`, `data-state="active\|inactive"` |
+| **Accessibility** | `aria-hidden="true"` (decorative element) |
+
+#### Architecture:
+```
+useVoiceRecorder (hook) - owns microphone + speech recognition
+├── analyserNode → VoiceWaveform (presentational)
+├── transcript → display recognized speech
+└── isRecording, startRecording, stopRecording → controls
+```
+
+#### Usage:
+```tsx
+import { useVoiceRecorder } from "@/hooks/use-voice-recorder"
+import { VoiceWaveform } from "@/components/ui/voice-waveform"
+
+function MyComponent() {
+  const { analyserNode, startRecording, stopRecording } = useVoiceRecorder()
+
+  return (
+    <div className="flex flex-col items-center gap-6">
+      <VoiceWaveform analyserNode={analyserNode} />
+      <SpeechInput onRecordClick={startRecording} onStopClick={stopRecording} />
+    </div>
+  )
+}
+```
+
+#### Visual Behavior:
+- **Inactive state:** Minimal uniform bars (flat idle look)
+- **Active state:** Dynamic bars mirrored from center, ~12% asymmetry for organic feel
+- **Smoothing:** 0.3 factor for fluid transitions
+- **Voice focus:** Samples 100Hz-3000Hz range (human voice frequencies)
+
+#### Adding New Canvas Components:
+When creating canvas-based components, follow this pattern:
+1. Read colors from CSS variables (`getComputedStyle(document.documentElement).getPropertyValue('--variable')`)
+2. Use spacing values that align with Tailwind scale (4px increments)
+3. Apply `data-slot` and `data-state` attributes to wrapper element
+4. Add `aria-hidden="true"` if purely decorative
+5. Document the component in this section
+
 ## Component Checklist
 
 When adding a new shadcn component:
@@ -237,6 +294,8 @@ When adding a new shadcn component:
 - **Button example:** [components/ui/button.tsx](components/ui/button.tsx)
 - **Example with icons:** [components/component-example.tsx](components/component-example.tsx)
 - **Showcase page:** [app/showcase/page.tsx](app/showcase/page.tsx)
+- **Canvas component:** [components/ui/voice-waveform.tsx](components/ui/voice-waveform.tsx)
+- **Voice recorder hook:** [hooks/use-voice-recorder.ts](hooks/use-voice-recorder.ts)
 
 ## Design Philosophy
 
