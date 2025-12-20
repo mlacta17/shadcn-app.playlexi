@@ -324,4 +324,19 @@ button.destructive:focus-visible,
   .focus-ring-none:focus-visible {
     outline: none !important;
   }
+
+  /*
+   * Focus ring for container components (InputGroup, ComboboxChips)
+   * Use when a container div wraps focusable children.
+   * Shows outline when any descendant is focused.
+   */
+  .focus-within-ring:focus-within {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  /* Destructive focus-within ring for error states */
+  .focus-within-ring[aria-invalid="true"]:focus-within {
+    outline-color: var(--destructive);
+  }
 }

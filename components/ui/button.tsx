@@ -4,6 +4,15 @@ import { Slot } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Button variant styles using class-variance-authority.
+ * Can be used directly for styling non-button elements as buttons.
+ *
+ * @example
+ * ```tsx
+ * <a className={buttonVariants({ variant: "outline" })}>Link as button</a>
+ * ```
+ */
 const buttonVariants = cva(
   "rounded-full border border-transparent bg-clip-padding text-sm font-medium [&_svg:not([class*='size-'])]:size-4 inline-flex items-center justify-center whitespace-nowrap transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none shrink-0 [&_svg]:shrink-0 group/button select-none",
   {
@@ -34,6 +43,50 @@ const buttonVariants = cva(
   }
 )
 
+/**
+ * A versatile button component with multiple variants and sizes.
+ *
+ * @param variant - Visual style of the button
+ *   - `default` - Primary action (solid background)
+ *   - `outline` - Secondary action (bordered)
+ *   - `secondary` - Alternative action (muted background)
+ *   - `ghost` - Minimal style (transparent until hover)
+ *   - `destructive` - Dangerous action (red)
+ *   - `link` - Text link style (underline on hover)
+ *
+ * @param size - Button dimensions
+ *   - `default` - Standard size (h-10)
+ *   - `xs` - Extra small (h-7)
+ *   - `sm` - Small (h-9)
+ *   - `lg` - Large (h-11)
+ *   - `icon` - Square icon button (size-10)
+ *   - `icon-xs`, `icon-sm`, `icon-lg` - Icon button sizes
+ *
+ * @param asChild - Render as child element using Radix Slot.
+ *   Useful for rendering as Next.js Link or other components.
+ *
+ * @example
+ * ```tsx
+ * // Basic usage
+ * <Button variant="outline">Click me</Button>
+ *
+ * // With icon (add data-icon for automatic padding adjustment)
+ * <Button>
+ *   <IconPlus data-icon="inline-start" />
+ *   Add Item
+ * </Button>
+ *
+ * // As a link
+ * <Button asChild>
+ *   <Link href="/page">Go to page</Link>
+ * </Button>
+ *
+ * // Icon-only button
+ * <Button variant="ghost" size="icon-sm">
+ *   <IconSettings />
+ * </Button>
+ * ```
+ */
 function Button({
   className,
   variant = "default",
@@ -42,6 +95,7 @@ function Button({
   ...props
 }: React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
+    /** Render as child element using Radix Slot for polymorphic components */
     asChild?: boolean
   }) {
   const Comp = asChild ? Slot.Root : "button"

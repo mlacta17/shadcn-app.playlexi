@@ -55,8 +55,15 @@ These are built into the codebase and apply automatically to all components:
 ### 4.1. Focus Ring for Container Components
 - **Pattern:** Use `focus-within` for containers that don't receive focus themselves
 - **Applies to:** InputGroup, ComboboxChips (containers wrapping focusable children)
-- **Implementation:**
-  ```
+- **Utility class:** `focus-within-ring` (defined in globals.css)
+- **Implementation options:**
+  ```tsx
+  // Option 1: Use utility class (recommended for new components)
+  <div className="focus-within-ring" aria-invalid={hasError}>
+    <input />
+  </div>
+
+  // Option 2: Inline Tailwind (existing components use this)
   focus-within:outline
   focus-within:outline-[length:var(--focus-ring-width)]
   focus-within:outline-[var(--focus-ring-color)]
@@ -64,7 +71,7 @@ These are built into the codebase and apply automatically to all components:
   aria-invalid:focus-within:outline-[var(--destructive)]
   ```
 - **Why?** Container `<div>` elements don't receive focus - their child `<input>` elements do. `focus-within` shows outline when any descendant is focused.
-- **Action:** Use this pattern for any new composite form components
+- **Action:** Use `focus-within-ring` class for any new composite form components
 
 ### 4.2. Error States (Form Validation)
 - **Pattern:** `aria-invalid:border-destructive dark:aria-invalid:border-destructive/50`
@@ -180,7 +187,13 @@ These require action when adding new components:
 ### 1. Icons - Use Nucleo Instead of Lucide
 **IMPORTANT:** Always import from `nucleo-core-outline-24`, never from `lucide-react`
 
-#### Pattern:
+#### Recommended: Use centralized icons file
+```typescript
+import { PlusIcon, TrashIcon, SettingsIcon } from "@/lib/icons"
+```
+See [lib/icons.ts](lib/icons.ts) for all available icons with common aliases.
+
+#### Alternative: Import directly from Nucleo
 ```typescript
 import {
   IconNameOutline24 as AliasName,
@@ -270,6 +283,90 @@ When creating canvas-based components, follow this pattern:
 4. Add `aria-hidden="true"` if purely decorative
 5. Document the component in this section
 
+## Navigation Components
+
+### Navbar
+- **Location:** [components/ui/navbar.tsx](components/ui/navbar.tsx)
+- **Type:** Full-featured responsive navigation bar
+- **Use case:** Main app navigation with logo, nav links, notifications, and user menu
+
+#### Props:
+| Prop | Type | Description |
+|------|------|-------------|
+| `logo` | `ReactNode` | Logo element or image |
+| `navLinks` | `Array<{label, href, active?, badge?}>` | Navigation links configuration |
+| `isLoggedIn` | `boolean` | Toggle logged-in/logged-out state |
+| `user` | `{name, email, avatarUrl?, initials?}` | User info for logged-in state |
+| `notificationCount` | `number` | Badge count on notification bell |
+| `onSignUp`, `onSignOut`, etc. | `() => void` | Action callbacks |
+
+#### Usage:
+```tsx
+import { Navbar } from "@/components/ui/navbar"
+
+<Navbar
+  logo={<img src="/logo.svg" alt="Logo" />}
+  navLinks={[
+    { label: "Play", href: "/play", active: true },
+    { label: "Learn", href: "/learn", badge: "PRO" },
+  ]}
+  isLoggedIn={true}
+  user={{ name: "John", email: "john@example.com" }}
+  notificationCount={3}
+  onSignOut={() => signOut()}
+/>
+```
+
+#### Features:
+- Responsive: Desktop shows full nav, mobile shows hamburger menu
+- Nav links support active state and badges
+- User dropdown with profile, settings, sign out
+- Notification bell with count badge
+
+---
+
+### TopNavbar
+- **Location:** [components/ui/top-navbar.tsx](components/ui/top-navbar.tsx)
+- **Type:** Minimal contextual header
+- **Use case:** Wizard flows, modal-like experiences, focused tasks where full navigation isn't needed
+
+#### Props:
+| Prop | Type | Description |
+|------|------|-------------|
+| `onClose` | `() => void` | Callback when close button clicked |
+| `closeHref` | `string` | URL for close button (alternative to callback) |
+| `skipLabel` | `string` | Text for skip link (default: "Skip") |
+| `skipHref` | `string` | URL for skip link |
+| `onSkip` | `() => void` | Callback when skip clicked |
+| `hideSkip` | `boolean` | Hide the skip link entirely |
+
+#### Usage:
+```tsx
+import { TopNavbar } from "@/components/ui/top-navbar"
+
+// With callbacks
+<TopNavbar
+  onClose={() => router.back()}
+  skipHref="/dashboard"
+/>
+
+// With links
+<TopNavbar
+  closeHref="/"
+  skipHref="/skip"
+  skipLabel="Skip this step"
+/>
+
+// Without skip link
+<TopNavbar onClose={() => router.back()} hideSkip />
+```
+
+#### Design System Compliance:
+- Close button: `Button variant="outline" size="icon-sm"` with Nucleo XIcon
+- Skip link: `Button variant="link" size="xs"`
+- Container: `bg-background border-b shadow-sm h-16 px-6`
+- Data attribute: `data-slot="top-navbar"`
+
 ## Component Checklist
 
 When adding a new shadcn component:
@@ -291,6 +388,7 @@ When adding a new shadcn component:
 
 - **Color system:** [app/globals.css](app/globals.css)
 - **Font setup:** [app/layout.tsx](app/layout.tsx)
+- **Icon exports:** [lib/icons.ts](lib/icons.ts)
 - **Button example:** [components/ui/button.tsx](components/ui/button.tsx)
 - **Example with icons:** [components/component-example.tsx](components/component-example.tsx)
 - **Showcase page:** [app/showcase/page.tsx](app/showcase/page.tsx)

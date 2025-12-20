@@ -59,6 +59,34 @@ export interface NavbarProps {
   className?: string
 }
 
+/**
+ * Full-featured responsive navigation bar.
+ *
+ * Features:
+ * - Responsive: Desktop shows full nav, mobile shows hamburger menu
+ * - Nav links with active state and optional badges
+ * - Notification bell with count badge
+ * - User dropdown (logged in) or sign up button (logged out)
+ *
+ * @example
+ * ```tsx
+ * // Logged out state
+ * <Navbar
+ *   logo={<img src="/logo.svg" />}
+ *   onSignUp={() => openSignUpModal()}
+ * />
+ *
+ * // Logged in state
+ * <Navbar
+ *   isLoggedIn={true}
+ *   user={{ name: "John", email: "john@example.com" }}
+ *   notificationCount={3}
+ *   onSignOut={() => signOut()}
+ * />
+ * ```
+ *
+ * @see {@link TopNavbar} for minimal wizard-flow navigation
+ */
 function Navbar({
   logo,
   navLinks = [

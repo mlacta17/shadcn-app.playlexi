@@ -64,6 +64,7 @@ import { IconCircleCheckOutline24, IconAlertWarningOutline24 } from "nucleo-core
 import { SpeechInput } from "@/components/ui/speech-input"
 import { VoiceWaveform } from "@/components/ui/voice-waveform"
 import { Navbar } from "@/components/ui/navbar"
+import { TopNavbar } from "@/components/ui/top-navbar"
 import { useVoiceRecorder } from "@/hooks/use-voice-recorder"
 import { useState } from "react"
 
@@ -705,6 +706,15 @@ export default function ShowcasePage() {
         <NavbarDemo />
       </section>
 
+      {/* Top Navbar Section */}
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold">Top Navbar</h2>
+        <p className="text-sm text-muted-foreground">
+          Minimal contextual header for wizard-like flows with close button and skip link.
+        </p>
+        <TopNavbarDemo />
+      </section>
+
       {/* Typography Demo */}
       <section className="space-y-4">
         <h2 className="text-2xl font-semibold">Typography (Poppins Font)</h2>
@@ -1035,6 +1045,37 @@ function NavbarDemo() {
             onSignOut={() => alert("Sign out clicked")}
           />
         </div>
+      </div>
+    </div>
+  )
+}
+
+function TopNavbarDemo() {
+  return (
+    <div className="space-y-8">
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Default (with callback)</h3>
+        <TopNavbar
+          onClose={() => alert("Close clicked")}
+          skipHref="/dashboard"
+        />
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">With Close Link</h3>
+        <TopNavbar
+          closeHref="/"
+          skipHref="/skip"
+          skipLabel="Skip this step"
+        />
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Without Skip Link</h3>
+        <TopNavbar
+          onClose={() => alert("Close clicked")}
+          hideSkip
+        />
       </div>
     </div>
   )
