@@ -62,7 +62,9 @@ import {
 } from "@/components/ui/alert-dialog"
 import { IconCircleCheckOutline24, IconAlertWarningOutline24 } from "nucleo-core-outline-24"
 import { SpeechInput } from "@/components/ui/speech-input"
+import { VoiceWaveform } from "@/components/ui/voice-waveform"
 import { Navbar } from "@/components/ui/navbar"
+import { useVoiceRecorder } from "@/hooks/use-voice-recorder"
 import { useState } from "react"
 
 export default function ShowcasePage() {
@@ -676,6 +678,15 @@ export default function ShowcasePage() {
         </div>
       </section>
 
+      {/* Voice Waveform Section */}
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold">Voice Waveform</h2>
+        <p className="text-sm text-muted-foreground">
+          Audio visualizer that reacts to microphone input. Shows inactive state when not recording.
+        </p>
+        <VoiceWaveformDemo />
+      </section>
+
       {/* Speech Input Section */}
       <section className="space-y-4">
         <h2 className="text-2xl font-semibold">Speech Input</h2>
@@ -773,6 +784,89 @@ function ComboboxErrorDemo() {
         </ComboboxContent>
       </Combobox>
       <p className="text-destructive text-sm">Please select at least one framework</p>
+    </div>
+  )
+}
+
+function VoiceWaveformDemo() {
+  const { isRecording, startRecording, stopRecording, analyserNode, transcript } = useVoiceRecorder({
+    onTranscript: (text) => console.log("Transcript:", text),
+  })
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Interactive Demo</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Click Record to capture microphone input. The waveform reacts to your voice.
+        </p>
+        <div className="flex flex-col items-start gap-4">
+          <VoiceWaveform analyserNode={analyserNode} />
+          <div className="flex items-center gap-4">
+            <Button
+              variant={isRecording ? "destructive" : "default"}
+              onClick={isRecording ? stopRecording : startRecording}
+            >
+              {isRecording ? "Stop Recording" : "Start Recording"}
+            </Button>
+            {transcript && (
+              <p className="text-sm text-muted-foreground">
+                You said: <span className="text-foreground font-medium">&quot;{transcript}&quot;</span>
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Inactive State</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Minimal uniform bars when no audio input.
+        </p>
+        <VoiceWaveform />
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Full Integration with SpeechInput</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          VoiceWaveform positioned above SpeechInput with gap-6, as per the Figma design.
+        </p>
+        <VoiceWaveformWithSpeechInputDemo />
+      </div>
+    </div>
+  )
+}
+
+function VoiceWaveformWithSpeechInputDemo() {
+  const { isRecording, startRecording, stopRecording, analyserNode, transcript } = useVoiceRecorder()
+  const [playPressed, setPlayPressed] = useState(false)
+  const [dictionaryPressed, setDictionaryPressed] = useState(false)
+  const [sentencePressed, setSentencePressed] = useState(false)
+
+  return (
+    <div className="flex flex-col items-center gap-6 max-w-[525px]">
+      <VoiceWaveform analyserNode={analyserNode} />
+      <SpeechInput
+        state={isRecording ? "recording" : "default"}
+        playPressed={playPressed}
+        dictionaryPressed={dictionaryPressed}
+        sentencePressed={sentencePressed}
+        inputText={transcript}
+        onRecordClick={startRecording}
+        onStopClick={stopRecording}
+        onPlayClick={() => setPlayPressed(!playPressed)}
+        onDictionaryClick={() => {
+          setDictionaryPressed(!dictionaryPressed)
+          setPlayPressed(false)
+          setSentencePressed(false)
+        }}
+        onSentenceClick={() => {
+          setSentencePressed(!sentencePressed)
+          setPlayPressed(false)
+          setDictionaryPressed(false)
+        }}
+        definition="Definition: a male child or young man"
+      />
     </div>
   )
 }
