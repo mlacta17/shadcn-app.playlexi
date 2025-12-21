@@ -1,6 +1,6 @@
 # PlayLexi — Technical Architecture
 
-> **Version:** 1.5
+> **Version:** 1.6
 > **Last Updated:** December 21, 2025
 > **Status:** Final Draft
 
@@ -27,6 +27,7 @@
 17. [Observability](#17-observability)
 18. [Developer Guide](#18-developer-guide)
 19. [Architecture Decision Records](#19-architecture-decision-records)
+20. [Implementation Roadmap](#20-implementation-roadmap)
 
 ---
 
@@ -2552,6 +2553,233 @@ When adding a new decision, copy this template:
 **Consequences:**
 - [What are the positive and negative implications?]
 ```
+
+---
+
+## 20. Implementation Roadmap
+
+This section defines the phased approach for building PlayLexi. Each phase is a vertical slice — complete, testable functionality rather than building all components first, then all APIs, etc.
+
+### 20.1 Phase Overview
+
+| Phase | Name | Goal | Dependencies |
+|-------|------|------|--------------|
+| 1 | Foundation | Database, auth, basic layout | None |
+| 2 | Solo Endless MVP | Playable single-player game | Phase 1 |
+| 3 | Onboarding | New user flow with placement | Phase 2 |
+| 4 | Multiplayer | Real-time competitive play | Phase 2 |
+| 5 | Social & Polish | Friends, chat, leaderboards | Phase 4 |
+
+### 20.2 Phase 1: Foundation
+
+**Goal:** Project infrastructure that all features depend on.
+
+| Task | Type | Details | Status |
+|------|------|---------|--------|
+| 1.1 | Database | Drizzle schema from Section 4, D1 setup | Not Started |
+| 1.2 | Database | Run migrations, verify tables | Not Started |
+| 1.3 | Database | Seed words table (100+ words across 7 tiers) | Not Started |
+| 1.4 | Auth | NextAuth config with Google OAuth | Not Started |
+| 1.5 | Auth | Apple OAuth provider | Not Started |
+| 1.6 | Auth | Protected route middleware | Not Started |
+| 1.7 | Layout | Navbar already done ✓ | Done |
+| 1.8 | Layout | Main app layout with auth gate | Not Started |
+| 1.9 | API | `/api/words/random` — get word by difficulty tier | Not Started |
+| 1.10 | API | `/api/users/me` — get/update current user | Not Started |
+
+**Exit Criteria:**
+- [ ] Can sign in with Google
+- [ ] Protected routes redirect to login
+- [ ] Can query random words by tier
+- [ ] Database migrations run successfully
+
+---
+
+### 20.3 Phase 2: Solo Endless MVP
+
+**Goal:** A playable single-player Endless mode game.
+
+**Documents to Reference:**
+- STYLE_GUIDE.md — UI patterns, icons, border radius
+- COMPONENT_INVENTORY.md — Component specs and status
+- PRD.md Section 4.1.1 — Endless mode rules
+
+| Task | Type | Details | Status |
+|------|------|---------|--------|
+| 2.1 | Hook | `useVoiceRecorder` — mic access, AnalyserNode, Whisper transcription | Not Started |
+| 2.2 | Hook | `useGameTimer` — countdown with warning/critical states | Not Started |
+| 2.3 | Component | `VoiceInput` — smart component composing hook + VoiceWaveform | Not Started |
+| 2.4 | Component | `KeyboardInput` — text input alternative | Not Started |
+| 2.5 | Component | `GameTimer` — wrapper around Progress with timer logic | Not Started |
+| 2.6 | Component | `HeartsDisplay` — 3 hearts with loss animation | Not Started |
+| 2.7 | Component | `RoundIndicator` — "Round 1" badge | Not Started |
+| 2.8 | Component | `WordHelperButtons` — sentence, dictionary, play buttons | Not Started |
+| 2.9 | API | `/api/voice/transcribe` — Whisper via Workers AI | Not Started |
+| 2.10 | API | `/api/games` — create solo game session | Not Started |
+| 2.11 | API | `/api/games/[gameId]/submit` — submit answer, check correctness | Not Started |
+| 2.12 | Page | `/play/single/endless/page.tsx` — mode selection | Not Started |
+| 2.13 | Page | `/game/[gameId]/page.tsx` — game screen | Not Started |
+| 2.14 | Page | `/game/[gameId]/results/page.tsx` — end screen with stats | Not Started |
+| 2.15 | Logic | Game state machine (ready → playing → round → result → next/end) | Not Started |
+| 2.16 | Logic | XP calculation for solo games (+5 XP per round) | Not Started |
+
+**Exit Criteria:**
+- [ ] Can start an Endless game
+- [ ] Can spell words via voice OR keyboard
+- [ ] Timer counts down with visual states
+- [ ] Hearts decrease on wrong answers
+- [ ] Game ends when hearts = 0
+- [ ] Results screen shows rounds completed and XP earned
+
+---
+
+### 20.4 Phase 3: Onboarding
+
+**Goal:** New users can complete tutorial, placement game, and create profile.
+
+**Documents to Reference:**
+- PRD.md Section 2.2 — New user flow details
+
+| Task | Type | Details | Status |
+|------|------|---------|--------|
+| 3.1 | Component | `TutorialCard` — step card with progress bar | Not Started |
+| 3.2 | Component | `TutorialStep` — individual step content | Not Started |
+| 3.3 | Component | `RankBadge` — tier badge (7 variants) | Not Started |
+| 3.4 | Component | `RankReveal` — animation showing earned rank | Not Started |
+| 3.5 | Component | `ProfileCompletionForm` — username, age, avatar | Not Started |
+| 3.6 | Page | `/onboarding/tutorial/page.tsx` — 3-step tutorial | Not Started |
+| 3.7 | Page | `/onboarding/placement/page.tsx` — placement game | Not Started |
+| 3.8 | Page | `/onboarding/rank-result/page.tsx` — rank assignment | Not Started |
+| 3.9 | Page | `/onboarding/complete-profile/page.tsx` — profile form | Not Started |
+| 3.10 | Logic | Placement rank calculation (based on highest tier reached) | Not Started |
+| 3.11 | API | `/api/users/check-username` — availability check | Not Started |
+| 3.12 | API | Update user profile after OAuth | Not Started |
+
+**Exit Criteria:**
+- [ ] New user sees tutorial on first visit
+- [ ] Can skip or complete tutorial
+- [ ] Placement game determines starting rank
+- [ ] Rank reveal shows appropriate tier badge
+- [ ] Profile completion validates unique username
+- [ ] User lands on main app after completion
+
+---
+
+### 20.5 Phase 4: Multiplayer
+
+**Goal:** Real-time multiplayer games with lobby and matchmaking.
+
+**Documents to Reference:**
+- ARCHITECTURE.md Section 7 — Durable Objects architecture
+- PRD.md Section 5 — Multiplayer rules
+
+| Task | Type | Details | Status |
+|------|------|---------|--------|
+| 4.1 | Infrastructure | Durable Object: `GameRoom` class | Not Started |
+| 4.2 | Infrastructure | Durable Object: `MatchmakingQueue` class | Not Started |
+| 4.3 | Hook | `useGameState` — WebSocket connection to Durable Object | Not Started |
+| 4.4 | Hook | `useMatchmaking` — queue state, tier expansion | Not Started |
+| 4.5 | Component | `PlayerStandingsSidebar` — collapsible player list | Not Started |
+| 4.6 | Component | `PlayerRow` — individual player in standings | Not Started |
+| 4.7 | Component | `LobbyPlayerList` — pre-game player cards | Not Started |
+| 4.8 | Component | `RoomCodeDisplay` — large code with copy button | Not Started |
+| 4.9 | Component | `MatchmakingSpinner` — queue animation with timer | Not Started |
+| 4.10 | Component | `GameCountdown` — 3-2-1 animation | Not Started |
+| 4.11 | Component | `CurrentPlayerIndicator` — avatar above waveform | Not Started |
+| 4.12 | Page | `/play/multiplayer/local/page.tsx` — create local room | Not Started |
+| 4.13 | Page | `/play/multiplayer/online/private/page.tsx` — create private room | Not Started |
+| 4.14 | Page | `/play/multiplayer/online/public/page.tsx` — matchmaking | Not Started |
+| 4.15 | Page | `/play/multiplayer/lobby/[roomCode]/page.tsx` — lobby | Not Started |
+| 4.16 | Logic | Turn-based game flow | Not Started |
+| 4.17 | Logic | Elimination and placement | Not Started |
+| 4.18 | Logic | Reconnection handling (60s window) | Not Started |
+| 4.19 | Logic | XP calculation with weighted modifiers | Not Started |
+
+**Exit Criteria:**
+- [ ] Can create and join private rooms via code
+- [ ] Matchmaking finds players within tier range
+- [ ] Real-time turn updates via WebSocket
+- [ ] Players see each other's status (hearts, rounds)
+- [ ] Elimination redirects to results with live updates
+- [ ] Reconnection works within 60s window
+
+---
+
+### 20.6 Phase 5: Social & Polish
+
+**Goal:** Friends, chat, leaderboards, and profile features.
+
+| Task | Type | Details | Status |
+|------|------|---------|--------|
+| 5.1 | Component | `FriendsList` — widget with search | Not Started |
+| 5.2 | Component | `FriendRow` — avatar, name, online status | Not Started |
+| 5.3 | Component | `FriendRequestCard` — accept/decline | Not Started |
+| 5.4 | Component | `PresetMessagePill` — chat bubbles | Not Started |
+| 5.5 | Component | `ChatWindow` — 1:1 preset message chat | Not Started |
+| 5.6 | Component | `LeaderboardTable` — ranked player table | Not Started |
+| 5.7 | Component | `LeaderboardFilters` — mode/input toggles | Not Started |
+| 5.8 | Component | `NotificationBell` — bell with badge | Not Started |
+| 5.9 | Component | `ProfileHeader` — avatar, username, stats | Not Started |
+| 5.10 | Component | `RankCards` — 4 track progress cards | Not Started |
+| 5.11 | Component | `MatchHistoryTable` — past games | Not Started |
+| 5.12 | Page | `/leaderboard/page.tsx` — with tabs | Not Started |
+| 5.13 | Page | `/profile/page.tsx` — own profile | Not Started |
+| 5.14 | Page | `/profile/[username]/page.tsx` — other profiles | Not Started |
+| 5.15 | Page | `/settings/page.tsx` — user settings | Not Started |
+| 5.16 | Page | `/chat/[friendId]/page.tsx` — chat | Not Started |
+| 5.17 | API | Friends CRUD routes | Not Started |
+| 5.18 | API | Leaderboard routes (global, friends, solo) | Not Started |
+| 5.19 | API | Notifications routes | Not Started |
+| 5.20 | API | Chat/messaging routes | Not Started |
+| 5.21 | Logic | Crown Points system (Royal Bees) | Not Started |
+| 5.22 | Logic | Bee Keeper determination per track | Not Started |
+
+**Exit Criteria:**
+- [ ] Can send/accept friend requests
+- [ ] Can chat with friends via preset messages
+- [ ] Leaderboards show global, friends, and solo tabs
+- [ ] Profile shows all 4 rank tracks
+- [ ] Settings allow theme and notification preferences
+- [ ] Crown Points tracked for Royal Bees
+
+---
+
+### 20.7 Implementation Guidelines
+
+When starting each phase:
+
+1. **Read the relevant docs first:**
+   - Phase 1-2: ARCHITECTURE.md Sections 4, 5, 8, 10
+   - Phase 2 UI: STYLE_GUIDE.md, COMPONENT_INVENTORY.md
+   - Phase 4: ARCHITECTURE.md Section 7
+
+2. **Update COMPONENT_INVENTORY.md** as you implement:
+   - Mark components "In Progress" when starting
+   - Mark "Done" when complete and tested
+
+3. **Follow the design system:**
+   - Icons from `lib/icons.ts` only
+   - Colors from CSS variables only
+   - Border radius per STYLE_GUIDE.md scale
+
+4. **Test each phase before moving on:**
+   - Manual testing of all exit criteria
+   - Unit tests for hooks and utilities
+   - Update this roadmap with completion status
+
+---
+
+### 20.8 Progress Tracking
+
+Update this section as phases complete:
+
+| Phase | Status | Started | Completed | Notes |
+|-------|--------|---------|-----------|-------|
+| 1 - Foundation | Not Started | — | — | — |
+| 2 - Solo Endless MVP | Not Started | — | — | — |
+| 3 - Onboarding | Not Started | — | — | — |
+| 4 - Multiplayer | Not Started | — | — | — |
+| 5 - Social & Polish | Not Started | — | — | — |
 
 ---
 
