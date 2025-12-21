@@ -71,6 +71,9 @@ export { IconSunOutline24 as SunIcon } from "nucleo-core-outline-24"
 export { IconMoonOutline24 as MoonIcon } from "nucleo-core-outline-24"
 export { IconMonitorOutline24 as MonitorIcon } from "nucleo-core-outline-24"
 
+// Text/Content icons
+export { IconMessage2ContentOutline24 as SentenceIcon } from "nucleo-core-outline-24"
+
 // Misc icons
 export { IconEyeOutline24 as EyeIcon } from "nucleo-core-outline-24"
 export { IconLayoutTopOutline24 as LayoutIcon } from "nucleo-core-outline-24"
@@ -79,5 +82,6 @@ export { IconCreditCardOutline24 as CreditCardIcon } from "nucleo-core-outline-2
 export { IconCircleQuestionOutline24 as HelpCircleIcon } from "nucleo-core-outline-24"
 export { IconBluetoothOutline24 as BluetoothIcon } from "nucleo-core-outline-24"
 export { IconBookOutline24 as BookIcon } from "nucleo-core-outline-24"
+export { IconBookOutline24 as DictionaryIcon } from "nucleo-core-outline-24"
 export { IconAlertWarningOutline24 as AlertWarningIcon } from "nucleo-core-outline-24"
 export { IconCircleCheckOutline24 as CircleCheckIcon } from "nucleo-core-outline-24"

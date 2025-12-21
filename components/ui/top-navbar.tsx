@@ -1,8 +1,7 @@
 "use client"
 
-import * as React from "react"
 import Link from "next/link"
-import { IconXmarkOutline24 as XIcon } from "nucleo-core-outline-24"
+import { XIcon } from "@/lib/icons"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"

@@ -11,11 +11,7 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from "@/components/ui/input-group"
-import {
-  IconChevronDownOutline24 as ChevronDownIcon,
-  IconXmarkOutline24 as XIcon,
-  IconCheckOutline24 as CheckIcon,
-} from "nucleo-core-outline-24"
+import { ChevronDownIcon, XIcon, CheckIcon } from "@/lib/icons"
 
 const Combobox = ComboboxPrimitive.Root
 

@@ -3,13 +3,13 @@
 import * as React from "react"
 import Link from "next/link"
 import {
-  IconBellOutline24 as BellIcon,
-  IconMenuOutline24 as MenuIcon,
-  IconXmarkOutline24 as XIcon,
-  IconCircleUserOutline24 as UserIcon,
-  IconGearOutline24 as SettingsIcon,
-  IconCircleLogoutOutline24 as LogOutIcon,
-} from "nucleo-core-outline-24"
+  BellIcon,
+  MenuIcon,
+  XIcon,
+  CircleUserIcon as UserIcon,
+  SettingsIcon,
+  LogOutIcon,
+} from "@/lib/icons"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"

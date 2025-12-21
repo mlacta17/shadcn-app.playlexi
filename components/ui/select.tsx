@@ -4,11 +4,7 @@ import * as React from "react"
 import { Select as SelectPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
-import {
-  IconChevronDownOutline24 as ChevronDownIcon,
-  IconCheckOutline24 as CheckIcon,
-  IconChevronUpOutline24 as ChevronUpIcon,
-} from "nucleo-core-outline-24"
+import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "@/lib/icons"
 
 /**
  * A dropdown select component built on Radix UI Select.

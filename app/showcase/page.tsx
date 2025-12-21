@@ -26,7 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { IconPlusOutline24, IconTrashOutline24, IconDotsVerticalOutline24 } from "nucleo-core-outline-24"
+import { PlusIcon, TrashIcon, MoreVerticalIcon } from "@/lib/icons"
 import { ThemeSwitcher } from "@/components/kibo-ui/theme-switcher"
 import { Avatar, AvatarImage, AvatarFallback, AvatarBadge } from "@/components/ui/avatar"
 import { Progress } from "@/components/ui/progress"
@@ -60,7 +60,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { IconCircleCheckOutline24, IconAlertWarningOutline24 } from "nucleo-core-outline-24"
+import { CircleCheckIcon, AlertWarningIcon } from "@/lib/icons"
 import { SpeechInput } from "@/components/ui/speech-input"
 import { VoiceWaveform } from "@/components/ui/voice-waveform"
 import { Navbar } from "@/components/ui/navbar"
@@ -125,28 +125,28 @@ export default function ShowcasePage() {
             <h3 className="text-sm font-medium mb-3 text-muted-foreground">With Icons</h3>
             <div className="flex flex-wrap gap-3">
               <Button>
-                <IconPlusOutline24 data-icon="inline-start" />
+                <PlusIcon data-icon="inline-start" />
                 Add Item
               </Button>
               <Button variant="destructive">
-                <IconTrashOutline24 data-icon="inline-start" />
+                <TrashIcon data-icon="inline-start" />
                 Delete
               </Button>
               <Button variant="outline">
                 Save
-                <IconPlusOutline24 data-icon="inline-end" />
+                <PlusIcon data-icon="inline-end" />
               </Button>
               <Button size="icon-xs" variant="secondary">
-                <IconPlusOutline24 />
+                <PlusIcon />
               </Button>
               <Button size="icon-sm" variant="ghost">
-                <IconPlusOutline24 />
+                <PlusIcon />
               </Button>
               <Button size="icon">
-                <IconPlusOutline24 />
+                <PlusIcon />
               </Button>
               <Button size="icon-lg" variant="outline">
-                <IconPlusOutline24 />
+                <PlusIcon />
               </Button>
             </div>
           </div>
@@ -324,7 +324,7 @@ export default function ShowcasePage() {
             <CardContent>
               <p className="text-sm mb-3">Click the button to test focus rings</p>
               <Button variant="destructive" className="w-full">
-                <IconTrashOutline24 data-icon="inline-start" />
+                <TrashIcon data-icon="inline-start" />
                 Delete Item
               </Button>
             </CardContent>
@@ -394,7 +394,7 @@ export default function ShowcasePage() {
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogMedia>
-                      <IconCircleCheckOutline24 className="text-green-600" />
+                      <CircleCheckIcon className="text-green-600" />
                     </AlertDialogMedia>
                     <AlertDialogTitle>Success!</AlertDialogTitle>
                     <AlertDialogDescription>
@@ -419,7 +419,7 @@ export default function ShowcasePage() {
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogMedia>
-                      <IconAlertWarningOutline24 className="text-destructive" />
+                      <AlertWarningIcon className="text-destructive" />
                     </AlertDialogMedia>
                     <AlertDialogTitle>Warning</AlertDialogTitle>
                     <AlertDialogDescription>
@@ -467,7 +467,7 @@ export default function ShowcasePage() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
-                <IconDotsVerticalOutline24 data-icon="inline-start" />
+                <MoreVerticalIcon data-icon="inline-start" />
                 Open Menu
               </Button>
             </DropdownMenuTrigger>

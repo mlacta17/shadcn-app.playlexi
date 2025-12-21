@@ -184,20 +184,20 @@ These are built into the codebase and apply automatically to all components:
 
 These require action when adding new components:
 
-### 1. Icons - Use Nucleo Instead of Lucide
-**IMPORTANT:** Always import from `nucleo-core-outline-24`, never from `lucide-react`
+### 1. Icons - Use Centralized Icons File
+**IMPORTANT:** Always import icons from `@/lib/icons`, never directly from `nucleo-core-outline-24` or `lucide-react`.
 
-#### Recommended: Use centralized icons file
 ```typescript
 import { PlusIcon, TrashIcon, SettingsIcon } from "@/lib/icons"
 ```
-See [lib/icons.ts](lib/icons.ts) for all available icons with common aliases.
 
-#### Alternative: Import directly from Nucleo
+All components in this codebase use this pattern. See [lib/icons.ts](lib/icons.ts) for all available icons.
+
+#### Adding New Icons
+If you need an icon that isn't in `lib/icons.ts`, add it there first:
 ```typescript
-import {
-  IconNameOutline24 as AliasName,
-} from "nucleo-core-outline-24"
+// In lib/icons.ts
+export { IconNewIconOutline24 as NewIcon } from "nucleo-core-outline-24"
 ```
 
 #### Common Icon Mappings:
@@ -220,11 +220,12 @@ import {
 2. Browse: `node_modules/nucleo-core-outline-24/dist/components/`
 3. Search command: `ls node_modules/nucleo-core-outline-24/dist/components/ | grep -i "search-term"`
 
-#### Deployment:
-Add to environment variables (Vercel/Netlify/etc.):
+#### Setup:
+Add your Nucleo license key to `.env`:
 ```
-NUCLEO_LICENSE_KEY=d6tpflas8rzd0l58ik7fiy1jt3wqti
+NUCLEO_LICENSE_KEY=your-license-key
 ```
+For deployment, add the same variable to your hosting provider (Vercel/Netlify/etc.).
 
 ## Canvas-Based Components
 

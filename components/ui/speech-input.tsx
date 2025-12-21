@@ -1,11 +1,11 @@
 import * as React from "react"
 import {
-  IconMicrophoneOutline24 as MicIcon,
-  IconMediaStopOutline24 as StopIcon,
-  IconMediaPlayOutline24 as PlayIcon,
-  IconMessage2ContentOutline24 as SentenceIcon,
-  IconBookOutline24 as DictionaryIcon,
-} from "nucleo-core-outline-24"
+  MicIcon,
+  StopIcon,
+  PlayIcon,
+  SentenceIcon,
+  DictionaryIcon,
+} from "@/lib/icons"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
