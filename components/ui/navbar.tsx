@@ -262,7 +262,7 @@ function Navbar({
 
       {/* Mobile Menu Dropdown */}
       {mobileMenuOpen && (
-        <div className="absolute left-0 right-0 top-full z-50 bg-background border-t shadow-lg md:hidden">
+        <div className="absolute left-0 right-0 top-full z-50 bg-background shadow-lg md:hidden">
           {/* Nav Links */}
           <div className="flex flex-col p-2">
             {navLinks.map((link) => (
