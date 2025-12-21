@@ -2,10 +2,10 @@
 
 import { useControllableState } from "@radix-ui/react-use-controllable-state";
 import {
-  IconMonitorOutline24 as Monitor,
-  IconMoonOutline24 as Moon,
-  IconSunOutline24 as Sun,
-} from "nucleo-core-outline-24";
+  MonitorIcon as Monitor,
+  MoonIcon as Moon,
+  SunIcon as Sun,
+} from "@/lib/icons";
 import { motion } from "motion/react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";

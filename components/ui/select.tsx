@@ -4,12 +4,32 @@ import * as React from "react"
 import { Select as SelectPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
-import {
-  IconChevronDownOutline24 as ChevronDownIcon,
-  IconCheckOutline24 as CheckIcon,
-  IconChevronUpOutline24 as ChevronUpIcon,
-} from "nucleo-core-outline-24"
+import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "@/lib/icons"
 
+/**
+ * A dropdown select component built on Radix UI Select.
+ *
+ * @example
+ * ```tsx
+ * <Select>
+ *   <SelectTrigger>
+ *     <SelectValue placeholder="Select option" />
+ *   </SelectTrigger>
+ *   <SelectContent>
+ *     <SelectGroup>
+ *       <SelectLabel>Fruits</SelectLabel>
+ *       <SelectItem value="apple">Apple</SelectItem>
+ *       <SelectItem value="banana">Banana</SelectItem>
+ *     </SelectGroup>
+ *   </SelectContent>
+ * </Select>
+ * ```
+ *
+ * @remarks
+ * - Set `aria-invalid="true"` on SelectTrigger for error state
+ * - Use `size="sm"` on SelectTrigger for compact variant
+ * - SelectContent handles scroll buttons automatically for long lists
+ */
 function Select({
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Root>) {
@@ -35,6 +55,10 @@ function SelectValue({
   return <SelectPrimitive.Value data-slot="select-value" {...props} />
 }
 
+/**
+ * Button that opens the select dropdown. Displays current selection.
+ * @param size - `default` (h-10) or `sm` (h-9) for compact variant
+ */
 function SelectTrigger({
   className,
   size = "default",
@@ -106,6 +130,7 @@ function SelectLabel({
   )
 }
 
+/** Individual option in the select dropdown. Shows checkmark when selected. */
 function SelectItem({
   className,
   children,

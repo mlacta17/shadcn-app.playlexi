@@ -26,7 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { IconPlusOutline24, IconTrashOutline24, IconDotsVerticalOutline24 } from "nucleo-core-outline-24"
+import { PlusIcon, TrashIcon, MoreVerticalIcon } from "@/lib/icons"
 import { ThemeSwitcher } from "@/components/kibo-ui/theme-switcher"
 import { Avatar, AvatarImage, AvatarFallback, AvatarBadge } from "@/components/ui/avatar"
 import { Progress } from "@/components/ui/progress"
@@ -60,7 +60,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { IconCircleCheckOutline24, IconAlertWarningOutline24 } from "nucleo-core-outline-24"
+import { CircleCheckIcon, AlertWarningIcon } from "@/lib/icons"
+import { SpeechInput } from "@/components/ui/speech-input"
+import { VoiceWaveform } from "@/components/ui/voice-waveform"
+import { Navbar } from "@/components/ui/navbar"
+import { TopNavbar } from "@/components/ui/top-navbar"
+import { useVoiceRecorder } from "@/hooks/use-voice-recorder"
 import { useState } from "react"
 
 export default function ShowcasePage() {
@@ -120,28 +125,28 @@ export default function ShowcasePage() {
             <h3 className="text-sm font-medium mb-3 text-muted-foreground">With Icons</h3>
             <div className="flex flex-wrap gap-3">
               <Button>
-                <IconPlusOutline24 data-icon="inline-start" />
+                <PlusIcon data-icon="inline-start" />
                 Add Item
               </Button>
               <Button variant="destructive">
-                <IconTrashOutline24 data-icon="inline-start" />
+                <TrashIcon data-icon="inline-start" />
                 Delete
               </Button>
               <Button variant="outline">
                 Save
-                <IconPlusOutline24 data-icon="inline-end" />
+                <PlusIcon data-icon="inline-end" />
               </Button>
               <Button size="icon-xs" variant="secondary">
-                <IconPlusOutline24 />
+                <PlusIcon />
               </Button>
               <Button size="icon-sm" variant="ghost">
-                <IconPlusOutline24 />
+                <PlusIcon />
               </Button>
               <Button size="icon">
-                <IconPlusOutline24 />
+                <PlusIcon />
               </Button>
               <Button size="icon-lg" variant="outline">
-                <IconPlusOutline24 />
+                <PlusIcon />
               </Button>
             </div>
           </div>
@@ -319,7 +324,7 @@ export default function ShowcasePage() {
             <CardContent>
               <p className="text-sm mb-3">Click the button to test focus rings</p>
               <Button variant="destructive" className="w-full">
-                <IconTrashOutline24 data-icon="inline-start" />
+                <TrashIcon data-icon="inline-start" />
                 Delete Item
               </Button>
             </CardContent>
@@ -389,7 +394,7 @@ export default function ShowcasePage() {
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogMedia>
-                      <IconCircleCheckOutline24 className="text-green-600" />
+                      <CircleCheckIcon className="text-green-600" />
                     </AlertDialogMedia>
                     <AlertDialogTitle>Success!</AlertDialogTitle>
                     <AlertDialogDescription>
@@ -414,7 +419,7 @@ export default function ShowcasePage() {
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogMedia>
-                      <IconAlertWarningOutline24 className="text-destructive" />
+                      <AlertWarningIcon className="text-destructive" />
                     </AlertDialogMedia>
                     <AlertDialogTitle>Warning</AlertDialogTitle>
                     <AlertDialogDescription>
@@ -462,7 +467,7 @@ export default function ShowcasePage() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
-                <IconDotsVerticalOutline24 data-icon="inline-start" />
+                <MoreVerticalIcon data-icon="inline-start" />
                 Open Menu
               </Button>
             </DropdownMenuTrigger>
@@ -674,6 +679,42 @@ export default function ShowcasePage() {
         </div>
       </section>
 
+      {/* Voice Waveform Section */}
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold">Voice Waveform</h2>
+        <p className="text-sm text-muted-foreground">
+          Audio visualizer that reacts to microphone input. Shows inactive state when not recording.
+        </p>
+        <VoiceWaveformDemo />
+      </section>
+
+      {/* Speech Input Section */}
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold">Speech Input</h2>
+        <p className="text-sm text-muted-foreground">
+          Voice input component for spelling bee / word practice. Click buttons to see different states.
+        </p>
+        <SpeechInputDemo />
+      </section>
+
+      {/* Navbar Section */}
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold">Navbar</h2>
+        <p className="text-sm text-muted-foreground">
+          Responsive navigation bar with desktop and mobile views. Supports logged-in and logged-out states.
+        </p>
+        <NavbarDemo />
+      </section>
+
+      {/* Top Navbar Section */}
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold">Top Navbar</h2>
+        <p className="text-sm text-muted-foreground">
+          Minimal contextual header for wizard-like flows with close button and skip link.
+        </p>
+        <TopNavbarDemo />
+      </section>
+
       {/* Typography Demo */}
       <section className="space-y-4">
         <h2 className="text-2xl font-semibold">Typography (Poppins Font)</h2>
@@ -753,6 +794,283 @@ function ComboboxErrorDemo() {
         </ComboboxContent>
       </Combobox>
       <p className="text-destructive text-sm">Please select at least one framework</p>
+    </div>
+  )
+}
+
+function VoiceWaveformDemo() {
+  const { isRecording, startRecording, stopRecording, analyserNode, transcript } = useVoiceRecorder({
+    onTranscript: (text) => console.log("Transcript:", text),
+  })
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Interactive Demo</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Click Record to capture microphone input. The waveform reacts to your voice.
+        </p>
+        <div className="flex flex-col items-start gap-4">
+          <VoiceWaveform analyserNode={analyserNode} />
+          <div className="flex items-center gap-4">
+            <Button
+              variant={isRecording ? "destructive" : "default"}
+              onClick={isRecording ? stopRecording : startRecording}
+            >
+              {isRecording ? "Stop Recording" : "Start Recording"}
+            </Button>
+            {transcript && (
+              <p className="text-sm text-muted-foreground">
+                You said: <span className="text-foreground font-medium">&quot;{transcript}&quot;</span>
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Inactive State</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Minimal uniform bars when no audio input.
+        </p>
+        <VoiceWaveform />
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Full Integration with SpeechInput</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          VoiceWaveform positioned above SpeechInput with gap-6, as per the Figma design.
+        </p>
+        <VoiceWaveformWithSpeechInputDemo />
+      </div>
+    </div>
+  )
+}
+
+function VoiceWaveformWithSpeechInputDemo() {
+  const { isRecording, startRecording, stopRecording, analyserNode, transcript } = useVoiceRecorder()
+  const [playPressed, setPlayPressed] = useState(false)
+  const [dictionaryPressed, setDictionaryPressed] = useState(false)
+  const [sentencePressed, setSentencePressed] = useState(false)
+
+  return (
+    <div className="flex flex-col items-center gap-6 max-w-[525px]">
+      <VoiceWaveform analyserNode={analyserNode} />
+      <SpeechInput
+        state={isRecording ? "recording" : "default"}
+        playPressed={playPressed}
+        dictionaryPressed={dictionaryPressed}
+        sentencePressed={sentencePressed}
+        inputText={transcript}
+        onRecordClick={startRecording}
+        onStopClick={stopRecording}
+        onPlayClick={() => setPlayPressed(!playPressed)}
+        onDictionaryClick={() => {
+          setDictionaryPressed(!dictionaryPressed)
+          setPlayPressed(false)
+          setSentencePressed(false)
+        }}
+        onSentenceClick={() => {
+          setSentencePressed(!sentencePressed)
+          setPlayPressed(false)
+          setDictionaryPressed(false)
+        }}
+        definition="Definition: a male child or young man"
+      />
+    </div>
+  )
+}
+
+function SpeechInputDemo() {
+  const [state, setState] = useState<"default" | "recording">("default")
+  const [playPressed, setPlayPressed] = useState(false)
+  const [dictionaryPressed, setDictionaryPressed] = useState(false)
+  const [sentencePressed, setSentencePressed] = useState(false)
+  const [inputText, setInputText] = useState("")
+
+  const handleRecord = () => {
+    setState("recording")
+    // Simulate voice input after 2 seconds
+    setTimeout(() => {
+      setInputText("boy")
+    }, 1000)
+  }
+
+  const handleStop = () => {
+    setState("default")
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Interactive Demo</h3>
+        <SpeechInput
+          state={state}
+          playPressed={playPressed}
+          dictionaryPressed={dictionaryPressed}
+          sentencePressed={sentencePressed}
+          inputText={inputText}
+          onRecordClick={handleRecord}
+          onStopClick={handleStop}
+          onPlayClick={() => setPlayPressed(!playPressed)}
+          onDictionaryClick={() => {
+            setDictionaryPressed(!dictionaryPressed)
+            setPlayPressed(false)
+            setSentencePressed(false)
+          }}
+          onSentenceClick={() => {
+            setSentencePressed(!sentencePressed)
+            setPlayPressed(false)
+            setDictionaryPressed(false)
+          }}
+          definition="Definition: a male child or young man"
+        />
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Default State (No Input)</h3>
+        <SpeechInput />
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Recording State</h3>
+        <SpeechInput state="recording" />
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">With Input + Dictionary</h3>
+        <SpeechInput
+          inputText="elephant"
+          dictionaryPressed={true}
+          definition="Definition: a very large animal with thick grey skin, large ears, two curved outer teeth called tusks and a long nose called a trunk"
+        />
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Recording + Play Active</h3>
+        <SpeechInput
+          state="recording"
+          inputText="magnificent"
+          playPressed={true}
+        />
+      </div>
+    </div>
+  )
+}
+
+function NavbarDemo() {
+  return (
+    <div className="space-y-8">
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Logged Out (Default)</h3>
+        <Navbar
+          logo={
+            <div className="size-9 rounded-lg bg-foreground flex items-center justify-center text-background font-bold text-sm">
+              L
+            </div>
+          }
+          onSignUp={() => alert("Sign up clicked")}
+          onNotificationClick={() => alert("Notifications clicked")}
+        />
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Logged In (with notifications)</h3>
+        <Navbar
+          logo={
+            <div className="size-9 rounded-lg bg-foreground flex items-center justify-center text-background font-bold text-sm">
+              L
+            </div>
+          }
+          isLoggedIn={true}
+          user={{
+            name: "John Doe",
+            email: "john@example.com",
+            avatarUrl: "https://github.com/shadcn.png",
+            initials: "JD",
+          }}
+          notificationCount={2}
+          onNotificationClick={() => alert("Notifications clicked")}
+          onProfileClick={() => alert("Profile clicked")}
+          onSettingsClick={() => alert("Settings clicked")}
+          onSignOut={() => alert("Sign out clicked")}
+        />
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Custom Nav Links</h3>
+        <Navbar
+          logo={
+            <div className="size-9 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
+              P
+            </div>
+          }
+          navLinks={[
+            { label: "Home", href: "/", active: true },
+            { label: "Dashboard", href: "/dashboard" },
+            { label: "Settings", href: "/settings" },
+          ]}
+          onSignUp={() => alert("Sign up clicked")}
+        />
+      </div>
+
+      <div className="relative">
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Mobile View (resize browser or use dev tools)</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          The navbar shows a hamburger menu on mobile. Click the menu icon to expand. Below is a mobile-width preview:
+        </p>
+        <div className="max-w-[375px]">
+          <Navbar
+            logo={
+              <div className="size-9 rounded-lg bg-foreground flex items-center justify-center text-background font-bold text-sm">
+                L
+              </div>
+            }
+            isLoggedIn={true}
+            user={{
+              name: "Jane Smith",
+              email: "jane@example.com",
+              initials: "JS",
+            }}
+            notificationCount={5}
+            onNotificationClick={() => alert("Notifications clicked")}
+            onProfileClick={() => alert("Profile clicked")}
+            onSettingsClick={() => alert("Settings clicked")}
+            onSignOut={() => alert("Sign out clicked")}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TopNavbarDemo() {
+  return (
+    <div className="space-y-8">
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Default (with callback)</h3>
+        <TopNavbar
+          onClose={() => alert("Close clicked")}
+          skipHref="/dashboard"
+        />
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">With Close Link</h3>
+        <TopNavbar
+          closeHref="/"
+          skipHref="/skip"
+          skipLabel="Skip this step"
+        />
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Without Skip Link</h3>
+        <TopNavbar
+          onClose={() => alert("Close clicked")}
+          hideSkip
+        />
+      </div>
     </div>
   )
 }

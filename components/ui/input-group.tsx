@@ -8,13 +8,51 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 
+/**
+ * A composite input component that combines an input field with addons.
+ * Use for inputs with prefixes, suffixes, icons, or action buttons.
+ *
+ * @example
+ * ```tsx
+ * // With prefix text (e.g., currency)
+ * <InputGroup>
+ *   <InputGroupAddon>
+ *     <InputGroupText>$</InputGroupText>
+ *   </InputGroupAddon>
+ *   <InputGroupInput placeholder="0.00" />
+ * </InputGroup>
+ *
+ * // With suffix button
+ * <InputGroup>
+ *   <InputGroupInput placeholder="Search..." />
+ *   <InputGroupAddon align="inline-end">
+ *     <InputGroupButton>
+ *       <IconSearch />
+ *     </InputGroupButton>
+ *   </InputGroupAddon>
+ * </InputGroup>
+ *
+ * // With textarea
+ * <InputGroup>
+ *   <InputGroupTextarea placeholder="Message..." />
+ *   <InputGroupAddon align="block-end">
+ *     <InputGroupButton>Send</InputGroupButton>
+ *   </InputGroupAddon>
+ * </InputGroup>
+ * ```
+ *
+ * @remarks
+ * - Container handles focus ring for the entire group
+ * - Set `aria-invalid="true"` on InputGroup for error state
+ * - Addons can be positioned: `inline-start`, `inline-end`, `block-start`, `block-end`
+ */
 function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="input-group"
       role="group"
       className={cn(
-        "border-input bg-input/30 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 focus-within:outline focus-within:outline-[length:var(--focus-ring-width)] focus-within:outline-[var(--focus-ring-color)] focus-within:outline-offset-[var(--focus-ring-offset)] aria-invalid:focus-within:outline-[var(--destructive)] h-9 rounded-lg border transition-colors has-data-[align=block-end]:rounded-2xl has-data-[align=block-start]:rounded-2xl has-[textarea]:rounded-xl has-[>[data-align=block-end]]:h-auto has-[>[data-align=block-end]]:flex-col has-[>[data-align=block-start]]:h-auto has-[>[data-align=block-start]]:flex-col has-[>[data-align=block-end]]:[&>input]:pt-3 has-[>[data-align=block-start]]:[&>input]:pb-3 has-[>[data-align=inline-end]]:[&>input]:pr-1.5 has-[>[data-align=inline-start]]:[&>input]:pl-1.5 [[data-slot=combobox-content]_&]:focus-within:border-inherit group/input-group relative flex w-full min-w-0 items-center has-[>textarea]:h-auto",
+        "border-input bg-input/30 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 focus-within:outline focus-within:outline-[length:var(--focus-ring-width)] focus-within:outline-[var(--focus-ring-color)] focus-within:outline-offset-[var(--focus-ring-offset)] aria-invalid:focus-within:outline-[var(--destructive)] h-9 rounded-lg border transition-colors has-data-[align=block-end]:rounded-lg has-data-[align=block-start]:rounded-lg has-[textarea]:rounded-lg has-[>[data-align=block-end]]:h-auto has-[>[data-align=block-end]]:flex-col has-[>[data-align=block-start]]:h-auto has-[>[data-align=block-start]]:flex-col has-[>[data-align=block-end]]:[&>input]:pt-3 has-[>[data-align=block-start]]:[&>input]:pb-3 has-[>[data-align=inline-end]]:[&>input]:pr-1.5 has-[>[data-align=inline-start]]:[&>input]:pl-1.5 [[data-slot=combobox-content]_&]:focus-within:border-inherit group/input-group relative flex w-full min-w-0 items-center has-[>textarea]:h-auto",
         className
       )}
       {...props}
@@ -41,6 +79,15 @@ const inputGroupAddonVariants = cva(
   }
 )
 
+/**
+ * Container for addon content (text, icons, buttons) within InputGroup.
+ *
+ * @param align - Position of the addon
+ *   - `inline-start` - Left side (default)
+ *   - `inline-end` - Right side
+ *   - `block-start` - Above input
+ *   - `block-end` - Below input
+ */
 function InputGroupAddon({
   className,
   align = "inline-start",
@@ -80,6 +127,7 @@ const inputGroupButtonVariants = cva(
   }
 )
 
+/** Compact button designed for use inside InputGroupAddon. */
 function InputGroupButton({
   className,
   type = "button",
@@ -99,6 +147,7 @@ function InputGroupButton({
   )
 }
 
+/** Static text or icon display inside InputGroupAddon (e.g., "$", "@", icons). */
 function InputGroupText({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
@@ -111,6 +160,7 @@ function InputGroupText({ className, ...props }: React.ComponentProps<"span">) {
   )
 }
 
+/** Input field for use inside InputGroup. Inherits focus/error states from container. */
 function InputGroupInput({
   className,
   ...props
@@ -124,6 +174,7 @@ function InputGroupInput({
   )
 }
 
+/** Textarea for use inside InputGroup. Auto-expands container height. */
 function InputGroupTextarea({
   className,
   ...props

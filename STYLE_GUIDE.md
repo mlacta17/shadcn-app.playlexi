@@ -16,27 +16,28 @@ These are built into the codebase and apply automatically to all components:
 - **Location:** [app/globals.css:52-58](app/globals.css:52-58)
 - **Base:** `--radius: 0.625rem` (10px)
 - **Available utilities:**
-  - `rounded-md` = 6px (Tailwind default) - **for tab triggers**
-  - `rounded-lg` = 8px (Tailwind default) - **for inputs, dropdowns, menu items**
+  - `rounded-md` = 6px (Tailwind default) - **for tab triggers, badges**
+  - `rounded-lg` = 8px (Tailwind default) - **for inputs, dropdowns, menu items, nav links**
   - `rounded-3xl` = 24px (Tailwind default) - **for cards**
   - `rounded-4xl` = 26px (`calc(var(--radius) + 16px)`) - **for individual combobox chips**
-  - `rounded-full` = 9999px (Tailwind default) - **for buttons, badges**
+  - `rounded-full` = 9999px (Tailwind default) - **for buttons**
 - **Visual hierarchy:**
-  - Extra Subtle (6px): Tab triggers - minimal, clean
-  - Subtle (8px): Form inputs, dropdown containers, menu items - cohesive, functional
+  - Extra Subtle (6px): Tab triggers, badges - minimal, clean
+  - Subtle (8px): Form inputs, dropdown containers, menu items, nav links - cohesive, functional
   - Medium (24px): Cards - structured, contained
   - Medium-Bold (26px): Individual combobox chips - prominent but not fully rounded
-  - Bold (fully rounded): Buttons, badges - distinctive, pill-shaped
+  - Bold (fully rounded): Buttons - distinctive, pill-shaped
 - **Action:**
-  - Use `rounded-md` for tab triggers
+  - Use `rounded-md` for tab triggers, badges
   - Use `rounded-lg` for:
     - Form inputs (input, textarea, select trigger, combobox chips container)
     - Dropdown content (select dropdown, dropdown menu, combobox popup)
     - Tab list containers
     - All menu items (dropdown items, select items, combobox items)
+    - Nav links (navbar navigation items)
   - Use `rounded-3xl` for cards
   - Use `rounded-4xl` for individual combobox chips (the pills inside ComboboxChips)
-  - Use `rounded-full` for buttons, badges
+  - Use `rounded-full` for buttons
 
 ### 3. Component Padding Scale
 - **Pattern:** ~33% increase from shadcn defaults
@@ -54,8 +55,15 @@ These are built into the codebase and apply automatically to all components:
 ### 4.1. Focus Ring for Container Components
 - **Pattern:** Use `focus-within` for containers that don't receive focus themselves
 - **Applies to:** InputGroup, ComboboxChips (containers wrapping focusable children)
-- **Implementation:**
-  ```
+- **Utility class:** `focus-within-ring` (defined in globals.css)
+- **Implementation options:**
+  ```tsx
+  // Option 1: Use utility class (recommended for new components)
+  <div className="focus-within-ring" aria-invalid={hasError}>
+    <input />
+  </div>
+
+  // Option 2: Inline Tailwind (existing components use this)
   focus-within:outline
   focus-within:outline-[length:var(--focus-ring-width)]
   focus-within:outline-[var(--focus-ring-color)]
@@ -63,7 +71,7 @@ These are built into the codebase and apply automatically to all components:
   aria-invalid:focus-within:outline-[var(--destructive)]
   ```
 - **Why?** Container `<div>` elements don't receive focus - their child `<input>` elements do. `focus-within` shows outline when any descendant is focused.
-- **Action:** Use this pattern for any new composite form components
+- **Action:** Use `focus-within-ring` class for any new composite form components
 
 ### 4.2. Error States (Form Validation)
 - **Pattern:** `aria-invalid:border-destructive dark:aria-invalid:border-destructive/50`
@@ -106,6 +114,13 @@ These are built into the codebase and apply automatically to all components:
 ### 8. Button Hover States
 - **Pattern:** Darker shades on hover (not lighter)
 - **Implementation:** `hover:bg-[var(--primary-hover)]`
+- **Action:** None - already built into button component
+
+### 8.1. Outline Button Background
+- **Pattern:** `bg-background` (matching original shadcn/ui)
+- **Light mode:** White background
+- **Dark mode:** Dark gray background (`oklch(0.145 0 0)`)
+- **Why?** Provides visual distinction from ghost buttons and ensures consistent appearance across different container backgrounds
 - **Action:** None - already built into button component
 
 ### 9. Icon Positioning System
@@ -169,14 +184,20 @@ These are built into the codebase and apply automatically to all components:
 
 These require action when adding new components:
 
-### 1. Icons - Use Nucleo Instead of Lucide
-**IMPORTANT:** Always import from `nucleo-core-outline-24`, never from `lucide-react`
+### 1. Icons - Use Centralized Icons File
+**IMPORTANT:** Always import icons from `@/lib/icons`, never directly from `nucleo-core-outline-24` or `lucide-react`.
 
-#### Pattern:
 ```typescript
-import {
-  IconNameOutline24 as AliasName,
-} from "nucleo-core-outline-24"
+import { PlusIcon, TrashIcon, SettingsIcon } from "@/lib/icons"
+```
+
+All components in this codebase use this pattern. See [lib/icons.ts](lib/icons.ts) for all available icons.
+
+#### Adding New Icons
+If you need an icon that isn't in `lib/icons.ts`, add it there first:
+```typescript
+// In lib/icons.ts
+export { IconNewIconOutline24 as NewIcon } from "nucleo-core-outline-24"
 ```
 
 #### Common Icon Mappings:
@@ -199,21 +220,164 @@ import {
 2. Browse: `node_modules/nucleo-core-outline-24/dist/components/`
 3. Search command: `ls node_modules/nucleo-core-outline-24/dist/components/ | grep -i "search-term"`
 
-#### Deployment:
-Add to environment variables (Vercel/Netlify/etc.):
+#### Setup:
+Add your Nucleo license key to `.env`:
 ```
-NUCLEO_LICENSE_KEY=d6tpflas8rzd0l58ik7fiy1jt3wqti
+NUCLEO_LICENSE_KEY=your-license-key
 ```
+For deployment, add the same variable to your hosting provider (Vercel/Netlify/etc.).
+
+## Canvas-Based Components
+
+Some components use HTML Canvas for performance-critical rendering. These can't use Tailwind classes directly but must still follow the design system.
+
+### Voice Waveform
+- **Location:** [components/ui/voice-waveform.tsx](components/ui/voice-waveform.tsx)
+- **Hook:** [hooks/use-voice-recorder.ts](hooks/use-voice-recorder.ts)
+- **Type:** Canvas-based audio visualizer
+
+#### Design System Integration:
+| Aspect | Implementation |
+|--------|----------------|
+| **Color** | Reads `--foreground` CSS variable at runtime via `getComputedStyle()` |
+| **Bar radius** | Fully-rounded ends (`barWidth / 2`) matching button pattern |
+| **Spacing** | `barWidth=6px` (1.5 spacing units), `barGap=3px` (0.75 spacing units) |
+| **Attributes** | `data-slot="voice-waveform"`, `data-state="active\|inactive"` |
+| **Accessibility** | `aria-hidden="true"` (decorative element) |
+
+#### Architecture:
+```
+useVoiceRecorder (hook) - owns microphone + speech recognition
+├── analyserNode → VoiceWaveform (presentational)
+├── transcript → display recognized speech
+└── isRecording, startRecording, stopRecording → controls
+```
+
+#### Usage:
+```tsx
+import { useVoiceRecorder } from "@/hooks/use-voice-recorder"
+import { VoiceWaveform } from "@/components/ui/voice-waveform"
+
+function MyComponent() {
+  const { analyserNode, startRecording, stopRecording } = useVoiceRecorder()
+
+  return (
+    <div className="flex flex-col items-center gap-6">
+      <VoiceWaveform analyserNode={analyserNode} />
+      <SpeechInput onRecordClick={startRecording} onStopClick={stopRecording} />
+    </div>
+  )
+}
+```
+
+#### Visual Behavior:
+- **Inactive state:** Minimal uniform bars (flat idle look)
+- **Active state:** Dynamic bars mirrored from center, ~12% asymmetry for organic feel
+- **Smoothing:** 0.3 factor for fluid transitions
+- **Voice focus:** Samples 100Hz-3000Hz range (human voice frequencies)
+
+#### Adding New Canvas Components:
+When creating canvas-based components, follow this pattern:
+1. Read colors from CSS variables (`getComputedStyle(document.documentElement).getPropertyValue('--variable')`)
+2. Use spacing values that align with Tailwind scale (4px increments)
+3. Apply `data-slot` and `data-state` attributes to wrapper element
+4. Add `aria-hidden="true"` if purely decorative
+5. Document the component in this section
+
+## Navigation Components
+
+### Navbar
+- **Location:** [components/ui/navbar.tsx](components/ui/navbar.tsx)
+- **Type:** Full-featured responsive navigation bar
+- **Use case:** Main app navigation with logo, nav links, notifications, and user menu
+
+#### Props:
+| Prop | Type | Description |
+|------|------|-------------|
+| `logo` | `ReactNode` | Logo element or image |
+| `navLinks` | `Array<{label, href, active?, badge?}>` | Navigation links configuration |
+| `isLoggedIn` | `boolean` | Toggle logged-in/logged-out state |
+| `user` | `{name, email, avatarUrl?, initials?}` | User info for logged-in state |
+| `notificationCount` | `number` | Badge count on notification bell |
+| `onSignUp`, `onSignOut`, etc. | `() => void` | Action callbacks |
+
+#### Usage:
+```tsx
+import { Navbar } from "@/components/ui/navbar"
+
+<Navbar
+  logo={<img src="/logo.svg" alt="Logo" />}
+  navLinks={[
+    { label: "Play", href: "/play", active: true },
+    { label: "Learn", href: "/learn", badge: "PRO" },
+  ]}
+  isLoggedIn={true}
+  user={{ name: "John", email: "john@example.com" }}
+  notificationCount={3}
+  onSignOut={() => signOut()}
+/>
+```
+
+#### Features:
+- Responsive: Desktop shows full nav, mobile shows hamburger menu
+- Nav links support active state and badges
+- User dropdown with profile, settings, sign out
+- Notification bell with count badge
+
+---
+
+### TopNavbar
+- **Location:** [components/ui/top-navbar.tsx](components/ui/top-navbar.tsx)
+- **Type:** Minimal contextual header
+- **Use case:** Wizard flows, modal-like experiences, focused tasks where full navigation isn't needed
+
+#### Props:
+| Prop | Type | Description |
+|------|------|-------------|
+| `onClose` | `() => void` | Callback when close button clicked |
+| `closeHref` | `string` | URL for close button (alternative to callback) |
+| `skipLabel` | `string` | Text for skip link (default: "Skip") |
+| `skipHref` | `string` | URL for skip link |
+| `onSkip` | `() => void` | Callback when skip clicked |
+| `hideSkip` | `boolean` | Hide the skip link entirely |
+
+#### Usage:
+```tsx
+import { TopNavbar } from "@/components/ui/top-navbar"
+
+// With callbacks
+<TopNavbar
+  onClose={() => router.back()}
+  skipHref="/dashboard"
+/>
+
+// With links
+<TopNavbar
+  closeHref="/"
+  skipHref="/skip"
+  skipLabel="Skip this step"
+/>
+
+// Without skip link
+<TopNavbar onClose={() => router.back()} hideSkip />
+```
+
+#### Design System Compliance:
+- Close button: `Button variant="outline" size="icon-sm"` with Nucleo XIcon
+- Skip link: `Button variant="link" size="xs"`
+- Container: `bg-background border-b shadow-sm h-16 px-6`
+- Data attribute: `data-slot="top-navbar"`
 
 ## Component Checklist
 
 When adding a new shadcn component:
 
 - [ ] Replace all `lucide-react` imports with `nucleo-core-outline-24`
-- [ ] Use `rounded-full` for buttons, badges
+- [ ] Use `rounded-full` for buttons
+- [ ] Use `rounded-md` for badges
 - [ ] Use `rounded-4xl` for individual combobox chips
 - [ ] Use `rounded-3xl` for cards
-- [ ] Use `rounded-lg` for inputs, dropdowns, menu items
+- [ ] Use `rounded-lg` for inputs, dropdowns, menu items, nav links
 - [ ] Use `rounded-md` for tab triggers
 - [ ] Verify semantic color tokens are used (not arbitrary colors)
 - [ ] Confirm SVG sizing selector `[&_svg:not([class*='size-'])]:size-4` is present
@@ -225,9 +389,12 @@ When adding a new shadcn component:
 
 - **Color system:** [app/globals.css](app/globals.css)
 - **Font setup:** [app/layout.tsx](app/layout.tsx)
+- **Icon exports:** [lib/icons.ts](lib/icons.ts)
 - **Button example:** [components/ui/button.tsx](components/ui/button.tsx)
 - **Example with icons:** [components/component-example.tsx](components/component-example.tsx)
 - **Showcase page:** [app/showcase/page.tsx](app/showcase/page.tsx)
+- **Canvas component:** [components/ui/voice-waveform.tsx](components/ui/voice-waveform.tsx)
+- **Voice recorder hook:** [hooks/use-voice-recorder.ts](hooks/use-voice-recorder.ts)
 
 ## Design Philosophy
 
