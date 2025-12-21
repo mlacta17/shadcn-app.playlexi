@@ -963,69 +963,63 @@ function NavbarDemo() {
     <div className="space-y-8">
       <div>
         <h3 className="text-sm font-medium mb-3 text-muted-foreground">Logged Out (Default)</h3>
-        <div className="border overflow-hidden">
-          <Navbar
-            logo={
-              <div className="size-9 rounded-lg bg-foreground flex items-center justify-center text-background font-bold text-sm">
-                L
-              </div>
-            }
-            onSignUp={() => alert("Sign up clicked")}
-            onNotificationClick={() => alert("Notifications clicked")}
-          />
-        </div>
+        <Navbar
+          logo={
+            <div className="size-9 rounded-lg bg-foreground flex items-center justify-center text-background font-bold text-sm">
+              L
+            </div>
+          }
+          onSignUp={() => alert("Sign up clicked")}
+          onNotificationClick={() => alert("Notifications clicked")}
+        />
       </div>
 
       <div>
         <h3 className="text-sm font-medium mb-3 text-muted-foreground">Logged In (with notifications)</h3>
-        <div className="border overflow-hidden">
-          <Navbar
-            logo={
-              <div className="size-9 rounded-lg bg-foreground flex items-center justify-center text-background font-bold text-sm">
-                L
-              </div>
-            }
-            isLoggedIn={true}
-            user={{
-              name: "John Doe",
-              email: "john@example.com",
-              avatarUrl: "https://github.com/shadcn.png",
-              initials: "JD",
-            }}
-            notificationCount={2}
-            onNotificationClick={() => alert("Notifications clicked")}
-            onProfileClick={() => alert("Profile clicked")}
-            onSettingsClick={() => alert("Settings clicked")}
-            onSignOut={() => alert("Sign out clicked")}
-          />
-        </div>
+        <Navbar
+          logo={
+            <div className="size-9 rounded-lg bg-foreground flex items-center justify-center text-background font-bold text-sm">
+              L
+            </div>
+          }
+          isLoggedIn={true}
+          user={{
+            name: "John Doe",
+            email: "john@example.com",
+            avatarUrl: "https://github.com/shadcn.png",
+            initials: "JD",
+          }}
+          notificationCount={2}
+          onNotificationClick={() => alert("Notifications clicked")}
+          onProfileClick={() => alert("Profile clicked")}
+          onSettingsClick={() => alert("Settings clicked")}
+          onSignOut={() => alert("Sign out clicked")}
+        />
       </div>
 
       <div>
         <h3 className="text-sm font-medium mb-3 text-muted-foreground">Custom Nav Links</h3>
-        <div className="border overflow-hidden">
-          <Navbar
-            logo={
-              <div className="size-9 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
-                P
-              </div>
-            }
-            navLinks={[
-              { label: "Home", href: "/", active: true },
-              { label: "Dashboard", href: "/dashboard" },
-              { label: "Settings", href: "/settings" },
-            ]}
-            onSignUp={() => alert("Sign up clicked")}
-          />
-        </div>
+        <Navbar
+          logo={
+            <div className="size-9 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
+              P
+            </div>
+          }
+          navLinks={[
+            { label: "Home", href: "/", active: true },
+            { label: "Dashboard", href: "/dashboard" },
+            { label: "Settings", href: "/settings" },
+          ]}
+          onSignUp={() => alert("Sign up clicked")}
+        />
       </div>
 
-      <div>
+      <div className="relative">
         <h3 className="text-sm font-medium mb-3 text-muted-foreground">Mobile View (resize browser or use dev tools)</h3>
         <p className="text-sm text-muted-foreground mb-3">
           The navbar shows a hamburger menu on mobile. Click the menu icon to expand. Below is a mobile-width preview:
         </p>
-        <div className="border overflow-hidden max-w-[375px]">
+        <div className="max-w-[375px]">
           <Navbar
             logo={
               <div className="size-9 rounded-lg bg-foreground flex items-center justify-center text-background font-bold text-sm">

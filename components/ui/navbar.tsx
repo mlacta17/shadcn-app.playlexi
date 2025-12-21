@@ -24,6 +24,52 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator"
 
+/* -------------------------------------------------------------------------------------------------
+ * NavLink - Shared navigation link component for desktop and mobile
+ * Renders as <Link> when href is provided, <button> otherwise
+ * -----------------------------------------------------------------------------------------------*/
+
+interface NavLinkProps {
+  /** If provided, renders as Next.js Link. Otherwise renders as button. */
+  href?: string
+  active?: boolean
+  badge?: string
+  /** Size variant: "sm" for desktop, "base" for mobile */
+  size?: "sm" | "base"
+  onClick?: () => void
+  children: React.ReactNode
+}
+
+function NavLink({ href, active, badge, size = "sm", onClick, children }: NavLinkProps) {
+  const className = cn(
+    "flex items-center gap-1.5 rounded-lg px-3 font-medium transition-colors",
+    size === "sm" ? "py-2.5 text-sm" : "py-2 text-base",
+    !href && "text-left w-full",
+    active
+      ? "bg-accent text-foreground"
+      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+  )
+
+  if (href) {
+    return (
+      <Link href={href} onClick={onClick} className={className}>
+        {children}
+        {badge && <Badge className="text-xs px-2 py-0.5">{badge}</Badge>}
+      </Link>
+    )
+  }
+
+  return (
+    <button type="button" onClick={onClick} className={className}>
+      {children}
+    </button>
+  )
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * Navbar
+ * -----------------------------------------------------------------------------------------------*/
+
 export interface NavbarProps {
   /** Logo element or image URL */
   logo?: React.ReactNode
@@ -110,7 +156,7 @@ function Navbar({
     <nav
       data-slot="navbar"
       className={cn(
-        "bg-background flex h-16 w-full items-center justify-between px-4 md:px-6",
+        "relative bg-background border-b shadow-sm flex h-16 w-full items-center justify-between px-4 md:px-6",
         className
       )}
     >
@@ -144,21 +190,15 @@ function Navbar({
           {/* Desktop Nav Links */}
           <div className="hidden md:flex items-center gap-1">
             {navLinks.map((link) => (
-              <Link
+              <NavLink
                 key={link.href}
                 href={link.href}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                  link.active
-                    ? "bg-accent text-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                )}
+                active={link.active}
+                badge={link.badge}
+                size="sm"
               >
                 {link.label}
-                {link.badge && (
-                  <Badge className="text-xs px-2 py-0.5">{link.badge}</Badge>
-                )}
-              </Link>
+              </NavLink>
             ))}
           </div>
         </div>
@@ -222,26 +262,20 @@ function Navbar({
 
       {/* Mobile Menu Dropdown */}
       {mobileMenuOpen && (
-        <div className="absolute left-0 right-0 top-14 z-50 bg-background md:hidden">
+        <div className="absolute left-0 right-0 top-full z-50 bg-background border-t shadow-lg md:hidden">
           {/* Nav Links */}
           <div className="flex flex-col p-2">
             {navLinks.map((link) => (
-              <Link
+              <NavLink
                 key={link.href}
                 href={link.href}
+                active={link.active}
+                badge={link.badge}
+                size="base"
                 onClick={() => setMobileMenuOpen(false)}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-lg px-3 py-2 text-base font-medium",
-                  link.active
-                    ? "bg-accent text-foreground"
-                    : "text-muted-foreground"
-                )}
               >
                 {link.label}
-                {link.badge && (
-                  <Badge className="text-xs px-2 py-0.5">{link.badge}</Badge>
-                )}
-              </Link>
+              </NavLink>
             ))}
           </div>
 
@@ -263,36 +297,15 @@ function Navbar({
                   </div>
                 </div>
                 {/* Account Links */}
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    onProfileClick?.()
-                    setMobileMenuOpen(false)
-                  }}
-                  className="justify-start px-3 py-2 text-base font-medium text-muted-foreground"
-                >
+                <NavLink size="base" onClick={() => { onProfileClick?.(); setMobileMenuOpen(false) }}>
                   My profile
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    onSettingsClick?.()
-                    setMobileMenuOpen(false)
-                  }}
-                  className="justify-start px-3 py-2 text-base font-medium text-muted-foreground"
-                >
+                </NavLink>
+                <NavLink size="base" onClick={() => { onSettingsClick?.(); setMobileMenuOpen(false) }}>
                   Account settings
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    onSignOut?.()
-                    setMobileMenuOpen(false)
-                  }}
-                  className="justify-start px-3 py-2 text-base font-medium text-muted-foreground"
-                >
+                </NavLink>
+                <NavLink size="base" onClick={() => { onSignOut?.(); setMobileMenuOpen(false) }}>
                   Sign out
-                </Button>
+                </NavLink>
               </>
             ) : (
               <Button onClick={onSignUp} className="w-full">
