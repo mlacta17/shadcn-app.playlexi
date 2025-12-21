@@ -1,6 +1,6 @@
 # PlayLexi — Product Requirements Document (PRD)
 
-> **Version:** 1.0
+> **Version:** 1.2
 > **Last Updated:** December 21, 2025
 > **Status:** Final Draft
 
@@ -20,6 +20,9 @@
 10. [Notifications](#10-notifications)
 11. [UI Components](#11-ui-components)
 12. [Technical Decisions](#12-technical-decisions)
+13. [Edge Cases & Error Handling](#13-edge-cases--error-handling)
+14. [Privacy & Compliance](#14-privacy--compliance)
+15. [XP Thresholds & Crown Points Details](#15-xp-thresholds--crown-points-details)
 
 ---
 
@@ -724,6 +727,245 @@ Controlled by settings toggles (Social, Security, Marketing).
 | State sync | Player turn, hearts, waveform visual, timer |
 | No audio broadcast | Words/voice stay private to active player |
 | Elimination | Immediate redirect to results screen |
+
+---
+
+## 13. Edge Cases & Error Handling
+
+### 13.1 Connection & Disconnection
+
+#### 13.1.1 Player Disconnects Mid-Game (Multiplayer)
+
+| Scenario | Handling |
+|----------|----------|
+| Disconnect during own turn | Timer continues; if timer expires, auto-skip turn and lose 1 heart |
+| Disconnect during other's turn | No immediate impact; rejoin window applies |
+| Rejoin window | **60 seconds** to reconnect and resume |
+| After 60 seconds | Player is eliminated, placed at current position |
+
+#### 13.1.2 Host Disconnects
+
+| Scenario | Handling |
+|----------|----------|
+| Host leaves lobby (pre-game) | Next player in join order becomes host |
+| Host disconnects mid-game | Game continues — server manages state (not host device) |
+| All players disconnect | Game ends, all players receive placement based on when they left |
+
+**Clarification:** "Host" is a lobby management role, not the game server. Games run on Cloudflare Durable Objects, not player devices.
+
+### 13.2 Timer Expiration
+
+| Scenario | Handling |
+|----------|----------|
+| Timer runs out (Endless) | Wrong answer, lose 1 heart, move to next word |
+| Timer runs out (Blitz) | Game ends, score calculated based on correct answers |
+| Timer runs out during voice recording | Recording auto-stops, submitted as-is |
+
+### 13.3 Duplicate & Invalid Submissions
+
+| Scenario | Handling |
+|----------|----------|
+| Submit same answer twice rapidly | Server ignores duplicate within 2-second window |
+| Submit empty answer | Treated as wrong answer |
+| Submit during other player's turn | Rejected by server |
+| Network delay causes late submission | Server timestamp is authoritative |
+
+### 13.4 Concurrent Game Restriction
+
+| Rule | Description |
+|------|-------------|
+| One game at a time | Player cannot join a new game while in an active game |
+| What happens | "You're already in a game" message with option to return or forfeit |
+| Forfeiting | Counts as elimination, receives lowest remaining placement |
+
+**Rationale:** Prevents XP farming, simplifies state management, ensures players are engaged.
+
+### 13.5 Account & Profile Edge Cases
+
+| Scenario | Handling |
+|----------|----------|
+| Username taken | "Username already exists" — must choose different |
+| Username change conflicts | Same handling — must be unique |
+| Profanity in username | Blocked by filter list during creation/edit |
+| OAuth token expired | Redirect to re-authenticate |
+| OAuth provider unavailable | Show error, suggest trying later |
+
+### 13.6 Voice Recognition Edge Cases
+
+| Scenario | Handling |
+|----------|----------|
+| No audio detected | "We didn't hear anything. Please try again." |
+| Audio too quiet | Same as above |
+| Whisper returns gibberish | Submitted as-is (strict mode — no second chances) |
+| Microphone permission denied | Prompt to enable, offer keyboard as alternative |
+| Background noise interferes | Player responsible for quiet environment |
+
+### 13.7 Game State Recovery
+
+| Scenario | Handling |
+|----------|----------|
+| Browser refresh mid-game | Reconnect to active game if within rejoin window |
+| App crash | Same as disconnect — rejoin window applies |
+| Server restart | Durable Objects persist state; games resume automatically |
+
+---
+
+## 14. Privacy & Compliance
+
+### 14.1 Data Collection
+
+#### 14.1.1 What We Collect
+
+| Data Type | Purpose | Retention |
+|-----------|---------|-----------|
+| Email (from OAuth) | Account identification | Until account deletion |
+| Username | Display name | Until account deletion |
+| Age | Age-gating, compliance | Until account deletion |
+| Game history | Stats, leaderboards | Until account deletion |
+| Voice recordings | Transcription only | **Deleted immediately after transcription** |
+| IP address | Security, rate limiting | 30 days |
+| Device info | Debugging | 30 days |
+
+#### 14.1.2 What We Don't Collect
+
+- Passwords (OAuth only)
+- Location data
+- Contact lists
+- Payment information (no monetization in v1)
+- Voice recordings beyond immediate transcription
+
+### 14.2 Voice Data Handling
+
+| Rule | Description |
+|------|-------------|
+| Storage | Voice audio is **never stored** — processed in memory |
+| Transmission | Encrypted via TLS |
+| Transcription | OpenAI Whisper (self-hosted) — no third-party access |
+| Retention | 0 seconds — deleted immediately after spelling extraction |
+
+**Rationale:** Voice is sensitive biometric data. We minimize liability by not storing it.
+
+### 14.3 GDPR Compliance (EU Users)
+
+| Requirement | Implementation |
+|-------------|----------------|
+| Right to access | Export data feature (future) |
+| Right to deletion | Account deletion with 7-day grace period |
+| Data portability | JSON export of game history (future) |
+| Consent | Clear opt-in at signup |
+| Cookie consent | Banner for non-essential cookies |
+
+### 14.4 COPPA Considerations (US Users Under 13)
+
+| Approach | Description |
+|----------|-------------|
+| Age gate | Required age field during signup |
+| Under 13 handling | **v1: Block signup** — "You must be 13 or older to create an account" |
+| Future option | Parental consent flow with verification |
+| No PII from minors | If age < 13, no account creation = no data collection |
+
+**Rationale:** Full COPPA compliance requires parental consent verification which is complex. Blocking under-13 is simpler for v1.
+
+### 14.5 Account Deletion
+
+| Step | Description |
+|------|-------------|
+| 1. Request | User clicks "Delete Account" in Settings |
+| 2. Confirmation | "This will permanently delete your account and all data. This cannot be undone." |
+| 3. Grace period | **7 days** — account marked for deletion but not removed |
+| 4. Cancel option | User can login within 7 days to cancel deletion |
+| 5. Final deletion | After 7 days, all personal data is deleted |
+| 6. Anonymization | Game history retained with anonymized player ID for leaderboard integrity |
+
+### 14.6 Third-Party Services
+
+| Service | Data Shared | Purpose |
+|---------|-------------|---------|
+| Google OAuth | Email, name | Authentication |
+| Apple OAuth | Email, name | Authentication |
+| Cloudflare | Request data, IP | Hosting, CDN |
+| PostHog | Anonymous usage events | Analytics |
+| Sentry | Error logs (no PII) | Error tracking |
+
+### 14.7 Language Scope
+
+| Version | Languages |
+|---------|-----------|
+| v1 | **English only** |
+| Future | Spanish, French, German (potential) |
+
+**Rationale:** Merriam-Webster is English-only. Expanding to other languages requires different dictionary APIs and localization effort.
+
+---
+
+## 15. XP Thresholds & Crown Points Details
+
+### 15.1 XP Thresholds Per Tier
+
+| Tier | Name | XP Required | XP to Next Tier |
+|------|------|-------------|-----------------|
+| 1 | New Bee | 0 | 500 |
+| 2 | Bumble Bee | 500 | 1,000 |
+| 3 | Busy Bee | 1,500 | 2,000 |
+| 4 | Honey Bee | 3,500 | 3,500 |
+| 5 | Worker Bee | 7,000 | 5,000 |
+| 6 | Royal Bee | 12,000 | N/A (Crown Points take over) |
+| 7 | Bee Keeper | N/A | Crown Points leader |
+
+**Note:** Bee Keeper is not an XP threshold — it's the Royal Bee with the most Crown Points in each track.
+
+### 15.2 XP Gain/Loss by Game Type
+
+#### 15.2.1 Multiplayer XP (Base Values)
+
+| Placement | XP Change |
+|-----------|-----------|
+| 1st | +50 |
+| 2nd | +30 |
+| 3rd | +10 |
+| 4th | -10 |
+| 5th | -20 |
+| 6th | -30 |
+
+#### 15.2.2 Solo Game XP
+
+| Mode | XP Calculation |
+|------|----------------|
+| Endless | +5 XP per round survived |
+| Blitz | +2 XP per correct word |
+
+### 15.3 Crown Points System (Royal Bees Only)
+
+#### 15.3.1 Earning Crown Points
+
+| Action | Crown Points |
+|--------|--------------|
+| 1st place in multiplayer | +50 CP |
+| 2nd place in multiplayer | +30 CP |
+| 3rd place in multiplayer | +15 CP |
+| 4th place or lower | +5 CP |
+| Beat another Royal Bee | +10 CP bonus |
+| Endless streak (10+ rounds) | +20 CP |
+| Endless streak (20+ rounds) | +40 CP |
+
+#### 15.3.2 Crown Points Rules
+
+| Rule | Description |
+|------|-------------|
+| Can go down? | **No** — Crown Points never decrease from gameplay |
+| Inactivity decay | Yes — 10% loss per week if no games played for 7+ days |
+| Decay cap | Minimum 0 CP (can't go negative) |
+| Track separation | Crown Points are tracked separately per track |
+
+#### 15.3.3 Bee Keeper Determination
+
+| Rule | Description |
+|------|-------------|
+| How many? | 4 total (one per track) |
+| Who qualifies? | The Royal Bee with the highest Crown Points in each track |
+| Ties | Player who reached the CP total first wins |
+| Can lose title? | Yes — if another Royal Bee surpasses your CP |
+| Demotion? | If CP drops below Royal Bee threshold via decay, demote to Royal Bee |
 
 ---
 

@@ -1,6 +1,6 @@
 # PlayLexi — Technical Architecture
 
-> **Version:** 1.0
+> **Version:** 1.5
 > **Last Updated:** December 21, 2025
 > **Status:** Final Draft
 
@@ -20,6 +20,13 @@
 10. [Design System](#10-design-system)
 11. [Testing Strategy](#11-testing-strategy)
 12. [Deployment](#12-deployment)
+13. [Security Considerations](#13-security-considerations)
+14. [Error Handling Strategy](#14-error-handling-strategy)
+15. [Performance Guidelines](#15-performance-guidelines)
+16. [Accessibility Requirements](#16-accessibility-requirements)
+17. [Observability](#17-observability)
+18. [Developer Guide](#18-developer-guide)
+19. [Architecture Decision Records](#19-architecture-decision-records)
 
 ---
 
@@ -33,29 +40,63 @@
 | **Language** | TypeScript | Type safety, better DX, catch errors early |
 | **Styling** | Tailwind CSS + CSS Variables | Already in design system, utility-first, themeable |
 | **UI Components** | shadcn/ui | Already in project, accessible, customizable |
-| **Database** | PostgreSQL | Relational data (users, games, friendships), proven at scale |
-| **ORM** | Prisma | Type-safe queries, migrations, great DX |
-| **Auth** | NextAuth.js | OAuth providers, session management |
-| **Real-time** | Socket.io or Pusher | Multiplayer state sync |
-| **Voice** | OpenAI Whisper (self-hosted) | High accuracy, self-hosted for cost control |
-| **Hosting** | Vercel + Railway/Supabase | Easy deployment, managed Postgres |
+| **Database** | Cloudflare D1 (SQLite) | Serverless SQL, globally distributed, cost-effective |
+| **ORM** | Drizzle ORM | Type-safe, lightweight, D1-compatible |
+| **Auth** | Auth.js (NextAuth v5) | OAuth providers, session management |
+| **Real-time** | Cloudflare Durable Objects | Native WebSocket support, stateful game sessions |
+| **Voice** | OpenAI Whisper (self-hosted on Cloudflare Workers AI) | High accuracy, edge deployment |
+| **Hosting** | Cloudflare Pages + Workers | Edge deployment, cost-effective, integrated stack |
+| **Storage** | Cloudflare R2 | S3-compatible, zero egress fees |
+| **Analytics** | PostHog | Privacy-focused, self-hostable |
+| **Error Tracking** | Sentry | Real-time error monitoring |
 
-### 1.2 Why These Choices
+### 1.2 Why Cloudflare?
+
+**Cost Efficiency:**
+- Generous free tier (100k requests/day on Workers)
+- Zero egress fees on R2 storage
+- Pay-per-request pricing scales with usage
+
+**Native WebSocket Support:**
+- Durable Objects provide stateful WebSocket connections
+- No need for separate WebSocket server (Socket.io, Pusher)
+- Game state persists naturally in Durable Objects
+
+**Edge Performance:**
+- Code runs in 300+ data centers worldwide
+- Low latency for global player base
+- D1 read replicas for fast queries
+
+**Integrated Stack:**
+- One platform for compute, storage, database, and real-time
+- Simpler deployment and monitoring
+- `@cloudflare/next-on-pages` for Next.js compatibility
+
+### 1.3 Why These Choices
 
 **Next.js App Router:**
 - Server components reduce client bundle
 - API routes keep backend in same repo (monolith-first)
 - Great caching and ISR for leaderboards
+- Works on Cloudflare via `@cloudflare/next-on-pages`
 
-**PostgreSQL over MongoDB:**
-- Relational data: users have friends, games have players, players have ranks
-- Complex queries for leaderboards, matchmaking
-- ACID transactions for XP calculations
+**D1 over PostgreSQL:**
+- SQLite syntax is familiar and battle-tested
+- Native Cloudflare integration (no external database provider)
+- Global read replicas for low-latency queries
+- Drizzle ORM provides type safety similar to Prisma
 
-**Prisma:**
-- Type safety matches TypeScript
-- Migrations are version-controlled
-- Query builder prevents SQL injection
+**Drizzle over Prisma:**
+- Lighter weight, better edge compatibility
+- Native D1 driver support
+- TypeScript-first, similar DX to Prisma
+- No binary dependencies (works on edge runtime)
+
+**Durable Objects over Socket.io:**
+- Native Cloudflare solution, no additional service
+- Each game room is a Durable Object with WebSocket support
+- State persists across connections (handles disconnects gracefully)
+- Automatic scaling per game room
 
 ---
 
@@ -229,7 +270,7 @@ playlexi/
 │       └── theme-toggle.tsx
 │
 ├── lib/                          # Utilities and configurations
-│   ├── db.ts                     # Prisma client
+│   ├── db.ts                     # Drizzle client (D1 binding)
 │   ├── auth.ts                   # NextAuth config
 │   ├── icons.ts                  # Centralized icon imports
 │   ├── utils.ts                  # Helper functions (cn, formatters)
@@ -258,9 +299,10 @@ playlexi/
 │   ├── leaderboard.ts
 │   └── api.ts
 │
-├── prisma/
-│   ├── schema.prisma             # Database schema
-│   ├── migrations/               # Migration files
+├── db/
+│   ├── schema.ts                 # Drizzle schema (see Section 4)
+│   ├── migrations/               # D1 migration files
+│   ├── index.ts                  # Database client factory
 │   └── seed.ts                   # Seed script (words, test data)
 │
 ├── public/
@@ -381,376 +423,340 @@ GamePage
 
 ## 4. Database Schema
 
-### 4.1 Prisma Schema
+### 4.1 Drizzle Schema
 
-```prisma
-// prisma/schema.prisma
+> **Note:** We use Drizzle ORM instead of Prisma because Drizzle is lighter weight, has native D1 (SQLite) support, and runs on Cloudflare's edge runtime without binary dependencies.
 
-generator client {
-  provider = "prisma-client-js"
-}
+```typescript
+// db/schema.ts
 
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
+import { sqliteTable, text, integer, real, unique, index } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
+
+// ============================================
+// ENUMS (as string unions for SQLite)
+// ============================================
+
+export const authProviders = ['google', 'apple'] as const;
+export const themes = ['light', 'dark'] as const;
+export const rankTracks = ['endless_voice', 'endless_keyboard', 'blitz_voice', 'blitz_keyboard'] as const;
+export const rankTiers = ['new_bee', 'bumble_bee', 'busy_bee', 'honey_bee', 'worker_bee', 'royal_bee', 'bee_keeper'] as const;
+export const gameModes = ['endless', 'blitz'] as const;
+export const inputMethods = ['voice', 'keyboard'] as const;
+export const gameTypes = ['single', 'local_multi', 'online_private', 'online_public'] as const;
+export const gameStatuses = ['waiting', 'starting', 'in_progress', 'finished'] as const;
+export const requestStatuses = ['pending', 'accepted', 'declined'] as const;
+export const presetMessages = ['want_to_play', 'good_game', 'rematch'] as const;
+export const reportReasons = ['cheating', 'harassment', 'inappropriate_username', 'other'] as const;
+export const reportStatuses = ['pending', 'reviewed', 'actioned', 'dismissed'] as const;
+export const notificationTypes = ['friend_request', 'friend_accepted', 'game_invite', 'game_finished'] as const;
 
 // ============================================
 // USER & AUTH
 // ============================================
 
-model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  username      String    @unique
-  bio           String?
-  avatarId      Int       @default(1) // 1, 2, or 3
-  age           Int
-  authProvider  AuthProvider
-  createdAt     DateTime  @default(now())
-  lastOnline    DateTime  @default(now())
+export const users = sqliteTable('users', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  email: text('email').notNull().unique(),
+  username: text('username').notNull().unique(),
+  bio: text('bio'),
+  avatarId: integer('avatar_id').notNull().default(1), // 1, 2, or 3
+  age: integer('age').notNull(),
+  authProvider: text('auth_provider', { enum: authProviders }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  lastOnline: integer('last_online', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 
   // Settings
-  theme         Theme     @default(LIGHT)
-  emailSocial   Boolean   @default(true)
-  emailSecurity Boolean   @default(true)
-  emailMarketing Boolean  @default(false)
+  theme: text('theme', { enum: themes }).notNull().default('light'),
+  emailSocial: integer('email_social', { mode: 'boolean' }).notNull().default(true),
+  emailSecurity: integer('email_security', { mode: 'boolean' }).notNull().default(true),
+  emailMarketing: integer('email_marketing', { mode: 'boolean' }).notNull().default(false),
 
-  // Relations
-  ranks         UserRank[]
-  gamesPlayed   GamePlayer[]
-  sentRequests  FriendRequest[] @relation("SentRequests")
-  receivedRequests FriendRequest[] @relation("ReceivedRequests")
-  friends       Friendship[] @relation("UserFriends")
-  friendOf      Friendship[] @relation("FriendOf")
-  sentMessages  ChatMessage[] @relation("SentMessages")
-  receivedMessages ChatMessage[] @relation("ReceivedMessages")
-  notifications Notification[]
-  reports       Report[] @relation("Reporter")
-  reportedBy    Report[] @relation("Reported")
-  blockedUsers  Block[] @relation("Blocker")
-  blockedBy     Block[] @relation("Blocked")
-
-  @@index([username])
-  @@index([email])
-}
-
-enum AuthProvider {
-  GOOGLE
-  APPLE
-}
-
-enum Theme {
-  LIGHT
-  DARK
-}
+  // Account deletion
+  deletionRequestedAt: integer('deletion_requested_at', { mode: 'timestamp' }),
+}, (table) => ({
+  usernameIdx: index('idx_users_username').on(table.username),
+  emailIdx: index('idx_users_email').on(table.email),
+}));
 
 // ============================================
 // RANK SYSTEM
 // ============================================
 
-model UserRank {
-  id            String    @id @default(cuid())
-  userId        String
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  track         RankTrack
-  tier          RankTier  @default(NEW_BEE)
-  xp            Int       @default(0)
-  crownPoints   Int       @default(0) // Only for ROYAL_BEE
-
-  updatedAt     DateTime  @updatedAt
-
-  @@unique([userId, track])
-  @@index([track, xp])
-  @@index([track, crownPoints])
-}
-
-enum RankTrack {
-  ENDLESS_VOICE
-  ENDLESS_KEYBOARD
-  BLITZ_VOICE
-  BLITZ_KEYBOARD
-}
-
-enum RankTier {
-  NEW_BEE
-  BUMBLE_BEE
-  BUSY_BEE
-  HONEY_BEE
-  WORKER_BEE
-  ROYAL_BEE
-  BEE_KEEPER
-}
+export const userRanks = sqliteTable('user_ranks', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  track: text('track', { enum: rankTracks }).notNull(),
+  tier: text('tier', { enum: rankTiers }).notNull().default('new_bee'),
+  xp: integer('xp').notNull().default(0),
+  crownPoints: integer('crown_points').notNull().default(0), // Only for royal_bee
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+}, (table) => ({
+  userTrackUnique: unique().on(table.userId, table.track),
+  trackXpIdx: index('idx_user_ranks_track_xp').on(table.track, table.xp),
+  trackCrownPointsIdx: index('idx_user_ranks_track_crown_points').on(table.track, table.crownPoints),
+}));
 
 // ============================================
 // GAMES
 // ============================================
 
-model Game {
-  id            String    @id @default(cuid())
-  roomCode      String?   @unique // For private games
-
-  mode          GameMode
-  inputMethod   InputMethod
-  type          GameType
-  status        GameStatus @default(WAITING)
+export const games = sqliteTable('games', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  roomCode: text('room_code').unique(), // For private games
+  mode: text('mode', { enum: gameModes }).notNull(),
+  inputMethod: text('input_method', { enum: inputMethods }).notNull(),
+  type: text('type', { enum: gameTypes }).notNull(),
+  status: text('status', { enum: gameStatuses }).notNull().default('waiting'),
 
   // Multiplayer settings
-  hostId        String?
-  maxPlayers    Int       @default(6)
-  minPlayers    Int       @default(4)
+  hostId: text('host_id'),
+  maxPlayers: integer('max_players').notNull().default(6),
+  minPlayers: integer('min_players').notNull().default(4),
 
   // Calculated difficulty
-  averageRank   RankTier?
+  averageRank: text('average_rank', { enum: rankTiers }),
 
-  createdAt     DateTime  @default(now())
-  startedAt     DateTime?
-  endedAt       DateTime?
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  startedAt: integer('started_at', { mode: 'timestamp' }),
+  endedAt: integer('ended_at', { mode: 'timestamp' }),
+}, (table) => ({
+  statusTypeIdx: index('idx_games_status_type').on(table.status, table.type),
+  roomCodeIdx: index('idx_games_room_code').on(table.roomCode),
+}));
 
-  // Relations
-  players       GamePlayer[]
-  rounds        GameRound[]
-
-  @@index([status, type])
-  @@index([roomCode])
-}
-
-enum GameMode {
-  ENDLESS
-  BLITZ
-}
-
-enum InputMethod {
-  VOICE
-  KEYBOARD
-}
-
-enum GameType {
-  SINGLE
-  LOCAL_MULTI
-  ONLINE_PRIVATE
-  ONLINE_PUBLIC
-}
-
-enum GameStatus {
-  WAITING     // Lobby, waiting for players
-  STARTING    // Countdown
-  IN_PROGRESS
-  FINISHED
-}
-
-model GamePlayer {
-  id            String    @id @default(cuid())
-  gameId        String
-  game          Game      @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  userId        String
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+export const gamePlayers = sqliteTable('game_players', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  gameId: text('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
 
   // State
-  hearts        Int       @default(3)
-  isEliminated  Boolean   @default(false)
-  placement     Int?      // 1st, 2nd, 3rd, etc.
+  hearts: integer('hearts').notNull().default(3),
+  isEliminated: integer('is_eliminated', { mode: 'boolean' }).notNull().default(false),
+  placement: integer('placement'), // 1st, 2nd, 3rd, etc.
 
   // Stats
-  roundsCompleted Int     @default(0)
-  correctAnswers  Int     @default(0)
-  wrongAnswers    Int      @default(0)
+  roundsCompleted: integer('rounds_completed').notNull().default(0),
+  correctAnswers: integer('correct_answers').notNull().default(0),
+  wrongAnswers: integer('wrong_answers').notNull().default(0),
 
   // XP earned (calculated at end)
-  xpEarned      Int?
+  xpEarned: integer('xp_earned'),
 
-  joinedAt      DateTime  @default(now())
-  eliminatedAt  DateTime?
+  joinedAt: integer('joined_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  eliminatedAt: integer('eliminated_at', { mode: 'timestamp' }),
+}, (table) => ({
+  gameUserUnique: unique().on(table.gameId, table.userId),
+  gameIdIdx: index('idx_game_players_game_id').on(table.gameId),
+  userIdIdx: index('idx_game_players_user_id').on(table.userId),
+}));
 
-  @@unique([gameId, userId])
-  @@index([gameId])
-  @@index([userId])
-}
-
-model GameRound {
-  id            String    @id @default(cuid())
-  gameId        String
-  game          Game      @relation(fields: [gameId], references: [id], onDelete: Cascade)
-
-  roundNumber   Int
-  wordId        String
-  word          Word      @relation(fields: [wordId], references: [id])
+export const gameRounds = sqliteTable('game_rounds', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  gameId: text('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
+  roundNumber: integer('round_number').notNull(),
+  wordId: text('word_id').notNull().references(() => words.id),
 
   // For multiplayer: whose turn
-  activePlayerId String?
+  activePlayerId: text('active_player_id'),
 
   // Timing
-  startedAt     DateTime?
-  endedAt       DateTime?
-  timeLimit     Int       // seconds
+  startedAt: integer('started_at', { mode: 'timestamp' }),
+  endedAt: integer('ended_at', { mode: 'timestamp' }),
+  timeLimit: integer('time_limit').notNull(), // seconds
 
   // Result
-  answer        String?
-  isCorrect     Boolean?
-
-  @@unique([gameId, roundNumber])
-  @@index([gameId])
-}
+  answer: text('answer'),
+  isCorrect: integer('is_correct', { mode: 'boolean' }),
+}, (table) => ({
+  gameRoundUnique: unique().on(table.gameId, table.roundNumber),
+  gameIdIdx: index('idx_game_rounds_game_id').on(table.gameId),
+}));
 
 // ============================================
 // WORDS
 // ============================================
 
-model Word {
-  id              String    @id @default(cuid())
-  word            String    @unique
-  difficultyTier  Int       // 1-7
-  definition      String
-  exampleSentence String
-  audioUrl        String
-  partOfSpeech    String
-
-  // Relations
-  rounds          GameRound[]
-
-  @@index([difficultyTier])
-}
+export const words = sqliteTable('words', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  word: text('word').notNull().unique(),
+  difficultyTier: integer('difficulty_tier').notNull(), // 1-7
+  definition: text('definition').notNull(),
+  exampleSentence: text('example_sentence').notNull(),
+  audioUrl: text('audio_url').notNull(),
+  partOfSpeech: text('part_of_speech').notNull(),
+}, (table) => ({
+  difficultyTierIdx: index('idx_words_difficulty_tier').on(table.difficultyTier),
+}));
 
 // ============================================
 // SOCIAL
 // ============================================
 
-model Friendship {
-  id            String    @id @default(cuid())
-  userId        String
-  user          User      @relation("UserFriends", fields: [userId], references: [id], onDelete: Cascade)
-  friendId      String
-  friend        User      @relation("FriendOf", fields: [friendId], references: [id], onDelete: Cascade)
-  createdAt     DateTime  @default(now())
+export const friendships = sqliteTable('friendships', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  friendId: text('friend_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+}, (table) => ({
+  userFriendUnique: unique().on(table.userId, table.friendId),
+  userIdIdx: index('idx_friendships_user_id').on(table.userId),
+  friendIdIdx: index('idx_friendships_friend_id').on(table.friendId),
+}));
 
-  @@unique([userId, friendId])
-  @@index([userId])
-  @@index([friendId])
-}
+export const friendRequests = sqliteTable('friend_requests', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  senderId: text('sender_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  receiverId: text('receiver_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  status: text('status', { enum: requestStatuses }).notNull().default('pending'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  respondedAt: integer('responded_at', { mode: 'timestamp' }),
+}, (table) => ({
+  senderReceiverUnique: unique().on(table.senderId, table.receiverId),
+  receiverStatusIdx: index('idx_friend_requests_receiver_status').on(table.receiverId, table.status),
+}));
 
-model FriendRequest {
-  id            String    @id @default(cuid())
-  senderId      String
-  sender        User      @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
-  receiverId    String
-  receiver      User      @relation("ReceivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
-  status        RequestStatus @default(PENDING)
-  createdAt     DateTime  @default(now())
-  respondedAt   DateTime?
+export const chatMessages = sqliteTable('chat_messages', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  senderId: text('sender_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  receiverId: text('receiver_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  messageType: text('message_type', { enum: presetMessages }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  readAt: integer('read_at', { mode: 'timestamp' }),
+}, (table) => ({
+  senderReceiverIdx: index('idx_chat_messages_sender_receiver').on(table.senderId, table.receiverId),
+  receiverReadIdx: index('idx_chat_messages_receiver_read').on(table.receiverId, table.readAt),
+}));
 
-  @@unique([senderId, receiverId])
-  @@index([receiverId, status])
-}
+export const blocks = sqliteTable('blocks', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  blockerId: text('blocker_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  blockedId: text('blocked_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+}, (table) => ({
+  blockerBlockedUnique: unique().on(table.blockerId, table.blockedId),
+  blockerIdIdx: index('idx_blocks_blocker_id').on(table.blockerId),
+}));
 
-enum RequestStatus {
-  PENDING
-  ACCEPTED
-  DECLINED
-}
-
-model ChatMessage {
-  id            String    @id @default(cuid())
-  senderId      String
-  sender        User      @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
-  receiverId    String
-  receiver      User      @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
-
-  messageType   PresetMessage
-  createdAt     DateTime  @default(now())
-  readAt        DateTime?
-
-  @@index([senderId, receiverId])
-  @@index([receiverId, readAt])
-}
-
-enum PresetMessage {
-  WANT_TO_PLAY
-  GOOD_GAME
-  REMATCH
-}
-
-model Block {
-  id            String    @id @default(cuid())
-  blockerId     String
-  blocker       User      @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
-  blockedId     String
-  blocked       User      @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
-  createdAt     DateTime  @default(now())
-
-  @@unique([blockerId, blockedId])
-  @@index([blockerId])
-}
-
-model Report {
-  id            String    @id @default(cuid())
-  reporterId    String
-  reporter      User      @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
-  reportedId    String
-  reported      User      @relation("Reported", fields: [reportedId], references: [id], onDelete: Cascade)
-
-  reason        ReportReason
-  details       String?
-  status        ReportStatus @default(PENDING)
-
-  createdAt     DateTime  @default(now())
-  reviewedAt    DateTime?
-
-  @@index([status])
-}
-
-enum ReportReason {
-  CHEATING
-  HARASSMENT
-  INAPPROPRIATE_USERNAME
-  OTHER
-}
-
-enum ReportStatus {
-  PENDING
-  REVIEWED
-  ACTIONED
-  DISMISSED
-}
+export const reports = sqliteTable('reports', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  reporterId: text('reporter_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  reportedId: text('reported_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  reason: text('reason', { enum: reportReasons }).notNull(),
+  details: text('details'),
+  status: text('status', { enum: reportStatuses }).notNull().default('pending'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+  reviewedAt: integer('reviewed_at', { mode: 'timestamp' }),
+}, (table) => ({
+  statusIdx: index('idx_reports_status').on(table.status),
+}));
 
 // ============================================
 // NOTIFICATIONS
 // ============================================
 
-model Notification {
-  id            String    @id @default(cuid())
-  userId        String
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  type          NotificationType
-  title         String
-  message       String
-  link          String?   // Where to navigate on click
-
-  readAt        DateTime?
-  createdAt     DateTime  @default(now())
-
-  @@index([userId, readAt])
-}
-
-enum NotificationType {
-  FRIEND_REQUEST
-  FRIEND_ACCEPTED
-  GAME_INVITE
-  GAME_FINISHED
-}
+export const notifications = sqliteTable('notifications', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  type: text('type', { enum: notificationTypes }).notNull(),
+  title: text('title').notNull(),
+  message: text('message').notNull(),
+  link: text('link'), // Where to navigate on click
+  readAt: integer('read_at', { mode: 'timestamp' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+}, (table) => ({
+  userReadIdx: index('idx_notifications_user_read').on(table.userId, table.readAt),
+}));
 ```
 
-### 4.2 Database Indexes Rationale
+### 4.2 Type Inference
+
+Drizzle provides automatic type inference from the schema:
+
+```typescript
+// db/types.ts
+
+import { InferSelectModel, InferInsertModel } from 'drizzle-orm';
+import * as schema from './schema';
+
+// Select types (for reading from DB)
+export type User = InferSelectModel<typeof schema.users>;
+export type UserRank = InferSelectModel<typeof schema.userRanks>;
+export type Game = InferSelectModel<typeof schema.games>;
+export type GamePlayer = InferSelectModel<typeof schema.gamePlayers>;
+export type GameRound = InferSelectModel<typeof schema.gameRounds>;
+export type Word = InferSelectModel<typeof schema.words>;
+export type Friendship = InferSelectModel<typeof schema.friendships>;
+export type FriendRequest = InferSelectModel<typeof schema.friendRequests>;
+export type ChatMessage = InferSelectModel<typeof schema.chatMessages>;
+export type Block = InferSelectModel<typeof schema.blocks>;
+export type Report = InferSelectModel<typeof schema.reports>;
+export type Notification = InferSelectModel<typeof schema.notifications>;
+
+// Insert types (for writing to DB)
+export type NewUser = InferInsertModel<typeof schema.users>;
+export type NewUserRank = InferInsertModel<typeof schema.userRanks>;
+export type NewGame = InferInsertModel<typeof schema.games>;
+// ... etc
+```
+
+### 4.3 Database Client
+
+```typescript
+// db/index.ts
+
+import { drizzle } from 'drizzle-orm/d1';
+import * as schema from './schema';
+
+export function createDb(d1: D1Database) {
+  return drizzle(d1, { schema });
+}
+
+// Usage in API route or Worker
+export type Database = ReturnType<typeof createDb>;
+```
+
+### 4.4 Example Queries
+
+```typescript
+// Get user with ranks
+const userWithRanks = await db.query.users.findFirst({
+  where: eq(users.id, userId),
+  with: {
+    ranks: true,
+  },
+});
+
+// Get leaderboard for a track
+const leaderboard = await db
+  .select()
+  .from(userRanks)
+  .where(eq(userRanks.track, 'endless_voice'))
+  .orderBy(desc(userRanks.xp))
+  .limit(20);
+
+// Create a new game
+const [newGame] = await db
+  .insert(games)
+  .values({
+    mode: 'endless',
+    inputMethod: 'voice',
+    type: 'online_public',
+    hostId: userId,
+  })
+  .returning();
+```
+
+### 4.5 Database Indexes Rationale
 
 | Index | Purpose |
 |-------|---------|
-| `User.username` | Fast lookup for profile pages, search |
-| `UserRank[track, xp]` | Leaderboard queries sorted by XP |
-| `UserRank[track, crownPoints]` | Bee Keeper determination |
-| `Game[status, type]` | Find active public games for matchmaking |
-| `GamePlayer[gameId]` | Get all players in a game |
-| `Notification[userId, readAt]` | Unread notifications count |
+| `users.username` | Fast lookup for profile pages, search |
+| `user_ranks[track, xp]` | Leaderboard queries sorted by XP |
+| `user_ranks[track, crown_points]` | Bee Keeper determination |
+| `games[status, type]` | Find active public games for matchmaking |
+| `game_players[game_id]` | Get all players in a game |
+| `notifications[user_id, read_at]` | Unread notifications count |
 
 ---
 
@@ -900,9 +906,102 @@ interface Word {
 
 ### 7.1 Technology Choice
 
-**Socket.io** for v1 (simpler), can migrate to **Pusher** or **Ably** for scale.
+**Cloudflare Durable Objects** — native WebSocket support with persistent state per game room.
 
-### 7.2 Events
+### 7.2 Durable Object Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Cloudflare Edge                          │
+│                                                              │
+│  ┌─────────────┐     ┌─────────────┐     ┌─────────────┐   │
+│  │   Player 1  │     │   Player 2  │     │   Player 3  │   │
+│  │  (Browser)  │     │  (Browser)  │     │  (Browser)  │   │
+│  └──────┬──────┘     └──────┬──────┘     └──────┬──────┘   │
+│         │                   │                   │           │
+│         └───────────────────┼───────────────────┘           │
+│                             │                               │
+│                    WebSocket Connection                     │
+│                             │                               │
+│                    ┌────────▼────────┐                      │
+│                    │  Durable Object │                      │
+│                    │   (Game Room)   │                      │
+│                    │                 │                      │
+│                    │  - Game state   │                      │
+│                    │  - Player list  │                      │
+│                    │  - Turn order   │                      │
+│                    │  - Timer logic  │                      │
+│                    └────────┬────────┘                      │
+│                             │                               │
+│                    ┌────────▼────────┐                      │
+│                    │       D1        │                      │
+│                    │   (Database)    │                      │
+│                    └─────────────────┘                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 7.3 Game Room Durable Object
+
+```typescript
+// workers/game-room.ts
+
+export class GameRoom implements DurableObject {
+  private state: DurableObjectState;
+  private sessions: Map<WebSocket, PlayerSession> = new Map();
+  private gameState: GameState | null = null;
+
+  constructor(state: DurableObjectState) {
+    this.state = state;
+  }
+
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+
+    // WebSocket upgrade
+    if (request.headers.get('Upgrade') === 'websocket') {
+      const pair = new WebSocketPair();
+      const [client, server] = Object.values(pair);
+
+      await this.handleSession(server, url);
+
+      return new Response(null, {
+        status: 101,
+        webSocket: client,
+      });
+    }
+
+    return new Response('Expected WebSocket', { status: 400 });
+  }
+
+  private async handleSession(ws: WebSocket, url: URL) {
+    ws.accept();
+
+    const playerId = url.searchParams.get('playerId');
+    const session: PlayerSession = { playerId, ws };
+    this.sessions.set(ws, session);
+
+    ws.addEventListener('message', (event) => {
+      this.handleMessage(session, event.data);
+    });
+
+    ws.addEventListener('close', () => {
+      this.sessions.delete(ws);
+      this.handlePlayerDisconnect(playerId);
+    });
+  }
+
+  private broadcast(message: GameEvent, exclude?: string) {
+    const data = JSON.stringify(message);
+    for (const [ws, session] of this.sessions) {
+      if (session.playerId !== exclude) {
+        ws.send(data);
+      }
+    }
+  }
+}
+```
+
+### 7.4 Events
 
 #### Server → Client
 
@@ -910,6 +1009,7 @@ interface Word {
 |-------|---------|------|
 | `player:joined` | Player info | Someone joins lobby |
 | `player:left` | Player ID | Someone leaves |
+| `player:reconnected` | Player ID | Player rejoined within 60s window |
 | `game:starting` | Countdown | Host starts game |
 | `game:started` | Initial state | Countdown finished |
 | `round:start` | Word ID, time limit | New round begins |
@@ -917,104 +1017,370 @@ interface Word {
 | `answer:submitted` | Player ID, correct/wrong | Someone answered |
 | `player:eliminated` | Player ID, placement | Lost all hearts |
 | `game:finished` | Final results | Game over |
+| `error` | Error message | Something went wrong |
 
 #### Client → Server
 
 | Event | Payload | When |
 |-------|---------|------|
-| `game:join` | Room code | Joining lobby |
+| `game:join` | Room code, player ID | Joining lobby |
 | `game:leave` | - | Leaving |
 | `game:ready` | - | Ready to start |
 | `answer:submit` | Answer string | Submitting answer |
+| `ping` | - | Keep-alive (every 30s) |
 
-### 7.3 Room Structure
+### 7.5 Reconnection Handling
 
+```typescript
+// Durable Object handles reconnection gracefully
+private async handlePlayerDisconnect(playerId: string) {
+  const player = this.gameState?.players.find(p => p.id === playerId);
+  if (!player) return;
+
+  player.disconnectedAt = Date.now();
+  player.isDisconnected = true;
+
+  // Start 60-second countdown
+  this.state.storage.setAlarm(Date.now() + 60_000, {
+    type: 'disconnect_timeout',
+    playerId,
+  });
+
+  this.broadcast({
+    type: 'player:disconnected',
+    playerId,
+    rejoinWindowMs: 60_000,
+  });
+}
+
+async alarm() {
+  const alarmData = await this.state.storage.getAlarm();
+  if (alarmData?.type === 'disconnect_timeout') {
+    // Player didn't rejoin in time — eliminate them
+    this.eliminatePlayer(alarmData.playerId);
+  }
+}
 ```
-rooms/
-├── lobby:{roomCode}     # Pre-game lobby
-└── game:{gameId}        # Active game
-```
+
+### 7.6 Room Naming Convention
+
+| Room Type | Durable Object Name | Example |
+|-----------|--------------------| --------|
+| Private lobby | `lobby:{roomCode}` | `lobby:BEE42` |
+| Public matchmaking | `matchmaking:{track}:{tierRange}` | `matchmaking:ENDLESS_VOICE:1-3` |
+| Active game | `game:{gameId}` | `game:clx123abc` |
 
 ---
 
 ## 8. Voice Recognition
 
-### 8.1 Whisper Integration
+### 8.1 Architecture Overview
+
+The voice input system follows a **single-hook, multiple-consumer** pattern:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     useVoiceRecorder                         │
+│                                                              │
+│  Responsibilities:                                           │
+│  • Request microphone permission                             │
+│  • Create MediaStream                                        │
+│  • Create AnalyserNode (for visualization)                   │
+│  • Capture audio blob                                        │
+│  • Send blob to Whisper API                                  │
+│  • Return transcript                                         │
+│                                                              │
+│  Returns:                                                    │
+│  {                                                           │
+│    analyserNode,      // For VoiceWaveform                   │
+│    isRecording,       // UI state                            │
+│    isTranscribing,    // Loading state                       │
+│    transcript,        // Result from Whisper                 │
+│    error,             // Error state                         │
+│    startRecording,    // Action                              │
+│    stopRecording,     // Action                              │
+│  }                                                           │
+└─────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┴───────────────┐
+              │                               │
+              ▼                               ▼
+┌──────────────────────┐        ┌──────────────────────────┐
+│    VoiceWaveform     │        │      VoiceInput          │
+│   (presentational)   │        │    (smart component)     │
+│                      │        │                          │
+│  • Takes analyserNode│        │  • Uses the hook         │
+│  • Draws bars        │        │  • Shows record button   │
+│  • No other logic    │        │  • Shows transcript      │
+│                      │        │  • Handles submit        │
+└──────────────────────┘        └──────────────────────────┘
+```
+
+**Why this pattern:**
+
+| Principle | Implementation |
+|-----------|----------------|
+| Single Source of Truth | Hook owns entire audio pipeline |
+| Separation of Concerns | Visualization separate from transcription |
+| Testability | Each piece testable in isolation |
+| Reusability | VoiceWaveform usable without Whisper |
+
+### 8.2 Whisper API Integration
 
 ```typescript
 // lib/whisper.ts
 
-import { exec } from 'child_process';
+/**
+ * Transcribes audio using Cloudflare Workers AI (Whisper model).
+ * Audio is processed in-memory and never stored.
+ */
+export async function transcribeAudio(audioBlob: Blob): Promise<string> {
+  const formData = new FormData()
+  formData.append('audio', audioBlob)
 
-export async function transcribeAudio(audioBuffer: Buffer): Promise<string> {
-  // Save buffer to temp file
-  const tempPath = `/tmp/${Date.now()}.webm`;
-  await fs.writeFile(tempPath, audioBuffer);
+  const response = await fetch('/api/voice/transcribe', {
+    method: 'POST',
+    body: formData,
+  })
 
-  // Run Whisper CLI
-  const result = await execPromise(
-    `whisper ${tempPath} --model base --language en --output_format txt`
-  );
+  if (!response.ok) {
+    throw new Error('Transcription failed')
+  }
 
-  // Clean up and return
-  await fs.unlink(tempPath);
-  return parseWhisperOutput(result);
+  const data = await response.json()
+  return data.text
 }
 ```
 
-### 8.2 API Route
+### 8.3 API Route (Cloudflare Workers AI)
 
 ```typescript
 // app/api/voice/transcribe/route.ts
 
 export async function POST(req: Request) {
-  const formData = await req.formData();
-  const audio = formData.get('audio') as Blob;
+  const formData = await req.formData()
+  const audio = formData.get('audio') as Blob
 
-  const buffer = Buffer.from(await audio.arrayBuffer());
-  const transcription = await transcribeAudio(buffer);
+  if (!audio) {
+    return Response.json({ error: 'No audio provided' }, { status: 400 })
+  }
+
+  // Convert to array buffer for Workers AI
+  const arrayBuffer = await audio.arrayBuffer()
+
+  // Call Cloudflare Workers AI Whisper model
+  const result = await env.AI.run('@cf/openai/whisper', {
+    audio: [...new Uint8Array(arrayBuffer)],
+  })
 
   return Response.json({
-    text: transcription,
+    text: result.text,
     // No confidence score exposed to prevent gaming
-  });
+  })
 }
 ```
 
-### 8.3 Client Hook
+### 8.4 Voice Recorder Hook
 
 ```typescript
-// hooks/use-voice-recognition.ts
+// hooks/use-voice-recorder.ts
 
-export function useVoiceRecognition() {
-  const [isRecording, setIsRecording] = useState(false);
-  const [transcript, setTranscript] = useState('');
-  const mediaRecorder = useRef<MediaRecorder | null>(null);
+export interface UseVoiceRecorderReturn {
+  /** AnalyserNode for VoiceWaveform visualization */
+  analyserNode: AnalyserNode | null
+  /** Whether currently recording */
+  isRecording: boolean
+  /** Whether audio is being transcribed */
+  isTranscribing: boolean
+  /** Transcription result from Whisper */
+  transcript: string | null
+  /** Error state */
+  error: Error | null
+  /** Start recording audio */
+  startRecording: () => Promise<void>
+  /** Stop recording and transcribe */
+  stopRecording: () => Promise<string>
+}
 
-  const startRecording = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder.current = new MediaRecorder(stream);
+export function useVoiceRecorder(): UseVoiceRecorderReturn {
+  const [isRecording, setIsRecording] = useState(false)
+  const [isTranscribing, setIsTranscribing] = useState(false)
+  const [transcript, setTranscript] = useState<string | null>(null)
+  const [error, setError] = useState<Error | null>(null)
+  const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null)
 
-    const chunks: Blob[] = [];
-    mediaRecorder.current.ondataavailable = (e) => chunks.push(e.data);
-    mediaRecorder.current.onstop = async () => {
-      const blob = new Blob(chunks, { type: 'audio/webm' });
-      const result = await submitAudio(blob);
-      setTranscript(result.text);
-    };
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const chunksRef = useRef<Blob[]>([])
 
-    mediaRecorder.current.start();
-    setIsRecording(true);
-  };
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
 
-  const stopRecording = () => {
-    mediaRecorder.current?.stop();
-    setIsRecording(false);
-  };
+      // Set up audio context for visualization
+      const audioContext = new AudioContext()
+      const source = audioContext.createMediaStreamSource(stream)
+      const analyser = audioContext.createAnalyser()
+      analyser.fftSize = 256
+      source.connect(analyser)
 
-  return { isRecording, transcript, startRecording, stopRecording };
+      audioContextRef.current = audioContext
+      setAnalyserNode(analyser)
+
+      // Set up recording
+      const mediaRecorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = mediaRecorder
+      chunksRef.current = []
+
+      mediaRecorder.ondataavailable = (e) => {
+        chunksRef.current.push(e.data)
+      }
+
+      mediaRecorder.start()
+      setIsRecording(true)
+      setTranscript(null)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to start recording'))
+    }
+  }, [])
+
+  const stopRecording = useCallback(async () => {
+    const mediaRecorder = mediaRecorderRef.current
+    if (!mediaRecorder) return ''
+
+    return new Promise<string>((resolve) => {
+      mediaRecorder.onstop = async () => {
+        setIsRecording(false)
+        setAnalyserNode(null)
+
+        // Clean up audio context
+        audioContextRef.current?.close()
+
+        // Stop all tracks
+        mediaRecorder.stream.getTracks().forEach((track) => track.stop())
+
+        // Create blob and transcribe
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
+        setIsTranscribing(true)
+
+        try {
+          const result = await transcribeAudio(blob)
+          setTranscript(result)
+          resolve(result)
+        } catch (err) {
+          setError(err instanceof Error ? err : new Error('Transcription failed'))
+          resolve('')
+        } finally {
+          setIsTranscribing(false)
+        }
+      }
+
+      mediaRecorder.stop()
+    })
+  }, [])
+
+  return {
+    analyserNode,
+    isRecording,
+    isTranscribing,
+    transcript,
+    error,
+    startRecording,
+    stopRecording,
+  }
 }
 ```
+
+### 8.5 VoiceInput Component (Smart Component)
+
+```typescript
+// components/game/voice-input.tsx
+
+interface VoiceInputProps {
+  onSubmit: (answer: string) => void
+  disabled?: boolean
+}
+
+export function VoiceInput({ onSubmit, disabled }: VoiceInputProps) {
+  const {
+    analyserNode,
+    isRecording,
+    isTranscribing,
+    transcript,
+    error,
+    startRecording,
+    stopRecording,
+  } = useVoiceRecorder()
+
+  const handleStopAndSubmit = async () => {
+    const result = await stopRecording()
+    if (result) {
+      onSubmit(result)
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-6">
+      {/* Waveform visualization — presentational only */}
+      <VoiceWaveform analyserNode={analyserNode} />
+
+      {/* Recording controls */}
+      <div className="flex items-center gap-4">
+        {isRecording ? (
+          <Button onClick={handleStopAndSubmit} variant="destructive" disabled={disabled}>
+            <Square className="mr-2 size-4" />
+            Stop
+          </Button>
+        ) : (
+          <Button onClick={startRecording} disabled={disabled || isTranscribing}>
+            <Mic className="mr-2 size-4" />
+            Record
+          </Button>
+        )}
+      </div>
+
+      {/* Transcription state */}
+      {isTranscribing && <p className="text-muted-foreground text-sm">Processing...</p>}
+      {transcript && (
+        <p className="text-sm">
+          You said: <span className="font-medium">{transcript}</span>
+        </p>
+      )}
+      {error && <p className="text-destructive text-sm">{error.message}</p>}
+    </div>
+  )
+}
+```
+
+### 8.6 VoiceWaveform Component (Presentational)
+
+The `VoiceWaveform` component is **purely presentational**:
+
+- Located at `components/ui/voice-waveform.tsx`
+- Takes only an `AnalyserNode` prop
+- Draws frequency bars on a canvas
+- Has no knowledge of recording, transcription, or Whisper
+- Respects `prefers-reduced-motion` for accessibility
+
+This separation allows `VoiceWaveform` to be reused in other contexts (e.g., audio playback visualization) without modification.
+
+### 8.7 Component Relationships
+
+| Component/Hook | Type | Responsibility |
+|----------------|------|----------------|
+| `useVoiceRecorder` | Hook | Audio pipeline, Whisper API calls |
+| `VoiceWaveform` | UI Component | Draw frequency bars from AnalyserNode |
+| `VoiceInput` | Game Component | Compose hook + waveform, handle UI actions |
+
+### 8.8 Error Handling
+
+| Scenario | Handling |
+|----------|----------|
+| Microphone permission denied | Show error, suggest keyboard input |
+| No audio detected | "We didn't hear anything. Please try again." |
+| Whisper API failure | Retry with exponential backoff, then show error |
+| Network timeout | 10-second timeout, then show error |
 
 ---
 
@@ -1028,11 +1394,13 @@ export function useVoiceRecognition() {
 import NextAuth from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import AppleProvider from 'next-auth/providers/apple';
-import { PrismaAdapter } from '@auth/prisma-adapter';
-import { db } from './db';
+import { DrizzleAdapter } from '@auth/drizzle-adapter';
+import { createDb } from '@/db';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: PrismaAdapter(db),
+  // Note: DrizzleAdapter requires passing the db instance
+  // For D1, the db is created per-request with the D1 binding
+  adapter: DrizzleAdapter(db),
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -1113,25 +1481,25 @@ The project already has shadcn/ui components. Use these as primitives:
 
 ### 10.3 Theme Variables
 
-Already using CSS variables for theming. Key tokens:
+The project uses **OKLCH color space** for perceptually uniform colors. All tokens are defined in `app/globals.css`.
 
-```css
-:root {
-  --primary: #fcb040;        /* PlayLexi orange/yellow */
-  --background: white;
-  --foreground: #0a0a0a;
-  --muted: #f5f5f5;
-  --muted-foreground: #737373;
-  --destructive: #dc2626;    /* Red for hearts, errors */
-  /* ... existing shadcn tokens */
-}
+**Source Files (always reference these when implementing):**
+- **[STYLE_GUIDE.md](../STYLE_GUIDE.md)** — Component patterns, border radius, icon imports
+- **[app/globals.css](../app/globals.css)** — CSS variables, color tokens, focus rings
+- **[lib/icons.ts](../lib/icons.ts)** — Centralized icon imports
 
-.dark {
-  --background: #0a0a0a;
-  --foreground: #fafafa;
-  /* ... */
-}
-```
+**Key Color Tokens:**
+
+| Token | Light Mode | Dark Mode | Usage |
+|-------|------------|-----------|-------|
+| `--primary` | `oklch(0.852 0.199 91.936)` | same | PlayLexi yellow |
+| `--primary-hover` | `oklch(0.78 0.16 91.936)` | same | Button hover |
+| `--destructive` | `oklch(0.58 0.22 27)` | `oklch(0.58 0.22 27)` | Hearts, errors |
+| `--foreground` | `oklch(0.145 0 0)` | `oklch(0.985 0 0)` | Text |
+| `--background` | `oklch(1 0 0)` | `oklch(0.145 0 0)` | Page background |
+| `--focus-ring-color` | `oklch(0.5 0.25 252)` | `oklch(0.6 0.25 252)` | Focus rings |
+
+**Rule:** Never use arbitrary hex/rgb colors. Always use semantic tokens via CSS variables.
 
 ---
 
@@ -1162,45 +1530,140 @@ Already using CSS variables for theming. Key tokens:
 
 | Environment | Purpose | URL |
 |-------------|---------|-----|
-| Development | Local dev | localhost:3000 |
-| Preview | PR previews | pr-{n}.playlexi.vercel.app |
+| Development | Local dev | localhost:3000 (wrangler dev) |
+| Preview | PR previews | pr-{n}.playlexi.pages.dev |
 | Staging | Pre-production | staging.playlexi.com |
 | Production | Live | playlexi.com |
 
-### 12.2 Infrastructure
+### 12.2 Cloudflare Infrastructure
 
-| Service | Provider | Purpose |
-|---------|----------|---------|
-| Frontend/API | Vercel | Next.js hosting |
-| Database | Railway or Supabase | PostgreSQL |
-| Whisper | Self-hosted (Railway) or Replicate | Voice transcription |
-| File Storage | Vercel Blob or S3 | Audio files, avatars |
-| WebSocket | Upstash Redis + Socket.io | Real-time |
+| Service | Cloudflare Product | Purpose |
+|---------|-------------------|---------|
+| Frontend/API | Pages + Workers | Next.js hosting via `@cloudflare/next-on-pages` |
+| Database | D1 | SQLite-based serverless database |
+| Real-time | Durable Objects | WebSocket connections, game state |
+| File Storage | R2 | Audio files, avatars (S3-compatible) |
+| Voice AI | Workers AI | Whisper model for transcription |
+| KV Storage | Workers KV | Session tokens, cache |
+| Queues | Queues | Background jobs (XP calculations, notifications) |
 
-### 12.3 Environment Variables
+### 12.3 Cloudflare Configuration
+
+```toml
+# wrangler.toml
+
+name = "playlexi"
+compatibility_date = "2024-01-01"
+pages_build_output_dir = ".vercel/output/static"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "playlexi-db"
+database_id = "xxx-xxx-xxx"
+
+# R2 Bucket
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "playlexi-assets"
+
+# Durable Objects
+[[durable_objects.bindings]]
+name = "GAME_ROOMS"
+class_name = "GameRoom"
+
+[[durable_objects.bindings]]
+name = "MATCHMAKING"
+class_name = "MatchmakingQueue"
+
+# Workers AI
+[ai]
+binding = "AI"
+
+# KV Namespace
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "xxx-xxx-xxx"
+
+# Environment variables
+[vars]
+ENVIRONMENT = "production"
+```
+
+### 12.4 Environment Variables
 
 ```bash
-# .env.example
-
-# Database
-DATABASE_URL="postgresql://..."
+# .dev.vars (local development, git-ignored)
 
 # Auth
 NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="..."
+NEXTAUTH_SECRET="your-secret-here"
 GOOGLE_CLIENT_ID="..."
 GOOGLE_CLIENT_SECRET="..."
 APPLE_CLIENT_ID="..."
 APPLE_CLIENT_SECRET="..."
 
-# Whisper
-WHISPER_API_URL="http://localhost:9000"
+# Analytics
+POSTHOG_KEY="phc_..."
+SENTRY_DSN="https://..."
 
-# Real-time
-REDIS_URL="redis://..."
+# External Services (if needed)
+MERRIAM_WEBSTER_API_KEY="..." # Only for word seeding, not runtime
+```
 
-# Storage
-BLOB_READ_WRITE_TOKEN="..."
+### 12.5 Deployment Pipeline
+
+```yaml
+# .github/workflows/deploy.yml
+
+name: Deploy to Cloudflare
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy .vercel/output/static --project-name=playlexi
+```
+
+### 12.6 Database Migrations
+
+```bash
+# Run migrations locally
+wrangler d1 migrations apply playlexi-db --local
+
+# Run migrations on production
+wrangler d1 migrations apply playlexi-db --remote
+
+# Create new migration
+wrangler d1 migrations create playlexi-db "add_crown_points"
 ```
 
 ---
@@ -1238,6 +1701,857 @@ PRs require:
 - Passing tests
 - Code review
 - No merge conflicts
+
+---
+
+## 13. Security Considerations
+
+### 13.1 Authentication Security
+
+| Concern | Mitigation |
+|---------|------------|
+| Session hijacking | HTTP-only, Secure, SameSite=Strict cookies |
+| Token exposure | Never store tokens in localStorage; use encrypted cookies |
+| OAuth vulnerabilities | Validate state parameter, use PKCE for public clients |
+| Session expiry | 7-day refresh token, 15-minute access token |
+
+### 13.2 Input Validation
+
+```typescript
+// lib/validators.ts
+import { z } from 'zod';
+
+export const usernameSchema = z
+  .string()
+  .min(3)
+  .max(20)
+  .regex(/^[a-zA-Z0-9_]+$/, 'Only letters, numbers, and underscores')
+  .refine((val) => !profanityList.includes(val.toLowerCase()), 'Username not allowed');
+
+export const answerSchema = z
+  .string()
+  .max(50)
+  .regex(/^[a-zA-Z]+$/, 'Letters only');
+
+export const roomCodeSchema = z
+  .string()
+  .length(5)
+  .regex(/^[A-Z0-9]+$/, 'Invalid room code');
+```
+
+### 13.3 API Security
+
+| Protection | Implementation |
+|------------|----------------|
+| Rate limiting | Cloudflare rate limiting rules (100 req/min per IP) |
+| CORS | Strict origin whitelist (playlexi.com only) |
+| CSRF | Double-submit cookie pattern |
+| SQL injection | Drizzle ORM parameterized queries |
+| XSS | React auto-escaping, CSP headers |
+
+### 13.4 Content Security Policy
+
+```typescript
+// middleware.ts
+const cspHeader = `
+  default-src 'self';
+  script-src 'self' 'unsafe-inline' https://cdn.posthog.com;
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' blob: data: https://playlexi.r2.cloudflarestorage.com;
+  font-src 'self';
+  connect-src 'self' https://*.cloudflare.com wss://*.cloudflare.com https://posthog.com;
+  media-src 'self' https://playlexi.r2.cloudflarestorage.com;
+  frame-ancestors 'none';
+`;
+```
+
+### 13.5 Game Security
+
+| Attack Vector | Prevention |
+|---------------|------------|
+| Answer spoofing | Server validates answers; word not sent to client until round ends |
+| Timer manipulation | Server-authoritative timers via Durable Objects |
+| Multiple submissions | Deduplicate within 2-second window, reject after round ends |
+| XP manipulation | All XP calculations happen server-side |
+| Room code brute-force | 5-character alphanumeric = 60M+ combinations; rate limit joins |
+
+### 13.6 Voice Data Security
+
+| Rule | Implementation |
+|------|----------------|
+| No storage | Audio processed in-memory, never written to disk |
+| Encryption | TLS 1.3 for all audio transmission |
+| No third-party access | Whisper runs on Workers AI (Cloudflare-hosted) |
+| Immediate deletion | Buffer cleared after transcription returns |
+
+---
+
+## 14. Error Handling Strategy
+
+### 14.1 Error Types
+
+```typescript
+// lib/errors.ts
+
+export class AppError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public statusCode: number = 500,
+    public isOperational: boolean = true
+  ) {
+    super(message);
+    this.name = 'AppError';
+  }
+}
+
+// Specific error types
+export class ValidationError extends AppError {
+  constructor(message: string) {
+    super(message, 'VALIDATION_ERROR', 400);
+  }
+}
+
+export class AuthError extends AppError {
+  constructor(message: string = 'Unauthorized') {
+    super(message, 'AUTH_ERROR', 401);
+  }
+}
+
+export class NotFoundError extends AppError {
+  constructor(resource: string) {
+    super(`${resource} not found`, 'NOT_FOUND', 404);
+  }
+}
+
+export class RateLimitError extends AppError {
+  constructor() {
+    super('Too many requests', 'RATE_LIMIT', 429);
+  }
+}
+
+export class GameError extends AppError {
+  constructor(message: string, code: string) {
+    super(message, code, 400);
+  }
+}
+```
+
+### 14.2 API Error Responses
+
+```typescript
+// Standard error response format
+interface ErrorResponse {
+  error: {
+    code: string;
+    message: string;
+    details?: Record<string, string[]>; // For validation errors
+  };
+}
+
+// Example responses
+// 400 Bad Request
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid input",
+    "details": {
+      "username": ["Must be at least 3 characters"]
+    }
+  }
+}
+
+// 401 Unauthorized
+{
+  "error": {
+    "code": "AUTH_ERROR",
+    "message": "Session expired"
+  }
+}
+
+// 404 Not Found
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Game not found"
+  }
+}
+```
+
+### 14.3 Client-Side Error Handling
+
+```typescript
+// hooks/use-error-handler.ts
+
+export function useErrorHandler() {
+  const { toast } = useToast();
+
+  const handleError = useCallback((error: unknown) => {
+    if (error instanceof Response) {
+      error.json().then((data) => {
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: data.error?.message || 'Something went wrong',
+        });
+      });
+    } else if (error instanceof Error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message,
+      });
+    }
+
+    // Log to Sentry
+    Sentry.captureException(error);
+  }, [toast]);
+
+  return { handleError };
+}
+```
+
+### 14.4 Error Recovery Strategies
+
+| Scenario | Recovery |
+|----------|----------|
+| WebSocket disconnect | Auto-reconnect with exponential backoff (1s, 2s, 4s, max 30s) |
+| API request failure | Retry 3 times with backoff, then show error |
+| Voice transcription failure | Show "We didn't hear that" message, allow retry |
+| Game state desync | Request full state refresh from Durable Object |
+| Database write failure | Queue for retry, notify user if persistent |
+
+---
+
+## 15. Performance Guidelines
+
+### 15.1 Bundle Size Targets
+
+| Metric | Target | Measurement |
+|--------|--------|-------------|
+| Initial JS bundle | < 100KB gzipped | Lighthouse |
+| First Contentful Paint | < 1.5s | Lighthouse |
+| Time to Interactive | < 3s | Lighthouse |
+| Largest Contentful Paint | < 2.5s | Lighthouse |
+
+### 15.2 Code Splitting Strategy
+
+```typescript
+// Dynamic imports for non-critical features
+const VoiceRecognition = dynamic(() => import('@/components/game/voice-input'), {
+  loading: () => <VoiceInputSkeleton />,
+  ssr: false, // Browser-only feature
+});
+
+const SettingsDialog = dynamic(() => import('@/components/settings-dialog'));
+const ChatWindow = dynamic(() => import('@/components/chat/chat-window'));
+```
+
+### 15.3 Caching Strategy
+
+| Resource | Cache Duration | Strategy |
+|----------|---------------|----------|
+| Static assets (JS, CSS, images) | 1 year | Immutable, content-hashed |
+| Word audio files | 1 year | R2 with CDN caching |
+| Leaderboard data | 5 minutes | ISR with stale-while-revalidate |
+| User profile | 1 minute | React Query with background refresh |
+| Game state | Real-time | No caching, WebSocket |
+
+### 15.4 Database Query Optimization
+
+```sql
+-- Use indexes for common queries
+CREATE INDEX idx_user_rank_track_xp ON user_ranks(track, xp DESC);
+CREATE INDEX idx_games_status_type ON games(status, type);
+CREATE INDEX idx_notifications_user_unread ON notifications(user_id, read_at);
+
+-- Pagination for leaderboards
+SELECT * FROM user_ranks
+WHERE track = ?
+ORDER BY xp DESC
+LIMIT 20 OFFSET ?;
+```
+
+### 15.5 Real-Time Performance
+
+| Metric | Target |
+|--------|--------|
+| WebSocket message latency | < 100ms |
+| Game state update frequency | 60 updates/second max |
+| Reconnection time | < 2 seconds |
+| Durable Object cold start | < 50ms |
+
+---
+
+## 16. Accessibility Requirements
+
+### 16.1 WCAG 2.1 AA Compliance
+
+| Requirement | Implementation |
+|-------------|----------------|
+| Color contrast | 4.5:1 minimum for text |
+| Keyboard navigation | All interactive elements focusable |
+| Screen reader support | Proper ARIA labels |
+| Focus indicators | Visible focus rings |
+| Reduced motion | Respect `prefers-reduced-motion` |
+
+### 16.2 Game-Specific Accessibility
+
+| Feature | Accessibility Consideration |
+|---------|----------------------------|
+| Voice input | Keyboard alternative always available |
+| Timer | Audio cues at 10s, 5s, 1s; visual countdown |
+| Waveform animation | Static fallback for reduced motion |
+| Hearts display | Text alternative ("2 of 3 hearts remaining") |
+| Turn indicator | Screen reader announcement ("It's your turn") |
+
+### 16.3 ARIA Implementation
+
+```tsx
+// Example: Hearts display
+<div
+  role="status"
+  aria-live="polite"
+  aria-label={`${hearts} of 3 hearts remaining`}
+>
+  {[...Array(3)].map((_, i) => (
+    <Heart
+      key={i}
+      filled={i < hearts}
+      aria-hidden="true" // Visual only, status announced above
+    />
+  ))}
+</div>
+
+// Example: Game timer
+<div
+  role="timer"
+  aria-live="off" // Don't announce every second
+  aria-label={`${seconds} seconds remaining`}
+>
+  <Progress value={(seconds / maxSeconds) * 100} />
+</div>
+```
+
+### 16.4 Focus Management
+
+```typescript
+// Auto-focus input when it's player's turn
+useEffect(() => {
+  if (isMyTurn && inputRef.current) {
+    inputRef.current.focus();
+    announceToScreenReader("It's your turn. Spell the word.");
+  }
+}, [isMyTurn]);
+
+// Trap focus in modal dialogs
+<Dialog onOpenChange={setOpen}>
+  <DialogContent aria-describedby="dialog-description">
+    {/* Content */}
+  </DialogContent>
+</Dialog>
+```
+
+### 16.5 Testing Accessibility
+
+```typescript
+// tests/accessibility.spec.ts
+import { axe, toHaveNoViolations } from 'jest-axe';
+
+expect.extend(toHaveNoViolations);
+
+test('game screen has no accessibility violations', async () => {
+  const { container } = render(<GameScreen />);
+  const results = await axe(container);
+  expect(results).toHaveNoViolations();
+});
+```
+
+---
+
+## 17. Observability
+
+### 17.1 Analytics (PostHog)
+
+```typescript
+// lib/analytics.ts
+import posthog from 'posthog-js';
+
+export const analytics = {
+  init() {
+    posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
+      api_host: 'https://app.posthog.com',
+      capture_pageview: false, // Manual pageviews for SPA
+    });
+  },
+
+  identify(userId: string, properties?: Record<string, any>) {
+    posthog.identify(userId, properties);
+  },
+
+  track(event: string, properties?: Record<string, any>) {
+    posthog.capture(event, properties);
+  },
+
+  page(pageName: string) {
+    posthog.capture('$pageview', { page: pageName });
+  },
+};
+```
+
+### 17.2 Key Events to Track
+
+| Event | Properties | Purpose |
+|-------|------------|---------|
+| `game_started` | mode, inputMethod, playerCount | Usage patterns |
+| `game_completed` | mode, placement, duration, accuracy | Performance metrics |
+| `word_attempted` | difficulty, correct, inputMethod | Word difficulty tuning |
+| `voice_transcription` | success, latency | Voice feature health |
+| `matchmaking_started` | track, tier | Queue analytics |
+| `matchmaking_found` | waitTimeMs, tierSpread | Queue performance |
+
+### 17.3 Error Tracking (Sentry)
+
+```typescript
+// lib/sentry.ts
+import * as Sentry from '@sentry/nextjs';
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  environment: process.env.NODE_ENV,
+  tracesSampleRate: 0.1, // 10% of transactions
+  beforeSend(event) {
+    // Don't send PII
+    if (event.user) {
+      delete event.user.email;
+      delete event.user.ip_address;
+    }
+    return event;
+  },
+});
+
+// Capture game-specific context
+export function captureGameError(error: Error, gameId: string, playerId: string) {
+  Sentry.withScope((scope) => {
+    scope.setTag('gameId', gameId);
+    scope.setTag('playerId', playerId);
+    scope.setLevel('error');
+    Sentry.captureException(error);
+  });
+}
+```
+
+### 17.4 Cloudflare Analytics
+
+Built-in analytics for:
+- Request volume and latency
+- Error rates by endpoint
+- Durable Object metrics
+- D1 query performance
+
+Access via Cloudflare Dashboard > Analytics.
+
+### 17.5 Custom Dashboards
+
+| Dashboard | Metrics |
+|-----------|---------|
+| Game Health | Games started, completed, error rate, avg duration |
+| Voice Feature | Transcription success rate, latency p50/p95/p99 |
+| Matchmaking | Queue times, tier spread, abandonment rate |
+| Real-Time | WebSocket connections, message throughput, reconnects |
+
+---
+
+## 18. Developer Guide
+
+### 18.1 Local Development Setup
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/your-org/playlexi.git
+cd playlexi
+
+# 2. Install dependencies
+npm install
+
+# 3. Set up environment variables
+cp .dev.vars.example .dev.vars
+# Edit .dev.vars with your credentials
+
+# 4. Set up local D1 database
+wrangler d1 create playlexi-db --local
+wrangler d1 migrations apply playlexi-db --local
+
+# 5. Seed the database
+npm run db:seed
+
+# 6. Start the development server
+npm run dev  # Runs wrangler pages dev
+```
+
+### 18.2 Common Commands
+
+```bash
+# Development
+npm run dev              # Start dev server with Wrangler
+npm run build            # Build for production
+npm run preview          # Preview production build locally
+
+# Database
+npm run db:generate      # Generate Drizzle migrations
+npm run db:migrate       # Apply migrations locally
+npm run db:migrate:prod  # Apply migrations to production
+npm run db:seed          # Seed word database
+npm run db:studio        # Open Drizzle Studio
+
+# Testing
+npm run test             # Run unit tests
+npm run test:e2e         # Run Playwright tests
+npm run test:coverage    # Generate coverage report
+
+# Code Quality
+npm run lint             # ESLint
+npm run lint:fix         # Fix ESLint issues
+npm run typecheck        # TypeScript check
+npm run format           # Prettier
+
+# Deployment
+npm run deploy:preview   # Deploy to preview environment
+npm run deploy:staging   # Deploy to staging
+npm run deploy:prod      # Deploy to production
+```
+
+### 18.3 Project Conventions
+
+**File naming:**
+- Components: `PascalCase.tsx` (e.g., `VoiceWaveform.tsx`)
+- Hooks: `use-kebab-case.ts` (e.g., `use-game-state.ts`)
+- Utils: `kebab-case.ts` (e.g., `calculate-xp.ts`)
+- Types: `kebab-case.ts` in `types/` folder
+
+**Code style:**
+- Functional components with TypeScript
+- Named exports (no default exports except pages)
+- Props interfaces defined inline or in same file
+- Use `cn()` utility for conditional classes
+
+**Commit messages:**
+```
+feat: add voice input component
+fix: correct XP calculation for mixed-tier lobbies
+docs: update PRD with Crown Points rules
+refactor: extract game timer hook
+test: add unit tests for matchmaking
+chore: update dependencies
+```
+
+### 18.4 Adding a New Feature
+
+1. **Create a feature branch**
+   ```bash
+   git checkout -b feature/your-feature
+   ```
+
+2. **Update the database (if needed)**
+   ```bash
+   # Create migration
+   wrangler d1 migrations create playlexi-db "add_feature_table"
+   # Edit the migration file, then apply
+   wrangler d1 migrations apply playlexi-db --local
+   ```
+
+3. **Create types**
+   ```typescript
+   // types/feature.ts
+   export interface FeatureData {
+     id: string;
+     // ...
+   }
+   ```
+
+4. **Add API routes**
+   ```typescript
+   // app/api/feature/route.ts
+   export async function GET(request: Request) {
+     // Implementation
+   }
+   ```
+
+5. **Create components**
+   ```typescript
+   // components/feature/feature-component.tsx
+   export function FeatureComponent({ data }: { data: FeatureData }) {
+     // Implementation
+   }
+   ```
+
+6. **Add tests**
+   ```typescript
+   // tests/unit/feature.test.ts
+   // tests/e2e/feature.spec.ts
+   ```
+
+7. **Update documentation**
+   - Add to PRD.md if user-facing
+   - Add to ARCHITECTURE.md if technical
+
+8. **Create PR**
+   - Reference any related issues
+   - Include test results
+   - Request review
+
+### 18.5 Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Wrangler not connecting to D1 | Run `wrangler login` and check `.dev.vars` |
+| WebSocket not connecting locally | Ensure Durable Objects are enabled in `wrangler.toml` |
+| Type errors after DB change | Run `npm run db:generate` to update Drizzle types |
+| Tests failing on CI | Check if migrations were applied to test database |
+| Build fails on Cloudflare | Ensure all imports are edge-compatible |
+
+### 18.6 Resources
+
+- [Cloudflare Workers Documentation](https://developers.cloudflare.com/workers/)
+- [Cloudflare D1 Documentation](https://developers.cloudflare.com/d1/)
+- [Durable Objects Documentation](https://developers.cloudflare.com/durable-objects/)
+- [Next.js on Cloudflare](https://developers.cloudflare.com/pages/framework-guides/nextjs/)
+- [Drizzle ORM Documentation](https://orm.drizzle.team/)
+- [shadcn/ui Components](https://ui.shadcn.com/)
+
+---
+
+## 19. Architecture Decision Records
+
+This section tracks significant architectural decisions made during the project. Each ADR follows a standard format: context, decision, and consequences.
+
+### ADR-001: Drizzle ORM over Prisma
+
+| Field | Value |
+|-------|-------|
+| **Date** | December 21, 2025 |
+| **Status** | Accepted |
+| **Deciders** | Project team |
+
+**Context:** We need an ORM for Cloudflare D1 (SQLite) that runs on edge runtime.
+
+**Decision:** Use Drizzle ORM instead of Prisma.
+
+**Rationale:**
+- Drizzle has native D1 driver support
+- No binary dependencies (works on Cloudflare edge)
+- Lighter weight, faster cold starts
+- TypeScript-first with similar DX to Prisma
+
+**Consequences:**
+- Different query syntax than Prisma (SQL-like)
+- Smaller ecosystem and community
+- Must use Drizzle-specific migration tooling
+
+---
+
+### ADR-002: Cloudflare Durable Objects for Real-Time
+
+| Field | Value |
+|-------|-------|
+| **Date** | December 21, 2025 |
+| **Status** | Accepted |
+| **Deciders** | Project team |
+
+**Context:** Need WebSocket support for multiplayer games with persistent state per game room.
+
+**Decision:** Use Cloudflare Durable Objects instead of external services (Socket.io, Pusher, Ably).
+
+**Rationale:**
+- Native Cloudflare integration (single platform)
+- Each game room is a Durable Object with built-in WebSocket support
+- State persists across connections (handles disconnects gracefully)
+- Automatic scaling per game room
+- No additional service costs
+
+**Consequences:**
+- Tied to Cloudflare platform
+- Different programming model than traditional WebSocket servers
+- Must handle Durable Object lifecycle (hibernation, alarms)
+
+---
+
+### ADR-003: Wrapper Components over Extended Props
+
+| Field | Value |
+|-------|-------|
+| **Date** | December 21, 2025 |
+| **Status** | Accepted |
+| **Deciders** | Project team |
+
+**Context:** GameTimer needs countdown logic, color states (normal → warning → critical), and ARIA labels. Should we extend the existing Progress component or create a wrapper?
+
+**Decision:** Create domain-specific wrapper components rather than adding game-specific props to generic components.
+
+**Rationale:**
+- Generic components (Progress, Input) stay generic and reusable
+- Domain logic isolated in game-specific wrappers
+- Easier for junior developers to understand
+- Better testability — wrapper can be tested independently
+- Follows single responsibility principle
+
+**Consequences:**
+- More files in the codebase
+- Must maintain wrapper when underlying component changes
+- Clear separation between UI primitives and domain components
+
+**Example:**
+```tsx
+// GameTimer wraps Progress
+function GameTimer({ totalSeconds, remainingSeconds }: GameTimerProps) {
+  const state = remainingSeconds <= 5 ? "critical" : remainingSeconds <= 10 ? "warning" : "normal"
+  return <Progress value={(remainingSeconds / totalSeconds) * 100} data-state={state} />
+}
+```
+
+---
+
+### ADR-004: Single Hook for Voice Pipeline
+
+| Field | Value |
+|-------|-------|
+| **Date** | December 21, 2025 |
+| **Status** | Accepted |
+| **Deciders** | Project team |
+
+**Context:** Voice input requires: (1) microphone access, (2) audio visualization via AnalyserNode, (3) recording, (4) Whisper transcription. Should each concern have its own hook, or one hook that owns the entire pipeline?
+
+**Decision:** One hook (`useVoiceRecorder`) owns the entire audio pipeline; multiple components consume from it.
+
+**Rationale:**
+- Single source of truth for audio state
+- VoiceWaveform and VoiceInput stay in sync automatically
+- No risk of two hooks fighting over the same MediaStream
+- Clear separation: hook handles logic, components handle UI
+- Easier to test — mock one hook, not three
+
+**Consequences:**
+- Hook is larger and more complex
+- Must expose multiple return values for different consumers
+- VoiceWaveform becomes purely presentational (just takes AnalyserNode prop)
+
+**Architecture:**
+```
+useVoiceRecorder (owns audio pipeline)
+    │
+    ├── analyserNode → VoiceWaveform (presentational)
+    │
+    └── transcript, isRecording, etc. → VoiceInput (smart component)
+```
+
+---
+
+### ADR-005: Presentational vs Smart Component Separation
+
+| Field | Value |
+|-------|-------|
+| **Date** | December 21, 2025 |
+| **Status** | Accepted |
+| **Deciders** | Project team |
+
+**Context:** Need a clear pattern for component organization that junior developers can follow.
+
+**Decision:** Enforce strict separation between presentational and smart components based on folder location.
+
+**Rationale:**
+- Clear mental model for developers
+- Presentational components are easier to test (no mocking)
+- Smart components encapsulate complexity
+- Follows React community best practices
+
+**Rules:**
+| Type | Location | Characteristics |
+|------|----------|-----------------|
+| Presentational | `components/ui/` | No hooks, no side effects, just props → UI |
+| Smart | `components/game/`, etc. | Uses hooks, manages state, composes other components |
+
+**Consequences:**
+- Must think about component type before creating
+- Some components may need to be split
+- Clear import boundaries
+
+---
+
+### ADR-006: Strict Voice Recognition (No Edit Mode)
+
+| Field | Value |
+|-------|-------|
+| **Date** | December 21, 2025 |
+| **Status** | Accepted |
+| **Deciders** | Project team |
+
+**Context:** What happens when Whisper transcribes incorrectly? Should we allow players to edit?
+
+**Decision:** Strict mode — what Whisper hears is final. No editing allowed.
+
+**Rationale:**
+- Allowing edits on low confidence is exploitable (mumble intentionally to get keyboard fallback)
+- Simpler UX — no "did you mean?" flows
+- Fair competition — everyone has the same rules
+- Voice input is inherently a different skill than typing
+
+**Consequences:**
+- Players may lose due to transcription errors
+- Must clearly communicate this in onboarding
+- Keyboard alternative is always available for those who prefer it
+
+---
+
+### ADR-007: Pre-Cached Word Database
+
+| Field | Value |
+|-------|-------|
+| **Date** | December 21, 2025 |
+| **Status** | Accepted |
+| **Deciders** | Project team |
+
+**Context:** Merriam-Webster API has rate limits (1,000/day free tier) and requires commercial license for revenue-generating apps.
+
+**Decision:** Pre-fetch and cache all word data during development. Zero API calls during gameplay.
+
+**Rationale:**
+- No runtime dependency on external API
+- No rate limit concerns
+- Faster word retrieval (database query vs API call)
+- One-time commercial license negotiation, not per-request
+
+**Consequences:**
+- Must maintain word database
+- Adding new words requires seeding process
+- Audio files must be cached in R2
+- Database grows with word count
+
+---
+
+### Template for New ADRs
+
+When adding a new decision, copy this template:
+
+```markdown
+### ADR-XXX: [Title]
+
+| Field | Value |
+|-------|-------|
+| **Date** | [Date] |
+| **Status** | Proposed / Accepted / Deprecated / Superseded by ADR-XXX |
+| **Deciders** | [Names or "Project team"] |
+
+**Context:** [What is the issue? What forces are at play?]
+
+**Decision:** [What is the decision?]
+
+**Rationale:**
+- [Why this decision?]
+- [What alternatives were considered?]
+
+**Consequences:**
+- [What are the positive and negative implications?]
+```
 
 ---
 
