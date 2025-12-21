@@ -1,6 +1,6 @@
 # PlayLexi — Technical Architecture
 
-> **Version:** 1.6
+> **Version:** 1.7
 > **Last Updated:** December 21, 2025
 > **Status:** Final Draft
 
@@ -2560,7 +2560,40 @@ When adding a new decision, copy this template:
 
 This section defines the phased approach for building PlayLexi. Each phase is a vertical slice — complete, testable functionality rather than building all components first, then all APIs, etc.
 
-### 20.1 Phase Overview
+### 20.1 Local-First Development Strategy
+
+**Decision:** Build with local mocks first, swap in real services later.
+
+This approach unblocks development immediately and isolates problems. The architecture is designed so swapping from local to production requires minimal code changes.
+
+| Service | Local Implementation | Production Implementation | When to Switch |
+|---------|---------------------|---------------------------|----------------|
+| **Database** | Local SQLite via `better-sqlite3` | Cloudflare D1 | After Phase 2 tested |
+| **Auth** | Mock auth (hardcoded dev user) | Google + Apple OAuth | After Phase 2 tested |
+| **Words** | Hardcoded seed data (50+ words) | Merriam-Webster API seeding | Before Phase 3 |
+| **Voice AI** | Browser SpeechRecognition API | Cloudflare Workers AI (Whisper) | After Phase 2 tested |
+| **Real-time** | Local state (no WebSocket) | Cloudflare Durable Objects | Phase 4 |
+
+**Why this works:**
+- Drizzle ORM uses the same API for SQLite and D1 — zero code changes
+- Auth middleware checks `session` object — mock or real, same interface
+- Voice hook returns `transcript` — source doesn't matter to components
+
+**Post-Local Migration Checklist:**
+
+After Phase 2 is working locally, complete these before Phase 3:
+
+- [ ] Create Cloudflare D1 database (`wrangler d1 create playlexi-db`)
+- [ ] Set up Google OAuth (Google Cloud Console → OAuth credentials)
+- [ ] Set up Apple OAuth (Apple Developer account required)
+- [ ] Get Merriam-Webster API key (dictionaryapi.com)
+- [ ] Seed production database with real word data
+- [ ] Configure `wrangler.toml` with D1 binding
+- [ ] Deploy to Cloudflare Pages for testing
+
+---
+
+### 20.2 Phase Overview
 
 | Phase | Name | Goal | Dependencies |
 |-------|------|------|--------------|
@@ -2570,32 +2603,31 @@ This section defines the phased approach for building PlayLexi. Each phase is a 
 | 4 | Multiplayer | Real-time competitive play | Phase 2 |
 | 5 | Social & Polish | Friends, chat, leaderboards | Phase 4 |
 
-### 20.2 Phase 1: Foundation
+### 20.3 Phase 1: Foundation (Local)
 
-**Goal:** Project infrastructure that all features depend on.
+**Goal:** Project infrastructure that all features depend on. Using local mocks per Section 20.1.
 
 | Task | Type | Details | Status |
 |------|------|---------|--------|
-| 1.1 | Database | Drizzle schema from Section 4, D1 setup | Not Started |
-| 1.2 | Database | Run migrations, verify tables | Not Started |
-| 1.3 | Database | Seed words table (100+ words across 7 tiers) | Not Started |
-| 1.4 | Auth | NextAuth config with Google OAuth | Not Started |
-| 1.5 | Auth | Apple OAuth provider | Not Started |
-| 1.6 | Auth | Protected route middleware | Not Started |
-| 1.7 | Layout | Navbar already done ✓ | Done |
-| 1.8 | Layout | Main app layout with auth gate | Not Started |
-| 1.9 | API | `/api/words/random` — get word by difficulty tier | Not Started |
-| 1.10 | API | `/api/users/me` — get/update current user | Not Started |
+| 1.1 | Database | Drizzle schema from Section 4, local SQLite setup | Not Started |
+| 1.2 | Database | Run migrations locally, verify tables | Not Started |
+| 1.3 | Database | Seed words table (50+ words across 7 tiers, hardcoded) | Not Started |
+| 1.4 | Auth | Mock auth provider (hardcoded dev user, skip OAuth) | Not Started |
+| 1.5 | Auth | Protected route middleware (works with mock session) | Not Started |
+| 1.6 | Layout | Navbar already done ✓ | Done |
+| 1.7 | Layout | Main app layout with auth gate | Not Started |
+| 1.8 | API | `/api/words/random` — get word by difficulty tier | Not Started |
+| 1.9 | API | `/api/users/me` — get/update current user | Not Started |
 
-**Exit Criteria:**
-- [ ] Can sign in with Google
-- [ ] Protected routes redirect to login
-- [ ] Can query random words by tier
-- [ ] Database migrations run successfully
+**Exit Criteria (Local):**
+- [ ] Mock user can "sign in" (dev bypass)
+- [ ] Protected routes redirect when not authenticated
+- [ ] Can query random words by tier from local SQLite
+- [ ] Database migrations run successfully locally
 
 ---
 
-### 20.3 Phase 2: Solo Endless MVP
+### 20.4 Phase 2: Solo Endless MVP (Local)
 
 **Goal:** A playable single-player Endless mode game.
 
@@ -2633,7 +2665,7 @@ This section defines the phased approach for building PlayLexi. Each phase is a 
 
 ---
 
-### 20.4 Phase 3: Onboarding
+### 20.5 Phase 3: Onboarding
 
 **Goal:** New users can complete tutorial, placement game, and create profile.
 
@@ -2665,7 +2697,7 @@ This section defines the phased approach for building PlayLexi. Each phase is a 
 
 ---
 
-### 20.5 Phase 4: Multiplayer
+### 20.6 Phase 4: Multiplayer
 
 **Goal:** Real-time multiplayer games with lobby and matchmaking.
 
@@ -2705,7 +2737,7 @@ This section defines the phased approach for building PlayLexi. Each phase is a 
 
 ---
 
-### 20.6 Phase 5: Social & Polish
+### 20.7 Phase 5: Social & Polish
 
 **Goal:** Friends, chat, leaderboards, and profile features.
 
@@ -2744,7 +2776,7 @@ This section defines the phased approach for building PlayLexi. Each phase is a 
 
 ---
 
-### 20.7 Implementation Guidelines
+### 20.8 Implementation Guidelines
 
 When starting each phase:
 
@@ -2769,7 +2801,7 @@ When starting each phase:
 
 ---
 
-### 20.8 Progress Tracking
+### 20.9 Progress Tracking
 
 Update this section as phases complete:
 
