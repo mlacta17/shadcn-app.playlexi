@@ -370,7 +370,7 @@ GamePage
 │   └── InputComponent
 │       ├── SentenceButton
 │       ├── DictionaryButton
-│       ├── VoiceInput OR KeyboardInput
+│       ├── SpeechInput OR KeyboardInput
 │       ├── PlayWordButton
 │       └── DefinitionFooter
 │
@@ -1107,13 +1107,13 @@ The voice input system follows a **single-hook, multiple-consumer** pattern:
               │                               │
               ▼                               ▼
 ┌──────────────────────┐        ┌──────────────────────────┐
-│    VoiceWaveform     │        │      VoiceInput          │
-│   (presentational)   │        │    (smart component)     │
+│    VoiceWaveform     │        │      SpeechInput         │
+│   (presentational)   │        │    (presentational)      │
 │                      │        │                          │
-│  • Takes analyserNode│        │  • Uses the hook         │
+│  • Takes analyserNode│        │  • Takes props from hook │
 │  • Draws bars        │        │  • Shows record button   │
 │  • No other logic    │        │  • Shows transcript      │
-│                      │        │  • Handles submit        │
+│                      │        │  • Includes waveform     │
 └──────────────────────┘        └──────────────────────────┘
 ```
 
@@ -1293,68 +1293,41 @@ export function useVoiceRecorder(): UseVoiceRecorderReturn {
 }
 ```
 
-### 8.5 VoiceInput Component (Smart Component)
+### 8.5 SpeechInput Component (Presentational — ✅ Done)
+
+The `SpeechInput` component at `components/ui/speech-input.tsx` is **presentational only**:
+
+- Accepts all props from parent (controlled component pattern)
+- Renders record/stop buttons, transcript display, helper buttons (Sentence/Dictionary/Play)
+- Optionally renders `VoiceWaveform` when `analyserNode` prop is provided
+- No hooks or state management internally
 
 ```typescript
-// components/game/voice-input.tsx
-
-interface VoiceInputProps {
-  onSubmit: (answer: string) => void
-  disabled?: boolean
-}
-
-export function VoiceInput({ onSubmit, disabled }: VoiceInputProps) {
+// Usage with useVoiceRecorder hook
+function GameVoiceInput({ onSubmit, disabled }: GameVoiceInputProps) {
   const {
     analyserNode,
     isRecording,
-    isTranscribing,
     transcript,
-    error,
     startRecording,
     stopRecording,
   } = useVoiceRecorder()
 
-  const handleStopAndSubmit = async () => {
-    const result = await stopRecording()
-    if (result) {
-      onSubmit(result)
-    }
-  }
-
   return (
-    <div className="flex flex-col items-center gap-6">
-      {/* Waveform visualization — presentational only */}
-      <VoiceWaveform analyserNode={analyserNode} />
-
-      {/* Recording controls */}
-      <div className="flex items-center gap-4">
-        {isRecording ? (
-          <Button onClick={handleStopAndSubmit} variant="destructive" disabled={disabled}>
-            <Square className="mr-2 size-4" />
-            Stop
-          </Button>
-        ) : (
-          <Button onClick={startRecording} disabled={disabled || isTranscribing}>
-            <Mic className="mr-2 size-4" />
-            Record
-          </Button>
-        )}
-      </div>
-
-      {/* Transcription state */}
-      {isTranscribing && <p className="text-muted-foreground text-sm">Processing...</p>}
-      {transcript && (
-        <p className="text-sm">
-          You said: <span className="font-medium">{transcript}</span>
-        </p>
-      )}
-      {error && <p className="text-destructive text-sm">{error.message}</p>}
-    </div>
+    <SpeechInput
+      state={isRecording ? "recording" : "default"}
+      analyserNode={analyserNode}
+      inputText={transcript}
+      onRecordClick={startRecording}
+      onStopClick={stopRecording}
+      onSubmit={() => onSubmit(transcript)}
+      // ... other props
+    />
   )
 }
 ```
 
-### 8.6 VoiceWaveform Component (Presentational)
+### 8.6 VoiceWaveform Component (Presentational — ✅ Done)
 
 The `VoiceWaveform` component is **purely presentational**:
 
@@ -1363,16 +1336,17 @@ The `VoiceWaveform` component is **purely presentational**:
 - Draws frequency bars on a canvas
 - Has no knowledge of recording, transcription, or Whisper
 - Respects `prefers-reduced-motion` for accessibility
+- **Integrated into SpeechInput**: Pass `analyserNode` prop to SpeechInput to auto-render waveform
 
 This separation allows `VoiceWaveform` to be reused in other contexts (e.g., audio playback visualization) without modification.
 
 ### 8.7 Component Relationships
 
-| Component/Hook | Type | Responsibility |
-|----------------|------|----------------|
-| `useVoiceRecorder` | Hook | Audio pipeline, Whisper API calls |
-| `VoiceWaveform` | UI Component | Draw frequency bars from AnalyserNode |
-| `VoiceInput` | Game Component | Compose hook + waveform, handle UI actions |
+| Component/Hook | Type | Responsibility | Status |
+|----------------|------|----------------|--------|
+| `useVoiceRecorder` | Hook | Audio pipeline, Whisper API calls | ✅ Done |
+| `VoiceWaveform` | UI Component | Draw frequency bars from AnalyserNode | ✅ Done |
+| `SpeechInput` | UI Component | Presentational voice input with waveform + helper buttons | ✅ Done |
 
 ### 8.8 Error Handling
 
@@ -1939,9 +1913,9 @@ export function useErrorHandler() {
 
 ```typescript
 // Dynamic imports for non-critical features
-const VoiceRecognition = dynamic(() => import('@/components/game/voice-input'), {
-  loading: () => <VoiceInputSkeleton />,
-  ssr: false, // Browser-only feature
+const SpeechInputWrapper = dynamic(() => import('@/components/game/speech-input-wrapper'), {
+  loading: () => <SpeechInputSkeleton />,
+  ssr: false, // Browser-only feature (uses Web Audio API)
 });
 
 const SettingsDialog = dynamic(() => import('@/components/settings-dialog'));
@@ -2426,7 +2400,7 @@ function GameTimer({ totalSeconds, remainingSeconds }: GameTimerProps) {
 
 **Rationale:**
 - Single source of truth for audio state
-- VoiceWaveform and VoiceInput stay in sync automatically
+- VoiceWaveform and SpeechInput stay in sync automatically
 - No risk of two hooks fighting over the same MediaStream
 - Clear separation: hook handles logic, components handle UI
 - Easier to test — mock one hook, not three
@@ -2435,14 +2409,15 @@ function GameTimer({ totalSeconds, remainingSeconds }: GameTimerProps) {
 - Hook is larger and more complex
 - Must expose multiple return values for different consumers
 - VoiceWaveform becomes purely presentational (just takes AnalyserNode prop)
+- SpeechInput integrates VoiceWaveform internally when `analyserNode` prop provided
 
 **Architecture:**
 ```
 useVoiceRecorder (owns audio pipeline)
     │
-    ├── analyserNode → VoiceWaveform (presentational)
+    ├── analyserNode → SpeechInput (presentational, includes VoiceWaveform)
     │
-    └── transcript, isRecording, etc. → VoiceInput (smart component)
+    └── transcript, isRecording, etc. → SpeechInput props
 ```
 
 ---
@@ -2638,14 +2613,13 @@ After Phase 2 is working locally, complete these before Phase 3:
 
 | Task | Type | Details | Status |
 |------|------|---------|--------|
-| 2.1 | Hook | `useVoiceRecorder` — mic access, AnalyserNode, Whisper transcription | Not Started |
+| 2.1 | Hook | `useVoiceRecorder` — mic access, AnalyserNode, Whisper transcription | ✅ Done |
 | 2.2 | Hook | `useGameTimer` — countdown with warning/critical states | Not Started |
-| 2.3 | Component | `VoiceInput` — smart component composing hook + VoiceWaveform | Not Started |
+| 2.3 | Component | `SpeechInput` — presentational voice input with VoiceWaveform + helper buttons | ✅ Done |
 | 2.4 | Component | `KeyboardInput` — text input alternative | Not Started |
 | 2.5 | Component | `GameTimer` — wrapper around Progress with timer logic | Not Started |
 | 2.6 | Component | `HeartsDisplay` — 3 hearts with loss animation | Not Started |
 | 2.7 | Component | `RoundIndicator` — "Round 1" badge | Not Started |
-| 2.8 | Component | `WordHelperButtons` — sentence, dictionary, play buttons | Not Started |
 | 2.9 | API | `/api/voice/transcribe` — Whisper via Workers AI | Not Started |
 | 2.10 | API | `/api/games` — create solo game session | Not Started |
 | 2.11 | API | `/api/games/[gameId]/submit` — submit answer, check correctness | Not Started |
