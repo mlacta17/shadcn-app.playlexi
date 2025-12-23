@@ -253,21 +253,20 @@ useVoiceRecorder (hook) - owns microphone + speech recognition
 └── isRecording, startRecording, stopRecording → controls
 ```
 
-#### Usage:
+#### Standalone Usage:
+VoiceWaveform can be used standalone if needed, but **the recommended approach is to use SpeechInput with `analyserNode` prop** for full integration.
+
 ```tsx
 import { useVoiceRecorder } from "@/hooks/use-voice-recorder"
 import { VoiceWaveform } from "@/components/ui/voice-waveform"
 
-function MyComponent() {
-  const { analyserNode, startRecording, stopRecording } = useVoiceRecorder()
-
-  return (
-    <div className="flex flex-col items-center gap-6">
-      <VoiceWaveform analyserNode={analyserNode} />
-      <SpeechInput onRecordClick={startRecording} onStopClick={stopRecording} />
-    </div>
-  )
+// Standalone (just waveform, no controls)
+function WaveformOnly() {
+  const { analyserNode } = useVoiceRecorder()
+  return <VoiceWaveform analyserNode={analyserNode} />
 }
+
+// Recommended: Use SpeechInput with integrated waveform (see SpeechInput section below)
 ```
 
 #### Visual Behavior:
@@ -283,6 +282,73 @@ When creating canvas-based components, follow this pattern:
 3. Apply `data-slot` and `data-state` attributes to wrapper element
 4. Add `aria-hidden="true"` if purely decorative
 5. Document the component in this section
+
+### SpeechInput
+- **Location:** [components/ui/speech-input.tsx](components/ui/speech-input.tsx)
+- **Hook:** [hooks/use-voice-recorder.ts](hooks/use-voice-recorder.ts)
+- **Type:** Presentational voice input component with integrated VoiceWaveform
+
+#### Design System Integration:
+| Aspect | Implementation |
+|--------|----------------|
+| **Max width** | 525px per Figma |
+| **Main area height** | 138px per Figma |
+| **Waveform gap** | 24px (`gap-6`) per Figma |
+| **Container** | `bg-input/30 outline-input rounded-lg` |
+| **Buttons** | Primary (Record), Destructive (Stop), Outline (helpers) |
+| **Attributes** | `data-slot="speech-input"`, `data-state="default\|recording"`, `data-has-waveform` |
+| **Icons** | MicIcon, StopIcon, PlayIcon, SentenceIcon, DictionaryIcon from lib/icons.ts |
+
+#### Architecture:
+```
+useVoiceRecorder (hook)
+└── SpeechInput (presentational)
+    ├── analyserNode → VoiceWaveform (auto-rendered when provided)
+    ├── transcript → inputText display
+    └── isRecording → state prop
+```
+
+VoiceWaveform is now **integrated into SpeechInput**. When you pass `analyserNode`, the waveform renders automatically above the input controls. No manual composition needed.
+
+#### Props:
+| Prop | Type | Description |
+|------|------|-------------|
+| `state` | `"default" \| "recording"` | Current recording state |
+| `analyserNode` | `AnalyserNode \| null` | Audio analyser for waveform visualization |
+| `inputText` | `string` | Current transcribed text |
+| `placeholder` | `string` | Placeholder when no input |
+| `definition` | `string` | Dictionary definition to show in footer |
+| `playPressed` | `boolean` | Play button state |
+| `dictionaryPressed` | `boolean` | Dictionary button state |
+| `sentencePressed` | `boolean` | Sentence button state |
+| `onRecordClick`, `onStopClick`, etc. | `() => void` | Callback handlers |
+
+#### Usage:
+```tsx
+import { useVoiceRecorder } from "@/hooks/use-voice-recorder"
+import { SpeechInput } from "@/components/ui/speech-input"
+
+function VoiceInputScreen() {
+  const { isRecording, startRecording, stopRecording, analyserNode, transcript } = useVoiceRecorder()
+
+  return (
+    <SpeechInput
+      state={isRecording ? "recording" : "default"}
+      analyserNode={analyserNode}
+      inputText={transcript}
+      onRecordClick={startRecording}
+      onStopClick={stopRecording}
+    />
+  )
+}
+```
+
+#### Visual Behavior:
+- **VoiceWaveform:** Renders above input when `analyserNode` provided
+- **Waveform active state:** Only animates when `state="recording"` (prevents stale visualization)
+- **Helper buttons:** Disabled during recording
+- **Footer:** Shows contextual messages based on pressed button
+- **Input text:** Wrapped in quotes, italicized, centered
 
 ## Game Components
 
@@ -456,7 +522,9 @@ When adding a new shadcn component:
 - **Example with icons:** [components/component-example.tsx](components/component-example.tsx)
 - **Showcase page:** [app/showcase/page.tsx](app/showcase/page.tsx)
 - **Canvas component:** [components/ui/voice-waveform.tsx](components/ui/voice-waveform.tsx)
+- **Voice input:** [components/ui/speech-input.tsx](components/ui/speech-input.tsx)
 - **Voice recorder hook:** [hooks/use-voice-recorder.ts](hooks/use-voice-recorder.ts)
+- **Game components:** [components/game/](components/game/)
 
 ## Design Philosophy
 

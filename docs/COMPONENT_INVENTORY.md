@@ -36,7 +36,7 @@ These components are **blocking for MVP** — the game cannot function without t
 | **GameTimer** | Progress bar countdown timer | Not Started | Not Started | **Wrapper pattern.** Wraps existing `Progress` component; adds countdown logic, color states (normal → warning → critical), ARIA labels. See Architecture Decisions below. |
 | **RoundIndicator** | "Round 1", "Round 2" badge | Not Started | Not Started | Simple text badge |
 | **WordHelperButtons** | Sentence/Dictionary/Play button group | Not Started | Not Started | Icon buttons with tooltips |
-| **VoiceInput** | Microphone recording interface | Not Started | Not Started | **Smart component.** Composes `useVoiceRecorder` hook + `VoiceWaveform`. Handles record/stop buttons, shows transcript, submits answer. Located at `components/game/voice-input.tsx`. |
+| **SpeechInput** | Microphone recording interface | Done | Done | **Presentational component** with optional VoiceWaveform integration. Pass `analyserNode` prop to render waveform above input. Handles record/stop buttons, shows transcript, helper buttons (Sentence/Dictionary/Play). Located at `components/ui/speech-input.tsx`. Use with `useVoiceRecorder` hook for voice capture. |
 | **KeyboardInput** | Text input for typing spelling | Not Started | Not Started | May use existing Input component |
 | **GameResultCard** | Final placement display after game | Not Started | Not Started | Shows rank badge, XP earned, stats |
 | **CorrectAnswerFeedback** | Visual/audio feedback on correct answer | Not Started | Not Started | Green flash, sound effect |
@@ -205,11 +205,11 @@ Use this to decide what to design/build first.
 
 Without these, the game cannot function:
 
-1. VoiceWaveform
-2. HeartsDisplay
-3. GameTimer
-4. VoiceInput / KeyboardInput
-5. WordHelperButtons
+1. ~~VoiceWaveform~~ ✓ Done
+2. ~~HeartsDisplay~~ ✓ Done
+3. ~~SpeechInput~~ ✓ Done (includes WordHelperButtons + VoiceWaveform integration)
+4. GameTimer
+5. KeyboardInput
 6. GameResultCard
 7. RankBadge
 
@@ -254,7 +254,7 @@ Hooks that manage state and side effects for components.
 
 | Hook | Description | Implementation Status | Notes |
 |------|-------------|----------------------|-------|
-| **useVoiceRecorder** | Audio capture, visualization, and Whisper transcription | Not Started | Single source of truth for voice input. Returns `analyserNode` for VoiceWaveform, `transcript` for submission. See ARCHITECTURE.md Section 8. |
+| **useVoiceRecorder** | Audio capture, visualization, and speech recognition | Done | Single source of truth for voice input. Returns `isRecording`, `startRecording`, `stopRecording`, `analyserNode`, `transcript`, `isSupported`, `error`. Located at `hooks/use-voice-recorder.ts`. Uses Web Speech API for transcription. |
 | **useGameTimer** | Countdown timer with state management | Not Started | Manages time remaining, warning/critical states. Used by GameTimer component. |
 | **useGameState** | WebSocket connection and game state | Not Started | Connects to Durable Object, syncs player state. |
 | **useMatchmaking** | Matchmaking queue state | Not Started | Handles queue join/leave, tier expansion. |
@@ -288,24 +288,38 @@ function GameTimer({ totalSeconds, remainingSeconds }: GameTimerProps) {
 <Progress value={50} isTimer warningThreshold={10} criticalThreshold={5} />
 ```
 
-### 2. Single Hook, Multiple Consumers
+### 2. Single Hook, Integrated Components
 
-**Decision:** One hook owns the entire audio pipeline; multiple components consume from it.
+**Decision:** One hook owns the entire audio pipeline; SpeechInput integrates VoiceWaveform directly.
 
-**Example:** `useVoiceRecorder` provides both `analyserNode` (for VoiceWaveform) and `transcript` (for submission).
+**Example:** `useVoiceRecorder` provides `analyserNode`, `transcript`, `isRecording`, etc. SpeechInput accepts these as props.
 
 **Why:**
 - Single source of truth for audio state
-- VoiceWaveform and VoiceInput stay in sync
-- No risk of two hooks fighting over the same MediaStream
-- Clear separation: hook handles logic, components handle UI
+- VoiceWaveform is optional — only renders when `analyserNode` is passed
+- VoiceWaveform is automatically inactive when not recording (no stale visualization)
+- Clear separation: hook handles logic, SpeechInput handles UI
+- Junior developers only need to understand one component, not composition
 
 ```
 useVoiceRecorder (owns audio pipeline)
     │
-    ├── analyserNode → VoiceWaveform (presentational)
-    │
-    └── transcript, isRecording, etc. → VoiceInput (smart component)
+    └── All values → SpeechInput (presentational, but fully featured)
+                         │
+                         └── analyserNode → VoiceWaveform (auto-rendered above input)
+```
+
+**Usage:**
+```tsx
+const { isRecording, startRecording, stopRecording, analyserNode, transcript } = useVoiceRecorder()
+
+<SpeechInput
+  state={isRecording ? "recording" : "default"}
+  analyserNode={analyserNode}
+  inputText={transcript}
+  onRecordClick={startRecording}
+  onStopClick={stopRecording}
+/>
 ```
 
 ### 3. Presentational vs. Smart Components
@@ -382,6 +396,7 @@ The project uses **OKLCH color space** for perceptually uniform colors. Key toke
 | 2025-12-21 | Added Section 11 (Custom Hooks) and Architecture Decisions section. Documented wrapper pattern for GameTimer, single-hook pattern for voice input, presentational vs. smart component distinction. Updated VoiceWaveform and VoiceInput notes to reflect architecture. | Claude |
 | 2025-12-21 | Updated Design System Notes to reference OKLCH color system from globals.css, added explicit references to STYLE_GUIDE.md and lib/icons.ts, added border radius scale table. | Claude |
 | 2025-12-22 | Implemented HeartsDisplay component. Added HeartIcon to lib/icons.ts. Added heart-loss animation to globals.css. | Claude |
+| 2025-12-22 | Integrated VoiceWaveform into SpeechInput. Renamed VoiceInput to SpeechInput in inventory (already existed). Added `analyserNode` prop for optional waveform rendering. Updated useVoiceRecorder status to Done. Updated Architecture Decisions to reflect integration pattern. | Claude |
 
 ---
 

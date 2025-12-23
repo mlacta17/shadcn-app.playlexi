@@ -846,82 +846,37 @@ function VoiceWaveformDemo() {
         <VoiceWaveform />
       </div>
 
-      <div>
-        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Full Integration with SpeechInput</h3>
-        <p className="text-sm text-muted-foreground mb-3">
-          VoiceWaveform positioned above SpeechInput with gap-6, as per the Figma design.
-        </p>
-        <VoiceWaveformWithSpeechInputDemo />
-      </div>
     </div>
   )
 }
 
-function VoiceWaveformWithSpeechInputDemo() {
+/**
+ * SpeechInput demo with real voice recording via useVoiceRecorder.
+ * Uses the integrated VoiceWaveform (pass analyserNode prop).
+ */
+function SpeechInputDemo() {
   const { isRecording, startRecording, stopRecording, analyserNode, transcript } = useVoiceRecorder()
   const [playPressed, setPlayPressed] = useState(false)
   const [dictionaryPressed, setDictionaryPressed] = useState(false)
   const [sentencePressed, setSentencePressed] = useState(false)
 
   return (
-    <div className="flex flex-col items-center gap-6 max-w-[525px]">
-      <VoiceWaveform analyserNode={analyserNode} />
-      <SpeechInput
-        state={isRecording ? "recording" : "default"}
-        playPressed={playPressed}
-        dictionaryPressed={dictionaryPressed}
-        sentencePressed={sentencePressed}
-        inputText={transcript}
-        onRecordClick={startRecording}
-        onStopClick={stopRecording}
-        onPlayClick={() => setPlayPressed(!playPressed)}
-        onDictionaryClick={() => {
-          setDictionaryPressed(!dictionaryPressed)
-          setPlayPressed(false)
-          setSentencePressed(false)
-        }}
-        onSentenceClick={() => {
-          setSentencePressed(!sentencePressed)
-          setPlayPressed(false)
-          setDictionaryPressed(false)
-        }}
-        definition="Definition: a male child or young man"
-      />
-    </div>
-  )
-}
-
-function SpeechInputDemo() {
-  const [state, setState] = useState<"default" | "recording">("default")
-  const [playPressed, setPlayPressed] = useState(false)
-  const [dictionaryPressed, setDictionaryPressed] = useState(false)
-  const [sentencePressed, setSentencePressed] = useState(false)
-  const [inputText, setInputText] = useState("")
-
-  const handleRecord = () => {
-    setState("recording")
-    // Simulate voice input after 2 seconds
-    setTimeout(() => {
-      setInputText("boy")
-    }, 1000)
-  }
-
-  const handleStop = () => {
-    setState("default")
-  }
-
-  return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Interactive Demo</h3>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Interactive Demo (with VoiceWaveform)</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Pass <code className="bg-muted px-1 py-0.5 rounded text-xs">analyserNode</code> prop
+          to render VoiceWaveform above the input. Click Record to capture microphone input.
+        </p>
         <SpeechInput
-          state={state}
+          state={isRecording ? "recording" : "default"}
+          analyserNode={analyserNode}
           playPressed={playPressed}
           dictionaryPressed={dictionaryPressed}
           sentencePressed={sentencePressed}
-          inputText={inputText}
-          onRecordClick={handleRecord}
-          onStopClick={handleStop}
+          inputText={transcript}
+          onRecordClick={startRecording}
+          onStopClick={stopRecording}
           onPlayClick={() => setPlayPressed(!playPressed)}
           onDictionaryClick={() => {
             setDictionaryPressed(!dictionaryPressed)

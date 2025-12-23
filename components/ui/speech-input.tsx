@@ -1,3 +1,5 @@
+"use client"
+
 import * as React from "react"
 import {
   MicIcon,
@@ -9,10 +11,37 @@ import {
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { VoiceWaveform } from "@/components/ui/voice-waveform"
+
+/**
+ * Design System Tokens
+ *
+ * Layout:
+ * - Max width: 525px per Figma design
+ * - Main content height: 138px
+ * - Gap between waveform and input: 24px (gap-6) per Figma
+ *
+ * Colors:
+ * - Uses semantic color tokens from globals.css
+ * - Record button: primary (yellow)
+ * - Stop button: destructive (red)
+ * - Helper buttons: outline variant
+ *
+ * Integration:
+ * - When `analyserNode` is provided, VoiceWaveform renders above the input
+ * - VoiceWaveform shows active state only when recording
+ * - This creates a unified voice input experience
+ */
 
 export interface SpeechInputProps extends React.ComponentProps<"div"> {
   /** Current state of the input - Default or Recording */
   state?: "default" | "recording"
+  /**
+   * Audio analyser node from useVoiceRecorder hook.
+   * When provided, renders VoiceWaveform above the input controls.
+   * The waveform shows active state when state="recording".
+   */
+  analyserNode?: AnalyserNode | null
   /** Whether the play button is pressed - shows audio playback message in footer */
   playPressed?: boolean
   /** Whether the dictionary button is pressed - shows definition in footer */
@@ -37,8 +66,40 @@ export interface SpeechInputProps extends React.ComponentProps<"div"> {
   onSentenceClick?: () => void
 }
 
+/**
+ * Voice input component for the spelling bee game.
+ *
+ * This is a **presentational component** that displays:
+ * - Optional VoiceWaveform visualization (when analyserNode is provided)
+ * - Transcript display area
+ * - Record/Stop button
+ * - Helper buttons (Sentence, Dictionary, Play)
+ * - Contextual footer messages
+ *
+ * ## Architecture
+ * The component is intentionally "dumb" — it doesn't manage audio state.
+ * Audio capture and speech recognition are handled by `useVoiceRecorder` hook.
+ * This separation allows:
+ * - Easy testing (just pass props)
+ * - Flexibility in how audio is managed
+ * - Clear separation of concerns
+ *
+ * ## Usage with useVoiceRecorder
+ * ```tsx
+ * const { isRecording, startRecording, stopRecording, analyserNode, transcript } = useVoiceRecorder()
+ *
+ * <SpeechInput
+ *   state={isRecording ? "recording" : "default"}
+ *   analyserNode={analyserNode}
+ *   inputText={transcript}
+ *   onRecordClick={startRecording}
+ *   onStopClick={stopRecording}
+ * />
+ * ```
+ */
 function SpeechInput({
   state = "default",
+  analyserNode,
   playPressed = false,
   dictionaryPressed = false,
   sentencePressed = false,
@@ -55,6 +116,10 @@ function SpeechInput({
 }: SpeechInputProps) {
   const isRecording = state === "recording"
   const hasInput = Boolean(inputText)
+
+  // Only show active waveform when actually recording
+  // This prevents showing stale visualization when analyserNode is cached
+  const activeAnalyserNode = isRecording ? analyserNode : null
 
   // Determine footer text based on which button is pressed
   const getFooterText = () => {
@@ -76,14 +141,30 @@ function SpeechInput({
     <div
       data-slot="speech-input"
       data-state={state}
+      data-has-waveform={analyserNode ? "true" : "false"}
       className={cn(
-        "bg-input/30 outline-input flex w-full max-w-[525px] flex-col items-start overflow-clip rounded-lg outline outline-1 -outline-offset-1",
+        "flex w-full max-w-[525px] flex-col items-center",
+        // Gap between waveform and input area (24px per Figma)
+        "gap-6",
         className
       )}
       {...props}
     >
-      {/* Main content area */}
-      <div className="bg-background border-input flex h-[138px] w-full flex-col gap-2.5 rounded-lg border p-3">
+      {/* Voice Waveform - only renders when analyserNode is provided */}
+      {analyserNode !== undefined && (
+        <VoiceWaveform
+          analyserNode={activeAnalyserNode}
+          className="shrink-0"
+        />
+      )}
+
+      {/* Input container with background and border */}
+      <div
+        data-slot="speech-input-container"
+        className="bg-input/30 outline-input flex w-full flex-col items-start overflow-clip rounded-lg outline outline-1 -outline-offset-1"
+      >
+        {/* Main content area */}
+        <div className="bg-background border-input flex h-[138px] w-full flex-col gap-2.5 rounded-lg border p-3">
         {/* Voice input display */}
         <p
           className={cn(
@@ -144,21 +225,22 @@ function SpeechInput({
             </Button>
           </div>
         </div>
-      </div>
-
-      {/* Footer text area - shows contextual info based on pressed button */}
-      {footerText && (
-        <div className="flex w-full items-center justify-center p-3">
-          <p
-            className={cn(
-              "text-muted-foreground w-full text-sm leading-normal",
-              (playPressed || sentencePressed) && "italic text-nowrap"
-            )}
-          >
-            {footerText}
-          </p>
         </div>
-      )}
+
+        {/* Footer text area - shows contextual info based on pressed button */}
+        {footerText && (
+          <div className="flex w-full items-center justify-center p-3">
+            <p
+              className={cn(
+                "text-muted-foreground w-full text-sm leading-normal",
+                (playPressed || sentencePressed) && "italic text-nowrap"
+              )}
+            >
+              {footerText}
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
