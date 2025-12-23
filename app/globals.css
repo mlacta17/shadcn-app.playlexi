@@ -340,3 +340,54 @@ button.destructive:focus-visible,
     outline-color: var(--destructive);
   }
 }
+
+/*
+ * ============================================================================
+ * GAME COMPONENT ANIMATIONS
+ * ============================================================================
+ *
+ * Animations specific to game components. All animations respect
+ * prefers-reduced-motion via the @media query wrapper.
+ *
+ * Components using these:
+ * - HeartsDisplay (components/game/hearts-display.tsx) — heart loss animation
+ *
+ */
+
+@keyframes heart-loss {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  20% {
+    transform: scale(1.2);
+  }
+  40% {
+    transform: translateX(-4px) scale(1.1);
+  }
+  60% {
+    transform: translateX(4px) scale(1.1);
+  }
+  80% {
+    transform: translateX(-2px) scale(1.05);
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+
+@layer utilities {
+  .animate-heart-loss {
+    animation: heart-loss 300ms ease-out forwards;
+  }
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .animate-heart-loss {
+    animation: none;
+    opacity: 0;
+  }
+}

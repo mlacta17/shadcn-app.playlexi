@@ -65,6 +65,7 @@ import { SpeechInput } from "@/components/ui/speech-input"
 import { VoiceWaveform } from "@/components/ui/voice-waveform"
 import { Navbar } from "@/components/ui/navbar"
 import { TopNavbar } from "@/components/ui/top-navbar"
+import { HeartsDisplay } from "@/components/game"
 import { useVoiceRecorder } from "@/hooks/use-voice-recorder"
 import { useState } from "react"
 
@@ -581,6 +582,15 @@ export default function ShowcasePage() {
         </div>
       </section>
 
+      {/* Hearts Display Section */}
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold">Hearts Display</h2>
+        <p className="text-sm text-muted-foreground">
+          Game component showing remaining lives. Includes shake + fade animation when hearts are lost.
+        </p>
+        <HeartsDisplayDemo />
+      </section>
+
       {/* Tabs Section */}
       <section className="space-y-4">
         <h2 className="text-2xl font-semibold">Tabs</h2>
@@ -1070,6 +1080,73 @@ function TopNavbarDemo() {
           onClose={() => alert("Close clicked")}
           hideSkip
         />
+      </div>
+    </div>
+  )
+}
+
+function HeartsDisplayDemo() {
+  const [hearts, setHearts] = useState(3)
+
+  const loseHeart = () => {
+    if (hearts > 0) {
+      setHearts(hearts - 1)
+    }
+  }
+
+  const resetHearts = () => {
+    setHearts(3)
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Interactive Demo</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Click &quot;Lose Heart&quot; to see the shake + fade animation. The heart animates out before being removed.
+        </p>
+        <div className="flex items-center gap-6">
+          <HeartsDisplay remaining={hearts} onHeartLost={() => console.log("Heart lost!")} />
+          <div className="flex gap-2">
+            <Button variant="destructive" onClick={loseHeart} disabled={hearts === 0}>
+              Lose Heart
+            </Button>
+            <Button variant="outline" onClick={resetHearts}>
+              Reset
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">All States</h3>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-muted-foreground w-24">3 hearts:</span>
+            <HeartsDisplay remaining={3} />
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-muted-foreground w-24">2 hearts:</span>
+            <HeartsDisplay remaining={2} />
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-muted-foreground w-24">1 heart:</span>
+            <HeartsDisplay remaining={1} />
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-muted-foreground w-24">0 hearts:</span>
+            <HeartsDisplay remaining={0} />
+            <span className="text-sm text-muted-foreground">(empty - game over)</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Accessibility</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          The component includes <code className="bg-muted px-1 py-0.5 rounded text-xs">aria-live=&quot;polite&quot;</code> and <code className="bg-muted px-1 py-0.5 rounded text-xs">aria-label</code> for screen reader support.
+          Animation respects <code className="bg-muted px-1 py-0.5 rounded text-xs">prefers-reduced-motion</code>.
+        </p>
       </div>
     </div>
   )

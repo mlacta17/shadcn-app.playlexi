@@ -74,6 +74,9 @@ export { IconMonitorOutline24 as MonitorIcon } from "nucleo-core-outline-24"
 // Text/Content icons
 export { IconMessage2ContentOutline24 as SentenceIcon } from "nucleo-core-outline-24"
 
+// Game icons
+export { IconHeartOutline24 as HeartIcon } from "nucleo-core-outline-24"
+
 // Misc icons
 export { IconEyeOutline24 as EyeIcon } from "nucleo-core-outline-24"
 export { IconLayoutTopOutline24 as LayoutIcon } from "nucleo-core-outline-24"

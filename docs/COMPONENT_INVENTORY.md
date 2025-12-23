@@ -32,7 +32,7 @@ These components are **blocking for MVP** — the game cannot function without t
 | Component | Description | Design Status | Implementation Status | Notes |
 |-----------|-------------|---------------|----------------------|-------|
 | **VoiceWaveform** | Animated audio visualization during recording | Done | Done | **Presentational only.** Canvas-based, uses AnalyserNode, has idle/active states. Located at `components/ui/voice-waveform.tsx`. Does NOT handle audio capture or Whisper — that's `useVoiceRecorder` hook. |
-| **HeartsDisplay** | 3 heart icons showing remaining lives | Not Started | Not Started | Animation for losing a heart; aria-label for accessibility |
+| **HeartsDisplay** | 3 heart icons showing remaining lives | Done | Done | **Presentational.** Shows remaining hearts with shake+fade animation on loss. Uses `--destructive` color, 20px hearts, 2px gap. Located at `components/game/hearts-display.tsx`. Animation defined in `globals.css`. Respects `prefers-reduced-motion`. |
 | **GameTimer** | Progress bar countdown timer | Not Started | Not Started | **Wrapper pattern.** Wraps existing `Progress` component; adds countdown logic, color states (normal → warning → critical), ARIA labels. See Architecture Decisions below. |
 | **RoundIndicator** | "Round 1", "Round 2" badge | Not Started | Not Started | Simple text badge |
 | **WordHelperButtons** | Sentence/Dictionary/Play button group | Not Started | Not Started | Icon buttons with tooltips |
@@ -381,6 +381,7 @@ The project uses **OKLCH color space** for perceptually uniform colors. Key toke
 | 2025-12-21 | Marked VoiceWaveform as Done (already exists); Updated GameTimer notes to clarify it wraps Progress | Claude |
 | 2025-12-21 | Added Section 11 (Custom Hooks) and Architecture Decisions section. Documented wrapper pattern for GameTimer, single-hook pattern for voice input, presentational vs. smart component distinction. Updated VoiceWaveform and VoiceInput notes to reflect architecture. | Claude |
 | 2025-12-21 | Updated Design System Notes to reference OKLCH color system from globals.css, added explicit references to STYLE_GUIDE.md and lib/icons.ts, added border radius scale table. | Claude |
+| 2025-12-22 | Implemented HeartsDisplay component. Added HeartIcon to lib/icons.ts. Added heart-loss animation to globals.css. | Claude |
 
 ---
 
