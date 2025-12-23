@@ -284,6 +284,68 @@ When creating canvas-based components, follow this pattern:
 4. Add `aria-hidden="true"` if purely decorative
 5. Document the component in this section
 
+## Game Components
+
+Game-specific components live in `components/game/` and follow the same design system patterns as UI components.
+
+### HeartsDisplay
+- **Location:** [components/game/hearts-display.tsx](components/game/hearts-display.tsx)
+- **Type:** Presentational component (no hooks)
+- **Use case:** Displaying player's remaining lives in the game
+
+#### Design System Integration:
+| Aspect | Implementation |
+|--------|----------------|
+| **Color** | `fill-destructive stroke-destructive` (red hearts) |
+| **Size** | 20px (`size-5`) per Figma |
+| **Gap** | 2px (`gap-0.5`) per Figma |
+| **Animation** | `animate-heart-loss` keyframes in globals.css |
+| **Attributes** | `data-slot="hearts-display"`, `data-state="filled\|losing\|lost"`, `data-remaining`, `data-total` |
+| **Accessibility** | `role="status"`, `aria-live="polite"`, `aria-label` |
+
+#### Heart States (Active/Disabled Pattern):
+The component follows the **destructive button active/disabled pattern** for visual consistency:
+
+| State | Visual | `data-state` | Description |
+|-------|--------|--------------|-------------|
+| **Filled** | Full red (`opacity: 1`) | `filled` | Active heart (remaining life) |
+| **Losing** | Animating | `losing` | Currently transitioning (shake + fade) |
+| **Lost** | Dimmed red (`opacity: 0.5`) | `lost` | Disabled heart (life lost) |
+
+**Why show all hearts?** Displaying all hearts (filled + lost) provides clear visual feedback:
+- Players see total lives available (e.g., "3 lives total")
+- Players see how many they've lost (dimmed hearts)
+- Matches common game UI patterns (Mario, Zelda, etc.)
+
+#### Props:
+| Prop | Type | Description |
+|------|------|-------------|
+| `remaining` | `number` | Hearts remaining (0-3) |
+| `total` | `number` | Max hearts (default: 3) |
+| `onHeartLost` | `() => void` | Callback after loss animation completes |
+| `className` | `string` | Additional classes |
+
+#### Usage:
+```tsx
+import { HeartsDisplay } from "@/components/game"
+
+// Shows 2 filled hearts + 1 lost heart (50% opacity)
+<HeartsDisplay remaining={2} />
+
+<HeartsDisplay
+  remaining={hearts}
+  onHeartLost={() => playSound('heart-lost')}
+/>
+```
+
+#### Animation:
+- Defined in `globals.css` under "GAME COMPONENT ANIMATIONS"
+- Duration: 300ms (matches `HEART_LOSS_ANIMATION_DURATION` constant)
+- Respects `prefers-reduced-motion`
+- Shake + fade to 50% opacity (transitions to "lost" state, not hidden)
+
+---
+
 ## Navigation Components
 
 ### Navbar

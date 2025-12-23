@@ -352,6 +352,14 @@ button.destructive:focus-visible,
  * Components using these:
  * - HeartsDisplay (components/game/hearts-display.tsx) — heart loss animation
  *
+ * Design Pattern:
+ * Hearts follow the destructive button active/disabled pattern:
+ * - Active (filled): full opacity
+ * - Disabled (lost): 50% opacity
+ *
+ * The animation transitions a heart from "filled" to "lost" state
+ * with a shake effect, ending at 50% opacity (not 0).
+ *
  */
 
 @keyframes heart-loss {
@@ -370,11 +378,12 @@ button.destructive:focus-visible,
   }
   80% {
     transform: translateX(-2px) scale(1.05);
-    opacity: 0.5;
+    opacity: 0.7;
   }
   100% {
-    opacity: 0;
-    transform: scale(0.8);
+    /* End at 50% opacity (disabled state) - heart remains visible but dimmed */
+    opacity: 0.5;
+    transform: scale(1);
   }
 }
 
@@ -388,6 +397,7 @@ button.destructive:focus-visible,
 @media (prefers-reduced-motion: reduce) {
   .animate-heart-loss {
     animation: none;
-    opacity: 0;
+    /* Immediately apply disabled state (50% opacity) */
+    opacity: 0.5;
   }
 }

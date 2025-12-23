@@ -1103,7 +1103,7 @@ function HeartsDisplayDemo() {
       <div>
         <h3 className="text-sm font-medium mb-3 text-muted-foreground">Interactive Demo</h3>
         <p className="text-sm text-muted-foreground mb-3">
-          Click &quot;Lose Heart&quot; to see the shake + fade animation. The heart animates out before being removed.
+          Click &quot;Lose Heart&quot; to see the shake + fade animation. Lost hearts remain visible at 50% opacity (disabled state).
         </p>
         <div className="flex items-center gap-6">
           <HeartsDisplay remaining={hearts} onHeartLost={() => console.log("Heart lost!")} />
@@ -1119,24 +1119,27 @@ function HeartsDisplayDemo() {
       </div>
 
       <div>
-        <h3 className="text-sm font-medium mb-3 text-muted-foreground">All States</h3>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">All States (Active/Disabled Pattern)</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          All 3 hearts are always visible. Filled hearts are full opacity, lost hearts are 50% opacity (like a disabled destructive button).
+        </p>
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground w-24">3 hearts:</span>
+            <span className="text-sm text-muted-foreground w-32">3 filled, 0 lost:</span>
             <HeartsDisplay remaining={3} />
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground w-24">2 hearts:</span>
+            <span className="text-sm text-muted-foreground w-32">2 filled, 1 lost:</span>
             <HeartsDisplay remaining={2} />
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground w-24">1 heart:</span>
+            <span className="text-sm text-muted-foreground w-32">1 filled, 2 lost:</span>
             <HeartsDisplay remaining={1} />
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground w-24">0 hearts:</span>
+            <span className="text-sm text-muted-foreground w-32">0 filled, 3 lost:</span>
             <HeartsDisplay remaining={0} />
-            <span className="text-sm text-muted-foreground">(empty - game over)</span>
+            <span className="text-sm text-muted-foreground">(game over)</span>
           </div>
         </div>
       </div>
