@@ -519,7 +519,7 @@ When adding a new shadcn component:
 - **Font setup:** [app/layout.tsx](app/layout.tsx)
 - **Icon exports:** [lib/icons.ts](lib/icons.ts)
 - **Button example:** [components/ui/button.tsx](components/ui/button.tsx)
-- **Example with icons:** [components/component-example.tsx](components/component-example.tsx)
+- **Icon usage examples:** See showcase page button section
 - **Showcase page:** [app/showcase/page.tsx](app/showcase/page.tsx)
 - **Canvas component:** [components/ui/voice-waveform.tsx](components/ui/voice-waveform.tsx)
 - **Voice input:** [components/ui/speech-input.tsx](components/ui/speech-input.tsx)

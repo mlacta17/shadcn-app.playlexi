@@ -327,7 +327,7 @@ const { isRecording, startRecording, stopRecording, analyserNode, transcript } =
 | Type | Characteristics | Examples |
 |------|-----------------|----------|
 | **Presentational** | No hooks, no side effects, just props → UI | VoiceWaveform, HeartsDisplay, RankBadge |
-| **Smart** | Uses hooks, manages state, composes other components | VoiceInput, GameScreen, LobbyPlayerList |
+| **Smart** | Uses hooks, manages state, composes other components | GameScreen, LobbyPlayerList |
 
 **Rule:** UI components in `components/ui/` are presentational. Game components in `components/game/` can be smart.
 

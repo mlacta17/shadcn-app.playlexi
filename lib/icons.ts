@@ -5,6 +5,12 @@
  * Import from this file instead of directly from nucleo-core-outline-24
  * for consistent naming and easier discovery.
  *
+ * ## Organization
+ * Icons are grouped by current usage:
+ * 1. **Active** - Currently used in the codebase
+ * 2. **Reserved** - Planned for upcoming features (per COMPONENT_INVENTORY.md)
+ *
+ * ## Usage
  * @example
  * ```tsx
  * import { PlusIcon, TrashIcon, SettingsIcon } from "@/lib/icons"
@@ -18,6 +24,10 @@
  * @see STYLE_GUIDE.md for icon usage patterns and data-icon attribute
  */
 
+// =============================================================================
+// ACTIVE ICONS - Currently used in the codebase
+// =============================================================================
+
 // Common UI icons
 export { IconPlusOutline24 as PlusIcon } from "nucleo-core-outline-24"
 export { IconXmarkOutline24 as XIcon } from "nucleo-core-outline-24"
@@ -28,63 +38,58 @@ export { IconTrashOutline24 as TrashIcon } from "nucleo-core-outline-24"
 export { IconChevronDownOutline24 as ChevronDownIcon } from "nucleo-core-outline-24"
 export { IconChevronUpOutline24 as ChevronUpIcon } from "nucleo-core-outline-24"
 export { IconChevronRightOutline24 as ChevronRightIcon } from "nucleo-core-outline-24"
-export { IconChevronLeftOutline24 as ChevronLeftIcon } from "nucleo-core-outline-24"
 
 // Menu icons
 export { IconMenuOutline24 as MenuIcon } from "nucleo-core-outline-24"
 export { IconDotsVerticalOutline24 as MoreVerticalIcon } from "nucleo-core-outline-24"
-export { IconDotsOutline24 as MoreHorizontalIcon } from "nucleo-core-outline-24"
 
-// User/Account icons
+// User/Account icons (Navbar)
 export { IconUserOutline24 as UserIcon } from "nucleo-core-outline-24"
 export { IconCircleUserOutline24 as CircleUserIcon } from "nucleo-core-outline-24"
 export { IconCircleLogoutOutline24 as LogOutIcon } from "nucleo-core-outline-24"
 
-// Settings/System icons
+// Settings/System icons (Navbar)
 export { IconGearOutline24 as SettingsIcon } from "nucleo-core-outline-24"
 export { IconBellOutline24 as BellIcon } from "nucleo-core-outline-24"
-export { IconShieldOutline24 as ShieldIcon } from "nucleo-core-outline-24"
-export { IconKeyboardOutline24 as KeyboardIcon } from "nucleo-core-outline-24"
-export { IconLanguageOutline24 as LanguagesIcon } from "nucleo-core-outline-24"
 
-// Communication icons
-export { IconEnvelopeOutline24 as MailIcon } from "nucleo-core-outline-24"
-export { IconMessage2ContentOutline24 as MessageIcon } from "nucleo-core-outline-24"
-
-// File/Folder icons
-export { IconFileOutline24 as FileIcon } from "nucleo-core-outline-24"
-export { IconFileTxtOutline24 as FileTextIcon } from "nucleo-core-outline-24"
-export { IconFileCodeOutline24 as FileCodeIcon } from "nucleo-core-outline-24"
-export { IconFolderOutline24 as FolderIcon } from "nucleo-core-outline-24"
-export { IconFolderOpenOutline24 as FolderOpenIcon } from "nucleo-core-outline-24"
-export { IconFolderSearchOutline24 as FolderSearchIcon } from "nucleo-core-outline-24"
-export { IconFloppyDiskOutline24 as SaveIcon } from "nucleo-core-outline-24"
-export { IconDownloadOutline24 as DownloadIcon } from "nucleo-core-outline-24"
-
-// Media icons
+// Media icons (SpeechInput)
 export { IconMediaPlayOutline24 as PlayIcon } from "nucleo-core-outline-24"
 export { IconMediaStopOutline24 as StopIcon } from "nucleo-core-outline-24"
 export { IconMicrophoneOutline24 as MicIcon } from "nucleo-core-outline-24"
 
-// Theme icons
+// Theme icons (ThemeSwitcher)
 export { IconSunOutline24 as SunIcon } from "nucleo-core-outline-24"
 export { IconMoonOutline24 as MoonIcon } from "nucleo-core-outline-24"
 export { IconMonitorOutline24 as MonitorIcon } from "nucleo-core-outline-24"
 
-// Text/Content icons
-export { IconMessage2ContentOutline24 as SentenceIcon } from "nucleo-core-outline-24"
-
 // Game icons
 export { IconHeartOutline24 as HeartIcon } from "nucleo-core-outline-24"
 
-// Misc icons
-export { IconEyeOutline24 as EyeIcon } from "nucleo-core-outline-24"
-export { IconLayoutTopOutline24 as LayoutIcon } from "nucleo-core-outline-24"
-export { IconPaletteOutline24 as PaletteIcon } from "nucleo-core-outline-24"
-export { IconCreditCardOutline24 as CreditCardIcon } from "nucleo-core-outline-24"
-export { IconCircleQuestionOutline24 as HelpCircleIcon } from "nucleo-core-outline-24"
-export { IconBluetoothOutline24 as BluetoothIcon } from "nucleo-core-outline-24"
-export { IconBookOutline24 as BookIcon } from "nucleo-core-outline-24"
+// SpeechInput helper buttons
+export { IconMessage2ContentOutline24 as SentenceIcon } from "nucleo-core-outline-24"
 export { IconBookOutline24 as DictionaryIcon } from "nucleo-core-outline-24"
+
+// Alert/Feedback icons (AlertDialog)
 export { IconAlertWarningOutline24 as AlertWarningIcon } from "nucleo-core-outline-24"
 export { IconCircleCheckOutline24 as CircleCheckIcon } from "nucleo-core-outline-24"
+
+// =============================================================================
+// RESERVED ICONS - Planned for upcoming features
+// See COMPONENT_INVENTORY.md for feature roadmap
+// =============================================================================
+
+// KeyboardInput component (P0 - MVP)
+export { IconKeyboardOutline24 as KeyboardIcon } from "nucleo-core-outline-24"
+
+// Navigation (may need for mobile back button)
+export { IconChevronLeftOutline24 as ChevronLeftIcon } from "nucleo-core-outline-24"
+
+// Leaderboard/Social features (P3)
+// export { IconShieldOutline24 as ShieldIcon } from "nucleo-core-outline-24"
+// export { IconEnvelopeOutline24 as MailIcon } from "nucleo-core-outline-24"
+// export { IconMessage2ContentOutline24 as MessageIcon } from "nucleo-core-outline-24"
+
+// Profile/Settings features (P3)
+// export { IconEyeOutline24 as EyeIcon } from "nucleo-core-outline-24"
+// export { IconCreditCardOutline24 as CreditCardIcon } from "nucleo-core-outline-24"
+// export { IconCircleQuestionOutline24 as HelpCircleIcon } from "nucleo-core-outline-24"
