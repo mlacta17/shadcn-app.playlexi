@@ -351,6 +351,7 @@ button.destructive:focus-visible,
  *
  * Components using these:
  * - HeartsDisplay (components/game/hearts-display.tsx) — heart loss animation
+ * - GameFeedbackOverlay (components/game/game-feedback-overlay.tsx) — flash animation
  *
  * Design Pattern:
  * Hearts follow the destructive button active/disabled pattern:
@@ -359,6 +360,12 @@ button.destructive:focus-visible,
  *
  * The animation transitions a heart from "filled" to "lost" state
  * with a shake effect, ending at 50% opacity (not 0).
+ *
+ * Feedback Overlay:
+ * Quick flash (400ms) for immediate visual feedback on correct/wrong answers.
+ * - Quick fade in (0-20%)
+ * - Hold at peak (20-60%)
+ * - Fade out (60-100%)
  *
  */
 
@@ -387,9 +394,31 @@ button.destructive:focus-visible,
   }
 }
 
+@keyframes feedback-flash {
+  0% {
+    opacity: 0;
+  }
+  20% {
+    /* Quick fade in */
+    opacity: 1;
+  }
+  60% {
+    /* Hold at peak */
+    opacity: 1;
+  }
+  100% {
+    /* Fade out */
+    opacity: 0;
+  }
+}
+
 @layer utilities {
   .animate-heart-loss {
     animation: heart-loss 300ms ease-out forwards;
+  }
+
+  .animate-feedback-flash {
+    animation: feedback-flash 400ms ease-out forwards;
   }
 }
 
@@ -399,5 +428,11 @@ button.destructive:focus-visible,
     animation: none;
     /* Immediately apply disabled state (50% opacity) */
     opacity: 0.5;
+  }
+
+  .animate-feedback-flash {
+    animation: none;
+    /* Show briefly then hide - no animation */
+    opacity: 1;
   }
 }

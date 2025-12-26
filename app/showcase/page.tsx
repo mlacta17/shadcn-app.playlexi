@@ -65,9 +65,11 @@ import { SpeechInput } from "@/components/ui/speech-input"
 import { VoiceWaveform } from "@/components/ui/voice-waveform"
 import { Navbar } from "@/components/ui/navbar"
 import { TopNavbar } from "@/components/ui/top-navbar"
-import { HeartsDisplay, GameTimer } from "@/components/game"
+import { HeartsDisplay, GameTimer, GameFeedbackOverlay } from "@/components/game"
 import { useVoiceRecorder } from "@/hooks/use-voice-recorder"
 import { useGameTimer } from "@/hooks/use-game-timer"
+import { useGameFeedback } from "@/hooks/use-game-feedback"
+import { useGameSounds } from "@/hooks/use-game-sounds"
 import { useState } from "react"
 
 export default function ShowcasePage() {
@@ -600,6 +602,17 @@ export default function ShowcasePage() {
           transitions to <code className="bg-muted px-1 py-0.5 rounded text-xs">--destructive</code> (red) when ≤5 seconds remain.
         </p>
         <GameTimerDemo />
+      </section>
+
+      {/* Game Feedback Overlay Section */}
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold">Game Feedback Overlay</h2>
+        <p className="text-sm text-muted-foreground">
+          Full-screen flash overlay for correct/wrong answer feedback.
+          Uses green for correct, <code className="bg-muted px-1 py-0.5 rounded text-xs">--destructive</code> (red) for wrong.
+          Integrates with <code className="bg-muted px-1 py-0.5 rounded text-xs">useGameSounds</code> hook for audio.
+        </p>
+        <GameFeedbackDemo />
       </section>
 
       {/* Tabs Section */}
@@ -1180,6 +1193,89 @@ function GameTimerDemo() {
           The component includes <code className="bg-muted px-1 py-0.5 rounded text-xs">role=&quot;timer&quot;</code>,
           <code className="bg-muted px-1 py-0.5 rounded text-xs">aria-live=&quot;polite&quot;</code>, and
           <code className="bg-muted px-1 py-0.5 rounded text-xs">aria-label</code> for screen reader support.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * GameFeedback demo with interactive overlay + sound via useGameFeedback and useGameSounds hooks.
+ * Shows correct (green) and wrong (red) feedback states.
+ */
+function GameFeedbackDemo() {
+  const feedback = useGameFeedback({
+    onComplete: () => console.log("Feedback animation completed"),
+  })
+  const sounds = useGameSounds()
+
+  const handleCorrect = () => {
+    feedback.showCorrect()
+    sounds.playCorrect()
+  }
+
+  const handleWrong = () => {
+    feedback.showWrong()
+    sounds.playWrong()
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* The overlay - positioned fixed, will cover entire viewport */}
+      <GameFeedbackOverlay
+        type={feedback.feedbackType}
+        isVisible={feedback.isShowing}
+      />
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Interactive Demo</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Click the buttons to trigger the full-screen flash overlay.
+          Sound plays if you have audio files in <code className="bg-muted px-1 py-0.5 rounded text-xs">public/sounds/</code>.
+        </p>
+        <div className="flex gap-4">
+          <Button onClick={handleCorrect} disabled={feedback.isShowing}>
+            Correct Answer
+          </Button>
+          <Button variant="destructive" onClick={handleWrong} disabled={feedback.isShowing}>
+            Wrong Answer
+          </Button>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Architecture</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          The overlay uses <code className="bg-muted px-1 py-0.5 rounded text-xs">position: fixed</code> to cover the entire viewport.
+          Render it at the page/layout level, not inside other game components.
+        </p>
+        <div className="bg-muted/50 p-4 rounded-lg font-mono text-xs space-y-1">
+          <p>// In your game page/layout</p>
+          <p className="text-muted-foreground">&lt;GameFeedbackOverlay type=&#123;feedback.feedbackType&#125; isVisible=&#123;feedback.isShowing&#125; /&gt;</p>
+          <p className="text-muted-foreground">&lt;GameTimer ... /&gt;</p>
+          <p className="text-muted-foreground">&lt;SpeechInput ... /&gt;</p>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Sound Files</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Add MP3 files to <code className="bg-muted px-1 py-0.5 rounded text-xs">public/sounds/</code>:
+        </p>
+        <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
+          <li><code className="bg-muted px-1 py-0.5 rounded text-xs">correct.mp3</code> - played on correct answer</li>
+          <li><code className="bg-muted px-1 py-0.5 rounded text-xs">wrong.mp3</code> - played on wrong answer</li>
+        </ul>
+        <p className="text-sm text-muted-foreground mt-2">
+          Recommended: 128kbps, 44.1kHz, mono. Keep files small (~20KB) for fast loading.
+        </p>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Accessibility</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          The overlay has <code className="bg-muted px-1 py-0.5 rounded text-xs">aria-hidden=&quot;true&quot;</code> as it&apos;s decorative.
+          Animation respects <code className="bg-muted px-1 py-0.5 rounded text-xs">prefers-reduced-motion</code>.
         </p>
       </div>
     </div>

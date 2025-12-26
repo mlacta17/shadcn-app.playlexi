@@ -487,6 +487,91 @@ The smooth animation is implemented **at the GameTimer level** (not in Progress 
 - Junior developers can easily find and modify timer animation in one place
 - Other countdown components can make different choices without affecting Progress
 
+### GameFeedbackOverlay
+- **Location:** [components/game/game-feedback-overlay.tsx](components/game/game-feedback-overlay.tsx)
+- **Hooks:** [hooks/use-game-feedback.ts](hooks/use-game-feedback.ts), [hooks/use-game-sounds.ts](hooks/use-game-sounds.ts)
+- **Type:** Presentational overlay component
+- **Use case:** Full-screen flash feedback for correct/wrong answers
+
+#### Design System Integration:
+| Aspect | Implementation |
+|--------|----------------|
+| **Correct color** | `bg-green-500/20` (green at 20% opacity) |
+| **Wrong color** | `bg-destructive/20` (red at 20% opacity) |
+| **Positioning** | `fixed inset-0 z-50` (covers entire viewport) |
+| **Animation** | `animate-feedback-flash` keyframes in globals.css (400ms) |
+| **Attributes** | `data-slot="game-feedback-overlay"`, `data-state="correct\|wrong"` |
+| **Accessibility** | `aria-hidden="true"` (decorative element) |
+
+#### Architecture:
+```
+useGameFeedback (hook) - owns state and timing
+├── feedbackType → "correct" | "wrong" | null
+├── isShowing → boolean
+└── showCorrect, showWrong, clear → controls
+
+useGameSounds (hook) - owns audio playback
+├── playCorrect, playWrong → sound triggers
+├── isReady → sounds preloaded
+└── setEnabled, setVolume → controls
+```
+
+Both hooks feed into `GameFeedbackOverlay` (presentational). Place the overlay at page/layout level.
+
+#### Props:
+| Prop | Type | Description |
+|------|------|-------------|
+| `type` | `"correct" \| "wrong" \| null` | Feedback type to show |
+| `isVisible` | `boolean` | Whether overlay is visible |
+| `className` | `string` | Additional classes |
+
+#### Usage:
+```tsx
+import { GameFeedbackOverlay } from "@/components/game"
+import { useGameFeedback } from "@/hooks/use-game-feedback"
+import { useGameSounds } from "@/hooks/use-game-sounds"
+
+function GameScreen() {
+  const feedback = useGameFeedback({
+    onComplete: () => nextQuestion(),
+  })
+  const sounds = useGameSounds()
+
+  const handleAnswer = (isCorrect: boolean) => {
+    if (isCorrect) {
+      feedback.showCorrect()
+      sounds.playCorrect()
+    } else {
+      feedback.showWrong()
+      sounds.playWrong()
+    }
+  }
+
+  return (
+    <>
+      <GameFeedbackOverlay
+        type={feedback.feedbackType}
+        isVisible={feedback.isShowing}
+      />
+      <AnswerButton onClick={() => handleAnswer(true)} />
+    </>
+  )
+}
+```
+
+#### Visual Behavior:
+- **Flash animation:** Quick fade in (0-20%), hold at peak (20-60%), fade out (60-100%)
+- **Duration:** 400ms total (fast, immediate feedback)
+- **Opacity:** 20% for visibility without obscuring game UI
+- **Pointer events:** Disabled (overlay doesn't block interactions)
+
+#### Sound Files:
+MP3 files in `public/sounds/`:
+- `CorrectAnswerFeedback_sound.mp3` - played on correct answer
+- `WrongAnswerFeedback_sound.mp3` - played on wrong answer
+
+**Format:** MP3 for universal browser support (including iOS Safari).
+
 ---
 
 ## Navigation Components
@@ -602,7 +687,10 @@ When adding a new shadcn component:
 - **Voice input:** [components/ui/speech-input.tsx](components/ui/speech-input.tsx)
 - **Voice recorder hook:** [hooks/use-voice-recorder.ts](hooks/use-voice-recorder.ts)
 - **Game timer hook:** [hooks/use-game-timer.ts](hooks/use-game-timer.ts)
+- **Game feedback hook:** [hooks/use-game-feedback.ts](hooks/use-game-feedback.ts)
+- **Game sounds hook:** [hooks/use-game-sounds.ts](hooks/use-game-sounds.ts)
 - **Game components:** [components/game/](components/game/)
+- **Sound files:** [public/sounds/](public/sounds/) (add correct.mp3, wrong.mp3)
 
 ## Design Philosophy
 

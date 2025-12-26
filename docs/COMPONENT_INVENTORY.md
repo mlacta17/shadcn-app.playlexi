@@ -38,8 +38,7 @@ These components are **blocking for MVP** — the game cannot function without t
 | **SpeechInput** | Microphone recording interface | Done | Done | **Presentational component** with optional VoiceWaveform integration. Pass `analyserNode` prop to render waveform above input. Handles record/stop buttons, shows transcript, **includes helper buttons (Sentence/Dictionary/Play)**. Located at `components/ui/speech-input.tsx`. Use with `useVoiceRecorder` hook for voice capture. |
 | **KeyboardInput** | Text input for typing spelling | Not Started | Not Started | May use existing Input component |
 | **GameResultCard** | Final placement display after game | Not Started | Not Started | Shows rank badge, XP earned, stats |
-| **CorrectAnswerFeedback** | Visual/audio feedback on correct answer | Not Started | Not Started | Green flash, sound effect |
-| **WrongAnswerFeedback** | Visual/audio feedback on wrong answer | Not Started | Not Started | Red flash, heart loss animation |
+| **GameFeedbackOverlay** | Visual feedback overlay for correct/wrong answers | Done | Done | **Presentational.** Full-screen flash overlay. Green for correct, `--destructive` for wrong. 400ms animation. Located at `components/game/game-feedback-overlay.tsx`. Use with `useGameFeedback` hook for state and `useGameSounds` hook for audio. |
 
 ---
 
@@ -217,8 +216,8 @@ Without these, the game cannot function:
 Needed for a complete single-player experience:
 
 1. RoundIndicator
-2. CorrectAnswerFeedback
-3. WrongAnswerFeedback
+2. ~~CorrectAnswerFeedback~~ ✓ Done (now `GameFeedbackOverlay`)
+3. ~~WrongAnswerFeedback~~ ✓ Done (now `GameFeedbackOverlay`)
 4. TutorialCard
 5. PlacementGameIntro
 6. RankReveal
@@ -255,6 +254,8 @@ Hooks that manage state and side effects for components.
 |------|-------------|----------------------|-------|
 | **useVoiceRecorder** | Audio capture, visualization, and speech recognition | Done | Single source of truth for voice input. Returns `isRecording`, `startRecording`, `stopRecording`, `analyserNode`, `transcript`, `isSupported`, `error`. Located at `hooks/use-voice-recorder.ts`. Uses Web Speech API for transcription. |
 | **useGameTimer** | Countdown timer with state management | Done | Single source of truth for timer. Returns `totalSeconds`, `remainingSeconds`, `state`, `isRunning`, `isExpired`, `start`, `pause`, `reset`, `restart`. Located at `hooks/use-game-timer.ts`. Supports callbacks for `onTimeUp` and `onTick`. |
+| **useGameFeedback** | Feedback overlay state management | Done | Owns overlay state and timing. Returns `feedbackType`, `isShowing`, `showCorrect`, `showWrong`, `clear`. Auto-clears after animation (400ms). Located at `hooks/use-game-feedback.ts`. |
+| **useGameSounds** | Audio playback for game sounds | Done | Preloads and plays game sounds. Returns `playCorrect`, `playWrong`, `play`, `isReady`, `setEnabled`, `setVolume`. Graceful fallback if files missing. Located at `hooks/use-game-sounds.ts`. Expects MP3 files in `public/sounds/`. |
 | **useGameState** | WebSocket connection and game state | Not Started | Connects to Durable Object, syncs player state. |
 | **useMatchmaking** | Matchmaking queue state | Not Started | Handles queue join/leave, tier expansion. |
 
@@ -401,6 +402,7 @@ The project uses **OKLCH color space** for perceptually uniform colors. Key toke
 | 2025-12-22 | Implemented HeartsDisplay component. Added HeartIcon to lib/icons.ts. Added heart-loss animation to globals.css. | Claude |
 | 2025-12-22 | Integrated VoiceWaveform into SpeechInput. Renamed VoiceInput to SpeechInput in inventory (already existed). Added `analyserNode` prop for optional waveform rendering. Updated useVoiceRecorder status to Done. Updated Architecture Decisions to reflect integration pattern. | Claude |
 | 2025-12-26 | Implemented GameTimer component and useGameTimer hook. Uses wrapper pattern around Progress. Two states: normal (--primary) and critical (--destructive, ≤5 seconds). Added demo to showcase page. | Claude |
+| 2025-12-26 | Implemented GameFeedbackOverlay component, useGameFeedback hook, and useGameSounds hook. Combines CorrectAnswerFeedback and WrongAnswerFeedback into single overlay component. Created public/sounds/ folder for audio files. Added demo to showcase page. | Claude |
 
 ---
 

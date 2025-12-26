@@ -10,9 +10,11 @@
  *
  * @example
  * ```tsx
- * import { HeartsDisplay } from "@/components/game"
+ * import { HeartsDisplay, GameTimer, GameFeedbackOverlay } from "@/components/game"
  *
  * <HeartsDisplay remaining={2} />
+ * <GameTimer totalSeconds={15} remainingSeconds={10} />
+ * <GameFeedbackOverlay type="correct" isVisible={true} />
  * ```
  */
 
@@ -21,3 +23,6 @@ export type { HeartsDisplayProps } from "./hearts-display"
 
 export { GameTimer, CRITICAL_THRESHOLD_SECONDS } from "./game-timer"
 export type { GameTimerProps, GameTimerState } from "./game-timer"
+
+export { GameFeedbackOverlay } from "./game-feedback-overlay"
+export type { GameFeedbackOverlayProps, FeedbackOverlayType } from "./game-feedback-overlay"
