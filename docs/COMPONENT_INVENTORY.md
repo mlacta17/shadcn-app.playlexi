@@ -34,7 +34,6 @@ These components are **blocking for MVP** — the game cannot function without t
 | **VoiceWaveform** | Animated audio visualization during recording | Done | Done | **Presentational only.** Canvas-based, uses AnalyserNode, has idle/active states. Located at `components/ui/voice-waveform.tsx`. Does NOT handle audio capture or Whisper — that's `useVoiceRecorder` hook. |
 | **HeartsDisplay** | 3 heart icons showing remaining lives | Done | Done | **Presentational.** Shows remaining hearts with shake+fade animation on loss. Uses `--destructive` color, 20px hearts, 2px gap. Located at `components/game/hearts-display.tsx`. Animation defined in `globals.css`. Respects `prefers-reduced-motion`. |
 | **GameTimer** | Progress bar countdown timer | Done | Done | **Wrapper pattern.** Wraps existing `Progress` component. Uses `--primary` (yellow) for normal state, `--destructive` (red) for critical (≤5 seconds). Located at `components/game/game-timer.tsx`. Use with `useGameTimer` hook for countdown logic. |
-| **RoundIndicator** | "Round 1", "Round 2" badge | Not Started | Not Started | Simple text badge |
 | **SpeechInput** | Microphone recording interface | Done | Done | **Presentational component** with optional VoiceWaveform integration. Pass `analyserNode` prop to render waveform above input. Handles record/stop buttons, shows transcript, **includes helper buttons (Sentence/Dictionary/Play)**. Located at `components/ui/speech-input.tsx`. Use with `useVoiceRecorder` hook for voice capture. |
 | **KeyboardInput** | Text input for typing spelling | Not Started | Not Started | May use existing Input component |
 | **GameResultCard** | Final placement display after game | Not Started | Not Started | Shows rank badge, XP earned, stats |
@@ -215,7 +214,7 @@ Without these, the game cannot function:
 
 Needed for a complete single-player experience:
 
-1. RoundIndicator
+1. ~~RoundIndicator~~ ✗ Removed (just inline text, see Architecture Decision #4)
 2. ~~CorrectAnswerFeedback~~ ✓ Done (now `GameFeedbackOverlay`)
 3. ~~WrongAnswerFeedback~~ ✓ Done (now `GameFeedbackOverlay`)
 4. TutorialCard
@@ -335,6 +334,42 @@ const { isRecording, startRecording, stopRecording, analyserNode, transcript } =
 
 **Rule:** UI components in `components/ui/` are presentational. Game components in `components/game/` can be smart.
 
+### 4. When NOT to Create a Component
+
+**Decision:** Don't create components for simple, static text or trivial UI elements.
+
+**Example:** "Round 1" heading on the game screen is just two `<p>` tags — NOT a component.
+
+```tsx
+// GOOD: Inline in game page
+<div className="text-center space-y-2">
+  <h1 className="text-3xl font-bold">Round {currentRound}</h1>
+  <p className="text-sm text-muted-foreground">Spell the word that you hear:</p>
+</div>
+
+// BAD: Over-abstracted component
+<RoundIndicator round={1} />  // Does nothing but wrap two <p> tags
+```
+
+**A component earns its existence when it has:**
+- State or behavior (animations, timers, interactions)
+- Complex logic (conditional rendering, calculations)
+- Reuse in 3+ places
+- Accessibility requirements beyond basic text
+- Domain-specific styling that would be verbose inline
+
+**Signs you're over-abstracting:**
+- Component file is shorter than its import statement
+- Component accepts 1-2 props and just passes them to a single element
+- You can explain what it renders in one short sentence
+- It's only used in one place
+
+**Why this matters:**
+- Fewer files = less cognitive overhead
+- Junior developers can read JSX directly instead of jumping between files
+- Reduces indirection in the codebase
+- Keeps the component inventory focused on meaningful abstractions
+
 ---
 
 ## Design System Notes
@@ -403,6 +438,7 @@ The project uses **OKLCH color space** for perceptually uniform colors. Key toke
 | 2025-12-22 | Integrated VoiceWaveform into SpeechInput. Renamed VoiceInput to SpeechInput in inventory (already existed). Added `analyserNode` prop for optional waveform rendering. Updated useVoiceRecorder status to Done. Updated Architecture Decisions to reflect integration pattern. | Claude |
 | 2025-12-26 | Implemented GameTimer component and useGameTimer hook. Uses wrapper pattern around Progress. Two states: normal (--primary) and critical (--destructive, ≤5 seconds). Added demo to showcase page. | Claude |
 | 2025-12-26 | Implemented GameFeedbackOverlay component, useGameFeedback hook, and useGameSounds hook. Combines CorrectAnswerFeedback and WrongAnswerFeedback into single overlay component. Created public/sounds/ folder for audio files. Added demo to showcase page. | Claude |
+| 2025-12-26 | Removed RoundIndicator from inventory — it's just inline text, not a component. Added Architecture Decision #4: "When NOT to Create a Component" with guidelines on avoiding over-abstraction. | Claude |
 
 ---
 
