@@ -410,6 +410,68 @@ import { HeartsDisplay } from "@/components/game"
 - Respects `prefers-reduced-motion`
 - Shake + fade to 50% opacity (transitions to "lost" state, not hidden)
 
+### GameTimer
+- **Location:** [components/game/game-timer.tsx](components/game/game-timer.tsx)
+- **Hook:** [hooks/use-game-timer.ts](hooks/use-game-timer.ts)
+- **Type:** Presentational wrapper around Progress component
+- **Use case:** Countdown timer for game rounds
+
+#### Design System Integration:
+| Aspect | Implementation |
+|--------|----------------|
+| **Normal color** | `--primary` (yellow/amber) - plenty of time |
+| **Critical color** | `--destructive` (red) - ≤5 seconds |
+| **Height** | 8px (`h-2`) per Figma |
+| **Width** | Full width of parent |
+| **Attributes** | `data-slot="game-timer"`, `data-state="normal\|critical"`, `data-remaining`, `data-total` |
+| **Accessibility** | `role="timer"`, `aria-live="polite"`, `aria-label` |
+
+#### Architecture:
+```
+useGameTimer (hook) - owns countdown logic
+├── totalSeconds → total duration
+├── remainingSeconds → current time left
+├── state → "normal" | "critical"
+├── isRunning, isExpired → timer status
+└── start, pause, reset, restart → controls
+```
+
+GameTimer is **presentational only**. It receives values from `useGameTimer` hook and renders a styled Progress bar. This follows the same pattern as SpeechInput + useVoiceRecorder.
+
+#### Props:
+| Prop | Type | Description |
+|------|------|-------------|
+| `totalSeconds` | `number` | Total time for this round |
+| `remainingSeconds` | `number` | Current time remaining |
+| `criticalThreshold` | `number` | Seconds threshold for red state (default: 5) |
+| `className` | `string` | Additional classes |
+
+#### Usage:
+```tsx
+import { GameTimer } from "@/components/game"
+import { useGameTimer } from "@/hooks/use-game-timer"
+
+function GameScreen() {
+  const timer = useGameTimer(15, {
+    onTimeUp: () => handleWrongAnswer(),
+    autoStart: true,
+  })
+
+  return (
+    <GameTimer
+      totalSeconds={timer.totalSeconds}
+      remainingSeconds={timer.remainingSeconds}
+    />
+  )
+}
+```
+
+#### Visual Behavior:
+- **Normal state:** Yellow/amber progress bar (plenty of time)
+- **Critical state:** Red progress bar (≤5 seconds - creates urgency)
+- **Color transition:** Smooth 300ms transition between states
+- **Progress direction:** Fills from left, decreases toward right as time runs out
+
 ---
 
 ## Navigation Components
@@ -524,6 +586,7 @@ When adding a new shadcn component:
 - **Canvas component:** [components/ui/voice-waveform.tsx](components/ui/voice-waveform.tsx)
 - **Voice input:** [components/ui/speech-input.tsx](components/ui/speech-input.tsx)
 - **Voice recorder hook:** [hooks/use-voice-recorder.ts](hooks/use-voice-recorder.ts)
+- **Game timer hook:** [hooks/use-game-timer.ts](hooks/use-game-timer.ts)
 - **Game components:** [components/game/](components/game/)
 
 ## Design Philosophy

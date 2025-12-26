@@ -65,8 +65,9 @@ import { SpeechInput } from "@/components/ui/speech-input"
 import { VoiceWaveform } from "@/components/ui/voice-waveform"
 import { Navbar } from "@/components/ui/navbar"
 import { TopNavbar } from "@/components/ui/top-navbar"
-import { HeartsDisplay } from "@/components/game"
+import { HeartsDisplay, GameTimer } from "@/components/game"
 import { useVoiceRecorder } from "@/hooks/use-voice-recorder"
+import { useGameTimer } from "@/hooks/use-game-timer"
 import { useState } from "react"
 
 export default function ShowcasePage() {
@@ -591,6 +592,16 @@ export default function ShowcasePage() {
         <HeartsDisplayDemo />
       </section>
 
+      {/* Game Timer Section */}
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold">Game Timer</h2>
+        <p className="text-sm text-muted-foreground">
+          Countdown timer progress bar. Uses <code className="bg-muted px-1 py-0.5 rounded text-xs">--primary</code> (yellow) for normal state,
+          transitions to <code className="bg-muted px-1 py-0.5 rounded text-xs">--destructive</code> (red) when ≤5 seconds remain.
+        </p>
+        <GameTimerDemo />
+      </section>
+
       {/* Tabs Section */}
       <section className="space-y-4">
         <h2 className="text-2xl font-semibold">Tabs</h2>
@@ -1035,6 +1046,141 @@ function TopNavbarDemo() {
           onClose={() => alert("Close clicked")}
           hideSkip
         />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * GameTimer demo with interactive countdown via useGameTimer hook.
+ * Shows normal (primary) and critical (destructive) states.
+ */
+function GameTimerDemo() {
+  const timer = useGameTimer(15, {
+    onTimeUp: () => console.log("Time's up!"),
+  })
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Interactive Demo (with useGameTimer hook)</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Click Start to begin the countdown. The bar turns red when ≤5 seconds remain.
+        </p>
+        <div className="space-y-4">
+          <GameTimer
+            totalSeconds={timer.totalSeconds}
+            remainingSeconds={timer.remainingSeconds}
+          />
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-mono text-muted-foreground w-20">
+              {Math.ceil(timer.remainingSeconds)}s left
+            </span>
+            <span className="text-sm text-muted-foreground">
+              State: <code className="bg-muted px-1 py-0.5 rounded text-xs">{timer.state}</code>
+            </span>
+            <div className="flex gap-2 ml-auto">
+              {timer.isRunning ? (
+                <Button variant="outline" onClick={timer.pause}>
+                  Pause
+                </Button>
+              ) : (
+                <Button onClick={timer.start} disabled={timer.isExpired}>
+                  Start
+                </Button>
+              )}
+              <Button variant="outline" onClick={timer.reset}>
+                Reset
+              </Button>
+              <Button variant="outline" onClick={() => timer.restart(15)}>
+                Restart
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Static States</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Visual preview of normal and critical states at different time values.
+        </p>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-muted-foreground w-32">15s / 15s (100%):</span>
+              <div className="flex-1">
+                <GameTimer totalSeconds={15} remainingSeconds={15} />
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-muted-foreground w-32">10s / 15s (67%):</span>
+              <div className="flex-1">
+                <GameTimer totalSeconds={15} remainingSeconds={10} />
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-muted-foreground w-32">6s / 15s (40%):</span>
+              <div className="flex-1">
+                <GameTimer totalSeconds={15} remainingSeconds={6} />
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-muted-foreground w-32">5s / 15s (critical):</span>
+              <div className="flex-1">
+                <GameTimer totalSeconds={15} remainingSeconds={5} />
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-muted-foreground w-32">2s / 15s (critical):</span>
+              <div className="flex-1">
+                <GameTimer totalSeconds={15} remainingSeconds={2} />
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-muted-foreground w-32">0s / 15s (expired):</span>
+              <div className="flex-1">
+                <GameTimer totalSeconds={15} remainingSeconds={0} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Different Durations (per PRD)</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Timer supports variable durations (10-38 seconds based on word tier).
+        </p>
+        <div className="space-y-2">
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-muted-foreground w-32">Tier 1 (13s):</span>
+            <div className="flex-1">
+              <GameTimer totalSeconds={13} remainingSeconds={8} />
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-muted-foreground w-32">Tier 4 (21s):</span>
+            <div className="flex-1">
+              <GameTimer totalSeconds={21} remainingSeconds={14} />
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-muted-foreground w-32">Tier 7 (38s):</span>
+            <div className="flex-1">
+              <GameTimer totalSeconds={38} remainingSeconds={25} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Accessibility</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          The component includes <code className="bg-muted px-1 py-0.5 rounded text-xs">role=&quot;timer&quot;</code>,
+          <code className="bg-muted px-1 py-0.5 rounded text-xs">aria-live=&quot;polite&quot;</code>, and
+          <code className="bg-muted px-1 py-0.5 rounded text-xs">aria-label</code> for screen reader support.
+        </p>
       </div>
     </div>
   )

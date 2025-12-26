@@ -18,3 +18,6 @@
 
 export { HeartsDisplay } from "./hearts-display"
 export type { HeartsDisplayProps } from "./hearts-display"
+
+export { GameTimer, CRITICAL_THRESHOLD_SECONDS } from "./game-timer"
+export type { GameTimerProps, GameTimerState } from "./game-timer"

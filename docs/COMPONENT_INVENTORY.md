@@ -33,7 +33,7 @@ These components are **blocking for MVP** — the game cannot function without t
 |-----------|-------------|---------------|----------------------|-------|
 | **VoiceWaveform** | Animated audio visualization during recording | Done | Done | **Presentational only.** Canvas-based, uses AnalyserNode, has idle/active states. Located at `components/ui/voice-waveform.tsx`. Does NOT handle audio capture or Whisper — that's `useVoiceRecorder` hook. |
 | **HeartsDisplay** | 3 heart icons showing remaining lives | Done | Done | **Presentational.** Shows remaining hearts with shake+fade animation on loss. Uses `--destructive` color, 20px hearts, 2px gap. Located at `components/game/hearts-display.tsx`. Animation defined in `globals.css`. Respects `prefers-reduced-motion`. |
-| **GameTimer** | Progress bar countdown timer | Not Started | Not Started | **Wrapper pattern.** Wraps existing `Progress` component; adds countdown logic, color states (normal → warning → critical), ARIA labels. See Architecture Decisions below. |
+| **GameTimer** | Progress bar countdown timer | Done | Done | **Wrapper pattern.** Wraps existing `Progress` component. Uses `--primary` (yellow) for normal state, `--destructive` (red) for critical (≤5 seconds). Located at `components/game/game-timer.tsx`. Use with `useGameTimer` hook for countdown logic. |
 | **RoundIndicator** | "Round 1", "Round 2" badge | Not Started | Not Started | Simple text badge |
 | **SpeechInput** | Microphone recording interface | Done | Done | **Presentational component** with optional VoiceWaveform integration. Pass `analyserNode` prop to render waveform above input. Handles record/stop buttons, shows transcript, **includes helper buttons (Sentence/Dictionary/Play)**. Located at `components/ui/speech-input.tsx`. Use with `useVoiceRecorder` hook for voice capture. |
 | **KeyboardInput** | Text input for typing spelling | Not Started | Not Started | May use existing Input component |
@@ -207,7 +207,7 @@ Without these, the game cannot function:
 1. ~~VoiceWaveform~~ ✓ Done
 2. ~~HeartsDisplay~~ ✓ Done
 3. ~~SpeechInput~~ ✓ Done (includes WordHelperButtons + VoiceWaveform integration)
-4. GameTimer
+4. ~~GameTimer~~ ✓ Done
 5. KeyboardInput
 6. GameResultCard
 7. RankBadge
@@ -254,7 +254,7 @@ Hooks that manage state and side effects for components.
 | Hook | Description | Implementation Status | Notes |
 |------|-------------|----------------------|-------|
 | **useVoiceRecorder** | Audio capture, visualization, and speech recognition | Done | Single source of truth for voice input. Returns `isRecording`, `startRecording`, `stopRecording`, `analyserNode`, `transcript`, `isSupported`, `error`. Located at `hooks/use-voice-recorder.ts`. Uses Web Speech API for transcription. |
-| **useGameTimer** | Countdown timer with state management | Not Started | Manages time remaining, warning/critical states. Used by GameTimer component. |
+| **useGameTimer** | Countdown timer with state management | Done | Single source of truth for timer. Returns `totalSeconds`, `remainingSeconds`, `state`, `isRunning`, `isExpired`, `start`, `pause`, `reset`, `restart`. Located at `hooks/use-game-timer.ts`. Supports callbacks for `onTimeUp` and `onTick`. |
 | **useGameState** | WebSocket connection and game state | Not Started | Connects to Durable Object, syncs player state. |
 | **useMatchmaking** | Matchmaking queue state | Not Started | Handles queue join/leave, tier expansion. |
 
@@ -277,14 +277,18 @@ Key patterns and decisions for component implementation.
 - Better testability
 
 ```tsx
-// GOOD: Wrapper pattern
+// GOOD: Wrapper pattern (actual implementation)
 function GameTimer({ totalSeconds, remainingSeconds }: GameTimerProps) {
-  const state = remainingSeconds <= 5 ? "critical" : remainingSeconds <= 10 ? "warning" : "normal"
+  const state = remainingSeconds <= 5 ? "critical" : "normal"
   return <Progress value={(remainingSeconds / totalSeconds) * 100} data-state={state} />
 }
 
+// Usage with hook
+const timer = useGameTimer(15, { onTimeUp: handleTimeout })
+<GameTimer totalSeconds={timer.totalSeconds} remainingSeconds={timer.remainingSeconds} />
+
 // BAD: Bloated generic component
-<Progress value={50} isTimer warningThreshold={10} criticalThreshold={5} />
+<Progress value={50} isTimer criticalThreshold={5} />
 ```
 
 ### 2. Single Hook, Integrated Components
@@ -396,6 +400,7 @@ The project uses **OKLCH color space** for perceptually uniform colors. Key toke
 | 2025-12-21 | Updated Design System Notes to reference OKLCH color system from globals.css, added explicit references to STYLE_GUIDE.md and lib/icons.ts, added border radius scale table. | Claude |
 | 2025-12-22 | Implemented HeartsDisplay component. Added HeartIcon to lib/icons.ts. Added heart-loss animation to globals.css. | Claude |
 | 2025-12-22 | Integrated VoiceWaveform into SpeechInput. Renamed VoiceInput to SpeechInput in inventory (already existed). Added `analyserNode` prop for optional waveform rendering. Updated useVoiceRecorder status to Done. Updated Architecture Decisions to reflect integration pattern. | Claude |
+| 2025-12-26 | Implemented GameTimer component and useGameTimer hook. Uses wrapper pattern around Progress. Two states: normal (--primary) and critical (--destructive, ≤5 seconds). Added demo to showcase page. | Claude |
 
 ---
 
