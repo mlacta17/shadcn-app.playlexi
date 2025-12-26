@@ -208,7 +208,7 @@ Without these, the game cannot function:
 4. ~~GameTimer~~ ✓ Done
 5. KeyboardInput
 6. GameResultCard
-7. RankBadge
+7. ~~RankBadge~~ ✓ Done
 
 ### P1 — Core Experience
 

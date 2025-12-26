@@ -572,6 +572,60 @@ MP3 files in `public/sounds/`:
 
 **Format:** MP3 for universal browser support (including iOS Safari).
 
+### RankBadge
+- **Location:** [components/game/rank-badge.tsx](components/game/rank-badge.tsx)
+- **Type:** Presentational component
+- **Use case:** Display player rank tier badges throughout the app
+
+#### Design System Integration:
+| Aspect | Implementation |
+|--------|----------------|
+| **Rank tiers** | 7 tiers: New Bee → Bumble Bee → Busy Bee → Honey Bee → Worker Bee → Royal Bee → Bee Keeper |
+| **Variants** | 14 total (7 tiers × 2 modes: light/dark) |
+| **Sizes** | sm (32px), md (48px), lg (64px), xl (96px) |
+| **Theme switching** | Auto-switches with theme, or force via `mode` prop |
+| **Assets** | SVG files in `public/badges/` with naming `{rank}-{mode}.svg` |
+| **Attributes** | Uses Next.js `Image` component for optimization |
+
+#### Props:
+| Prop | Type | Description |
+|------|------|-------------|
+| `rank` | `RankTier` | The rank tier to display (`"new-bee"` through `"bee-keeper"`) |
+| `size` | `"sm" \| "md" \| "lg" \| "xl"` | Badge size preset. Default: `"md"` |
+| `mode` | `"light" \| "dark"` | Force specific mode (optional, auto-switches with theme) |
+| `className` | `string` | Additional CSS classes |
+
+#### Usage:
+```tsx
+import { RankBadge } from "@/components/game"
+
+// Basic - auto theme switching
+<RankBadge rank="honey-bee" />
+
+// With size
+<RankBadge rank="royal-bee" size="lg" />
+
+// Force specific mode
+<RankBadge rank="bee-keeper" mode="dark" />
+```
+
+#### Asset Files:
+SVG files in `public/badges/`:
+- `new-bee-light.svg`, `new-bee-dark.svg`
+- `bumble-bee-light.svg`, `bumble-bee-dark.svg`
+- `busy-bee-light.svg`, `busy-bee-dark.svg`
+- `honey-bee-light.svg`, `honey-bee-dark.svg`
+- `worker-bee-light.svg`, `worker-bee-dark.svg`
+- `royal-bee-light.svg`, `royal-bee-dark.svg`
+- `bee-keeper-light.svg`, `bee-keeper-dark.svg`
+
+#### Helper Exports:
+| Export | Type | Description |
+|--------|------|-------------|
+| `RANK_LABELS` | `Record<RankTier, string>` | Human-readable tier names |
+| `BADGE_PATHS` | `Record<RankTier, {light, dark}>` | Asset paths for each tier |
+| `BADGE_SIZES` | `Record<BadgeSize, number>` | Pixel dimensions for each size |
+
 ---
 
 ## Navigation Components

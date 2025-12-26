@@ -2614,12 +2614,15 @@ After Phase 2 is working locally, complete these before Phase 3:
 | Task | Type | Details | Status |
 |------|------|---------|--------|
 | 2.1 | Hook | `useVoiceRecorder` — mic access, AnalyserNode, Whisper transcription | ✅ Done |
-| 2.2 | Hook | `useGameTimer` — countdown with warning/critical states | Not Started |
+| 2.2 | Hook | `useGameTimer` — countdown with warning/critical states | ✅ Done |
+| 2.2b | Hook | `useGameFeedback` — overlay state and timing | ✅ Done |
+| 2.2c | Hook | `useGameSounds` — audio playback for game sounds | ✅ Done |
 | 2.3 | Component | `SpeechInput` — presentational voice input with VoiceWaveform + helper buttons | ✅ Done |
 | 2.4 | Component | `KeyboardInput` — text input alternative | Not Started |
-| 2.5 | Component | `GameTimer` — wrapper around Progress with timer logic | Not Started |
-| 2.6 | Component | `HeartsDisplay` — 3 hearts with loss animation | Not Started |
-| 2.7 | Component | `RoundIndicator` — "Round 1" badge | Not Started |
+| 2.5 | Component | `GameTimer` — wrapper around Progress with timer logic | ✅ Done |
+| 2.6 | Component | `HeartsDisplay` — 3 hearts with loss animation | ✅ Done |
+| 2.6b | Component | `GameFeedbackOverlay` — correct/wrong answer flash overlay | ✅ Done |
+| 2.7 | Component | `RoundIndicator` — "Round 1" badge | ✗ Removed (inline text, not a component) |
 | 2.9 | API | `/api/voice/transcribe` — Whisper via Workers AI | Not Started |
 | 2.10 | API | `/api/games` — create solo game session | Not Started |
 | 2.11 | API | `/api/games/[gameId]/submit` — submit answer, check correctness | Not Started |
@@ -2650,7 +2653,7 @@ After Phase 2 is working locally, complete these before Phase 3:
 |------|------|---------|--------|
 | 3.1 | Component | `TutorialCard` — step card with progress bar | Not Started |
 | 3.2 | Component | `TutorialStep` — individual step content | Not Started |
-| 3.3 | Component | `RankBadge` — tier badge (7 variants) | Not Started |
+| 3.3 | Component | `RankBadge` — tier badge (7 variants × 2 modes) | ✅ Done |
 | 3.4 | Component | `RankReveal` — animation showing earned rank | Not Started |
 | 3.5 | Component | `ProfileCompletionForm` — username, age, avatar | Not Started |
 | 3.6 | Page | `/onboarding/tutorial/page.tsx` — 3-step tutorial | Not Started |
