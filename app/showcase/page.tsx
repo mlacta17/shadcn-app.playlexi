@@ -65,7 +65,7 @@ import { SpeechInput } from "@/components/ui/speech-input"
 import { VoiceWaveform } from "@/components/ui/voice-waveform"
 import { Navbar } from "@/components/ui/navbar"
 import { TopNavbar } from "@/components/ui/top-navbar"
-import { HeartsDisplay, GameTimer, GameFeedbackOverlay } from "@/components/game"
+import { HeartsDisplay, GameTimer, GameFeedbackOverlay, RankBadge, RANK_LABELS, type RankTier } from "@/components/game"
 import { useVoiceRecorder } from "@/hooks/use-voice-recorder"
 import { useGameTimer } from "@/hooks/use-game-timer"
 import { useGameFeedback } from "@/hooks/use-game-feedback"
@@ -602,6 +602,17 @@ export default function ShowcasePage() {
           transitions to <code className="bg-muted px-1 py-0.5 rounded text-xs">--destructive</code> (red) when ≤5 seconds remain.
         </p>
         <GameTimerDemo />
+      </section>
+
+      {/* Rank Badge Section */}
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold">Rank Badge</h2>
+        <p className="text-sm text-muted-foreground">
+          Player rank badges for the PlayLexi progression system. 7 tiers from New Bee to Bee Keeper.
+          <br />
+          <strong>Note:</strong> Add SVG files to <code className="bg-muted px-1 py-0.5 rounded text-xs">public/badges/</code> with naming <code className="bg-muted px-1 py-0.5 rounded text-xs">{"{rank}-{mode}.svg"}</code>.
+        </p>
+        <RankBadgeDemo />
       </section>
 
       {/* Game Feedback Overlay Section */}
@@ -1277,6 +1288,97 @@ function GameFeedbackDemo() {
           The overlay has <code className="bg-muted px-1 py-0.5 rounded text-xs">aria-hidden=&quot;true&quot;</code> as it&apos;s decorative.
           Animation respects <code className="bg-muted px-1 py-0.5 rounded text-xs">prefers-reduced-motion</code>.
         </p>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * RankBadge demo showing all 7 rank tiers and size variants.
+ * Note: SVG files must be added to public/badges/ for images to display.
+ */
+function RankBadgeDemo() {
+  const allRanks: RankTier[] = [
+    "new-bee",
+    "bumble-bee",
+    "busy-bee",
+    "honey-bee",
+    "worker-bee",
+    "royal-bee",
+    "bee-keeper",
+  ]
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">All Rank Tiers</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          7 tiers from New Bee (lowest) to Bee Keeper (highest). Each tier has light and dark mode variants.
+        </p>
+        <div className="flex flex-wrap items-center gap-6">
+          {allRanks.map((rank) => (
+            <div key={rank} className="flex flex-col items-center gap-2">
+              <RankBadge rank={rank} size="md" />
+              <span className="text-xs text-muted-foreground">{RANK_LABELS[rank]}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Size Variants</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Available sizes: sm (32px), md (48px), lg (64px), xl (96px).
+        </p>
+        <div className="flex flex-wrap items-end gap-6">
+          <div className="flex flex-col items-center gap-2">
+            <RankBadge rank="honey-bee" size="sm" />
+            <span className="text-xs text-muted-foreground">sm (32px)</span>
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <RankBadge rank="honey-bee" size="md" />
+            <span className="text-xs text-muted-foreground">md (48px)</span>
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <RankBadge rank="honey-bee" size="lg" />
+            <span className="text-xs text-muted-foreground">lg (64px)</span>
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <RankBadge rank="honey-bee" size="xl" />
+            <span className="text-xs text-muted-foreground">xl (96px)</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Force Light/Dark Mode</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          By default, badges auto-switch with theme. Use <code className="bg-muted px-1 py-0.5 rounded text-xs">mode</code> prop to force a specific variant.
+        </p>
+        <div className="flex flex-wrap items-center gap-6">
+          <div className="flex flex-col items-center gap-2 p-4 bg-white rounded-lg">
+            <RankBadge rank="royal-bee" size="lg" mode="light" />
+            <span className="text-xs text-gray-600">mode=&quot;light&quot;</span>
+          </div>
+          <div className="flex flex-col items-center gap-2 p-4 bg-gray-900 rounded-lg">
+            <RankBadge rank="royal-bee" size="lg" mode="dark" />
+            <span className="text-xs text-gray-400">mode=&quot;dark&quot;</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Required SVG Files</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Add these files to <code className="bg-muted px-1 py-0.5 rounded text-xs">public/badges/</code>:
+        </p>
+        <div className="bg-muted/50 p-4 rounded-lg font-mono text-xs space-y-1">
+          {allRanks.map((rank) => (
+            <p key={rank} className="text-muted-foreground">
+              {rank}-light.svg, {rank}-dark.svg
+            </p>
+          ))}
+        </div>
       </div>
     </div>
   )

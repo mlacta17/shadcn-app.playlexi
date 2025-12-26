@@ -66,7 +66,7 @@ For displaying player progression.
 
 | Component | Description | Design Status | Implementation Status | Notes |
 |-----------|-------------|---------------|----------------------|-------|
-| **RankBadge** | Tier badge (New Bee → Bee Keeper) | Not Started | Not Started | 7 variants; may need SVG/images |
+| **RankBadge** | Tier badge (New Bee → Bee Keeper) | Done | Done | **Presentational.** 7 rank tiers × 2 modes = 14 SVG variants. Auto light/dark theme switching. Size presets: sm/md/lg/xl. Located at `components/game/rank-badge.tsx`. SVG files in `public/badges/` with naming `{rank}-{mode}.svg`. |
 | **RankCard** | Track-specific rank display | Not Started | Not Started | Badge + progress bar + XP to next tier |
 | **XPProgressBar** | Progress to next tier | Not Started | Not Started | May use existing Progress component |
 | **CrownPointsDisplay** | Royal Bee CP counter | Not Started | Not Started | Crown icon + points; only for Royal Bees |
@@ -329,7 +329,7 @@ const { isRecording, startRecording, stopRecording, analyserNode, transcript } =
 
 | Type | Characteristics | Examples |
 |------|-----------------|----------|
-| **Presentational** | No hooks, no side effects, just props → UI | VoiceWaveform, HeartsDisplay, RankBadge |
+| **Presentational** | No hooks, no side effects, just props → UI | VoiceWaveform, HeartsDisplay, RankBadge, GameFeedbackOverlay |
 | **Smart** | Uses hooks, manages state, composes other components | GameScreen, LobbyPlayerList |
 
 **Rule:** UI components in `components/ui/` are presentational. Game components in `components/game/` can be smart.
@@ -439,6 +439,7 @@ The project uses **OKLCH color space** for perceptually uniform colors. Key toke
 | 2025-12-26 | Implemented GameTimer component and useGameTimer hook. Uses wrapper pattern around Progress. Two states: normal (--primary) and critical (--destructive, ≤5 seconds). Added demo to showcase page. | Claude |
 | 2025-12-26 | Implemented GameFeedbackOverlay component, useGameFeedback hook, and useGameSounds hook. Combines CorrectAnswerFeedback and WrongAnswerFeedback into single overlay component. Created public/sounds/ folder for audio files. Added demo to showcase page. | Claude |
 | 2025-12-26 | Removed RoundIndicator from inventory — it's just inline text, not a component. Added Architecture Decision #4: "When NOT to Create a Component" with guidelines on avoiding over-abstraction. | Claude |
+| 2025-12-26 | Created RankBadge component structure with placeholder SVG paths. 7 tiers × 2 modes = 14 variants. Auto theme switching, size presets (sm/md/lg/xl). Expects files in `public/badges/`. | Claude |
 
 ---
 

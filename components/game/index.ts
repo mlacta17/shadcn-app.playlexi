@@ -10,11 +10,12 @@
  *
  * @example
  * ```tsx
- * import { HeartsDisplay, GameTimer, GameFeedbackOverlay } from "@/components/game"
+ * import { HeartsDisplay, GameTimer, GameFeedbackOverlay, RankBadge } from "@/components/game"
  *
  * <HeartsDisplay remaining={2} />
  * <GameTimer totalSeconds={15} remainingSeconds={10} />
  * <GameFeedbackOverlay type="correct" isVisible={true} />
+ * <RankBadge rank="honey-bee" size="md" />
  * ```
  */
 
@@ -26,3 +27,6 @@ export type { GameTimerProps, GameTimerState } from "./game-timer"
 
 export { GameFeedbackOverlay } from "./game-feedback-overlay"
 export type { GameFeedbackOverlayProps, FeedbackOverlayType } from "./game-feedback-overlay"
+
+export { RankBadge, RANK_LABELS, BADGE_PATHS, BADGE_SIZES } from "./rank-badge"
+export type { RankBadgeProps, RankTier, BadgeSize } from "./rank-badge"
