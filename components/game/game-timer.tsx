@@ -112,11 +112,13 @@ function GameTimer({
       <Progress
         value={percentage}
         className={cn(
-          "h-2 transition-colors duration-300",
-          // Override indicator color based on state
-          // Uses CSS custom property approach for cleaner state management
-          "[&>[data-slot=progress-indicator]]:transition-colors",
-          "[&>[data-slot=progress-indicator]]:duration-300",
+          "h-2",
+          // Smooth animation: 1s linear transition matches the 1-second tick interval
+          // This creates fluid movement instead of jumpy steps
+          "[&>[data-slot=progress-indicator]]:transition-[transform,background-color]",
+          "[&>[data-slot=progress-indicator]]:duration-1000",
+          "[&>[data-slot=progress-indicator]]:ease-linear",
+          // Color transition is faster (300ms) for responsive state change feel
           state === "critical"
             ? "[&>[data-slot=progress-indicator]]:bg-destructive"
             : "[&>[data-slot=progress-indicator]]:bg-primary"

@@ -469,8 +469,23 @@ function GameScreen() {
 #### Visual Behavior:
 - **Normal state:** Yellow/amber progress bar (plenty of time)
 - **Critical state:** Red progress bar (≤5 seconds - creates urgency)
-- **Color transition:** Smooth 300ms transition between states
+- **Smooth countdown animation:** 1-second linear CSS transition (`duration-1000 ease-linear`) matches the hook's 1-second tick interval, creating fluid movement instead of jumpy steps
+- **Color transition:** Faster 300ms transition for responsive state change feel when entering critical state
 - **Progress direction:** Fills from left, decreases toward right as time runs out
+
+#### Animation Architecture:
+The smooth animation is implemented **at the GameTimer level** (not in Progress component). This follows the wrapper pattern:
+
+| Layer | Responsibility |
+|-------|----------------|
+| **Progress (generic)** | Base progress bar, no timing assumptions |
+| **GameTimer (wrapper)** | Adds 1s linear transition for countdown-specific behavior |
+
+**Why this separation?**
+- Progress component stays generic (could be used for file uploads, loading states with different timing needs)
+- GameTimer owns the domain-specific knowledge that countdown ticks are 1-second intervals
+- Junior developers can easily find and modify timer animation in one place
+- Other countdown components can make different choices without affecting Progress
 
 ---
 
