@@ -204,9 +204,9 @@ Without these, the game cannot function:
 
 1. ~~VoiceWaveform~~ ✓ Done
 2. ~~HeartsDisplay~~ ✓ Done
-3. ~~SpeechInput~~ ✓ Done (includes WordHelperButtons + VoiceWaveform integration)
+3. ~~SpeechInput~~ ✓ Done (includes WordHelperButtons + VoiceWaveform integration + keyboard mode)
 4. ~~GameTimer~~ ✓ Done
-5. KeyboardInput
+5. ~~KeyboardInput~~ ✓ Done (implemented as `mode="keyboard"` in SpeechInput)
 6. GameResultCard
 7. ~~RankBadge~~ ✓ Done
 
@@ -440,6 +440,7 @@ The project uses **OKLCH color space** for perceptually uniform colors. Key toke
 | 2025-12-26 | Implemented GameFeedbackOverlay component, useGameFeedback hook, and useGameSounds hook. Combines CorrectAnswerFeedback and WrongAnswerFeedback into single overlay component. Created public/sounds/ folder for audio files. Added demo to showcase page. | Claude |
 | 2025-12-26 | Removed RoundIndicator from inventory — it's just inline text, not a component. Added Architecture Decision #4: "When NOT to Create a Component" with guidelines on avoiding over-abstraction. | Claude |
 | 2025-12-26 | Created RankBadge component structure with placeholder SVG paths. 7 tiers × 2 modes = 14 variants. Auto theme switching, size presets (sm/md/lg/xl). Expects files in `public/badges/`. | Claude |
+| 2025-12-30 | Added keyboard mode to SpeechInput. New `mode="keyboard"` prop with "Type to start"/"Enter to stop" buttons. Uses discriminated union types for type-safe mode-specific props. Added InputMode, InputState types and INPUT_MODE_PLACEHOLDERS constant for reusability. Improved accessibility with ARIA live regions. KeyboardInput now marked as Done (implemented within SpeechInput). | Claude |
 
 ---
 

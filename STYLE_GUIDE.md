@@ -285,8 +285,8 @@ When creating canvas-based components, follow this pattern:
 
 ### SpeechInput
 - **Location:** [components/ui/speech-input.tsx](components/ui/speech-input.tsx)
-- **Hook:** [hooks/use-voice-recorder.ts](hooks/use-voice-recorder.ts)
-- **Type:** Presentational voice input component with integrated VoiceWaveform
+- **Hook:** [hooks/use-voice-recorder.ts](hooks/use-voice-recorder.ts) (voice mode)
+- **Type:** Presentational input component with voice and keyboard modes
 
 #### Design System Integration:
 | Aspect | Implementation |
@@ -295,35 +295,57 @@ When creating canvas-based components, follow this pattern:
 | **Main area height** | 138px per Figma |
 | **Waveform gap** | 24px (`gap-6`) per Figma |
 | **Container** | `bg-input/30 outline-input rounded-lg` |
-| **Buttons** | Primary (Record), Destructive (Stop), Outline (helpers) |
-| **Attributes** | `data-slot="speech-input"`, `data-state="default\|recording"`, `data-has-waveform` |
-| **Icons** | MicIcon, StopIcon, PlayIcon, SentenceIcon, DictionaryIcon from lib/icons.ts |
+| **Voice buttons** | Primary (Record), Destructive (Stop), Outline (helpers) |
+| **Keyboard buttons** | Primary (Type to start), Destructive (Enter to stop), Outline (helpers) |
+| **Attributes** | `data-slot="speech-input"`, `data-mode="voice\|keyboard"`, `data-state="default\|recording"`, `data-has-waveform` |
+| **Icons** | MicIcon, KeyboardIcon, StopIcon, PlayIcon, SentenceIcon, DictionaryIcon from lib/icons.ts |
+
+#### Input Modes:
+| Mode | Use Case | Trigger | Stop |
+|------|----------|---------|------|
+| **Voice** | Microphone input | Record button | Stop button |
+| **Keyboard** | Typed spelling | Start typing or click "Type to start" | Press Enter or click "Enter to stop" |
+
+**Important:** Per PRD, input mode is locked per game (no mid-game switching). Voice and Keyboard are separate competitive tracks.
 
 #### Architecture:
 ```
+Voice mode:
 useVoiceRecorder (hook)
 └── SpeechInput (presentational)
     ├── analyserNode → VoiceWaveform (auto-rendered when provided)
     ├── transcript → inputText display
     └── isRecording → state prop
+
+Keyboard mode:
+Parent state management
+└── SpeechInput (presentational)
+    ├── Hidden input captures keystrokes
+    ├── onInputChange → update parent state
+    └── onSubmit → handle Enter key
 ```
 
-VoiceWaveform is now **integrated into SpeechInput**. When you pass `analyserNode`, the waveform renders automatically above the input controls. No manual composition needed.
+VoiceWaveform is **only shown in voice mode**. When you pass `analyserNode` in voice mode, the waveform renders automatically above the input controls.
 
 #### Props:
 | Prop | Type | Description |
 |------|------|-------------|
-| `state` | `"default" \| "recording"` | Current recording state |
-| `analyserNode` | `AnalyserNode \| null` | Audio analyser for waveform visualization |
-| `inputText` | `string` | Current transcribed text |
-| `placeholder` | `string` | Placeholder when no input |
+| `mode` | `"voice" \| "keyboard"` | Input method. Default: `"voice"` |
+| `state` | `"default" \| "recording"` | Current input state (recording/typing) |
+| `analyserNode` | `AnalyserNode \| null` | Audio analyser for waveform (voice mode only) |
+| `inputText` | `string` | Current input text |
+| `placeholder` | `string` | Placeholder text (default: mode-specific) |
 | `definition` | `string` | Dictionary definition to show in footer |
 | `playPressed` | `boolean` | Play button state |
 | `dictionaryPressed` | `boolean` | Dictionary button state |
 | `sentencePressed` | `boolean` | Sentence button state |
-| `onRecordClick`, `onStopClick`, etc. | `() => void` | Callback handlers |
+| `onRecordClick` | `() => void` | Voice mode: Record button clicked |
+| `onStopClick` | `() => void` | Voice mode: Stop button clicked |
+| `onInputChange` | `(value: string) => void` | Keyboard mode: Text changed |
+| `onSubmit` | `() => void` | Keyboard mode: Enter pressed or "Enter to stop" clicked |
+| `onPlayClick`, `onDictionaryClick`, `onSentenceClick` | `() => void` | Helper button callbacks |
 
-#### Usage:
+#### Usage - Voice Mode:
 ```tsx
 import { useVoiceRecorder } from "@/hooks/use-voice-recorder"
 import { SpeechInput } from "@/components/ui/speech-input"
@@ -333,6 +355,7 @@ function VoiceInputScreen() {
 
   return (
     <SpeechInput
+      mode="voice"
       state={isRecording ? "recording" : "default"}
       analyserNode={analyserNode}
       inputText={transcript}
@@ -343,12 +366,49 @@ function VoiceInputScreen() {
 }
 ```
 
+#### Usage - Keyboard Mode:
+```tsx
+import { useState } from "react"
+import { SpeechInput } from "@/components/ui/speech-input"
+
+function KeyboardInputScreen() {
+  const [text, setText] = useState("")
+  const [isTyping, setIsTyping] = useState(false)
+
+  return (
+    <SpeechInput
+      mode="keyboard"
+      state={isTyping ? "recording" : "default"}
+      inputText={text}
+      onInputChange={(value) => {
+        setText(value)
+        if (!isTyping && value) setIsTyping(true)
+      }}
+      onSubmit={() => {
+        // Validate answer
+        console.log("Submitted:", text)
+        setIsTyping(false)
+      }}
+    />
+  )
+}
+```
+
 #### Visual Behavior:
-- **VoiceWaveform:** Renders above input when `analyserNode` provided
-- **Waveform active state:** Only animates when `state="recording"` (prevents stale visualization)
-- **Helper buttons:** Disabled during recording
-- **Footer:** Shows contextual messages based on pressed button
-- **Input text:** Wrapped in quotes, italicized, centered
+- **Voice mode:**
+  - VoiceWaveform renders above input when `analyserNode` provided
+  - Waveform only animates when `state="recording"` (prevents stale visualization)
+  - Record/Stop buttons in center
+  - Placeholder: "no voice input..."
+- **Keyboard mode:**
+  - No VoiceWaveform
+  - Type to start/Enter to stop buttons in center
+  - Hidden input captures keystrokes
+  - Placeholder: "type to start"
+- **Both modes:**
+  - Helper buttons (Sentence, Dictionary, Play) disabled during recording/typing
+  - Footer shows contextual messages based on pressed button
+  - Input text wrapped in quotes, italicized, centered
 
 ## Game Components
 

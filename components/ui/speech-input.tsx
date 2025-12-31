@@ -7,11 +7,36 @@ import {
   PlayIcon,
   SentenceIcon,
   DictionaryIcon,
+  KeyboardIcon,
 } from "@/lib/icons"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { VoiceWaveform } from "@/components/ui/voice-waveform"
+
+// =============================================================================
+// TYPES & CONSTANTS
+// =============================================================================
+
+/**
+ * Input mode for the SpeechInput component.
+ * Per PRD, input mode is locked per game (no mid-game switching).
+ * Voice and Keyboard are separate competitive tracks.
+ */
+export type InputMode = "voice" | "keyboard"
+
+/**
+ * Input state representing whether user is actively inputting.
+ * - "default": Waiting for input
+ * - "recording": Voice recording or keyboard typing in progress
+ */
+export type InputState = "default" | "recording"
+
+/** Default placeholder text for each input mode */
+export const INPUT_MODE_PLACEHOLDERS: Record<InputMode, string> = {
+  voice: "no voice input...",
+  keyboard: "type to start",
+} as const
 
 /**
  * Design System Tokens
@@ -23,41 +48,41 @@ import { VoiceWaveform } from "@/components/ui/voice-waveform"
  *
  * Colors:
  * - Uses semantic color tokens from globals.css
- * - Record button: primary (yellow)
+ * - Record/Type button: primary (yellow)
  * - Stop button: destructive (red)
  * - Helper buttons: outline variant
  *
+ * Input Modes:
+ * - Voice mode: Record/Stop buttons, VoiceWaveform visualization
+ * - Keyboard mode: Type to start/Enter to stop, hidden text input
+ * - Input mode is locked per game (no mid-game switching per PRD)
+ *
  * Integration:
- * - When `analyserNode` is provided, VoiceWaveform renders above the input
+ * - When `analyserNode` is provided (voice mode), VoiceWaveform renders above the input
  * - VoiceWaveform shows active state only when recording
- * - This creates a unified voice input experience
+ * - This creates a unified voice/keyboard input experience
  */
 
-export interface SpeechInputProps extends React.ComponentProps<"div"> {
-  /** Current state of the input - Default or Recording */
-  state?: "default" | "recording"
-  /**
-   * Audio analyser node from useVoiceRecorder hook.
-   * When provided, renders VoiceWaveform above the input controls.
-   * The waveform shows active state when state="recording".
-   */
-  analyserNode?: AnalyserNode | null
+// =============================================================================
+// PROPS INTERFACE
+// =============================================================================
+
+/** Base props shared by both voice and keyboard modes */
+interface SpeechInputBaseProps extends React.ComponentProps<"div"> {
+  /** Current state of the input - Default or Recording/Typing */
+  state?: InputState
+  /** The current input text (voice transcript or typed text) */
+  inputText?: string
+  /** Placeholder text when no input. Defaults to mode-specific placeholder. */
+  placeholder?: string
+  /** Definition text to show in footer when dictionary is pressed */
+  definition?: string
   /** Whether the play button is pressed - shows audio playback message in footer */
   playPressed?: boolean
   /** Whether the dictionary button is pressed - shows definition in footer */
   dictionaryPressed?: boolean
   /** Whether the sentence button is pressed - shows sentence playback message in footer */
   sentencePressed?: boolean
-  /** The current voice input text */
-  inputText?: string
-  /** Placeholder text when no input */
-  placeholder?: string
-  /** Definition text to show in footer when dictionary is pressed */
-  definition?: string
-  /** Callback when record button is clicked */
-  onRecordClick?: () => void
-  /** Callback when stop button is clicked */
-  onStopClick?: () => void
   /** Callback when play button is clicked */
   onPlayClick?: () => void
   /** Callback when dictionary button is clicked */
@@ -66,29 +91,74 @@ export interface SpeechInputProps extends React.ComponentProps<"div"> {
   onSentenceClick?: () => void
 }
 
+/** Props specific to voice mode */
+interface VoiceModeProps extends SpeechInputBaseProps {
+  mode?: "voice"
+  /**
+   * Audio analyser node from useVoiceRecorder hook.
+   * When provided, renders VoiceWaveform above the input controls.
+   * The waveform shows active state when state="recording".
+   */
+  analyserNode?: AnalyserNode | null
+  /** Callback when record button is clicked */
+  onRecordClick?: () => void
+  /** Callback when stop button is clicked */
+  onStopClick?: () => void
+  // Keyboard-specific props should not be used in voice mode
+  onInputChange?: never
+  onSubmit?: never
+}
+
+/** Props specific to keyboard mode */
+interface KeyboardModeProps extends SpeechInputBaseProps {
+  mode: "keyboard"
+  /**
+   * Callback when input text changes.
+   * Called on each keystroke with the current input value.
+   */
+  onInputChange?: (value: string) => void
+  /**
+   * Callback when user submits their answer.
+   * Triggered by pressing Enter or clicking "Enter to stop" button.
+   */
+  onSubmit?: () => void
+  // Voice-specific props should not be used in keyboard mode
+  analyserNode?: never
+  onRecordClick?: never
+  onStopClick?: never
+}
+
 /**
- * Voice input component for the spelling bee game.
+ * Props for SpeechInput component.
+ * Uses discriminated union to ensure type safety for mode-specific props.
+ */
+export type SpeechInputProps = VoiceModeProps | KeyboardModeProps
+
+/**
+ * Input component for the spelling bee game supporting voice and keyboard modes.
  *
  * This is a **presentational component** that displays:
- * - Optional VoiceWaveform visualization (when analyserNode is provided)
- * - Transcript display area
- * - Record/Stop button
+ * - Optional VoiceWaveform visualization (voice mode only, when analyserNode is provided)
+ * - Input text display area
+ * - Record/Stop button (voice) or Type/Enter button (keyboard)
  * - Helper buttons (Sentence, Dictionary, Play)
  * - Contextual footer messages
  *
  * ## Architecture
- * The component is intentionally "dumb" — it doesn't manage audio state.
- * Audio capture and speech recognition are handled by `useVoiceRecorder` hook.
+ * The component is intentionally "dumb" — it doesn't manage audio or input state.
+ * Audio capture is handled by `useVoiceRecorder` hook. Keyboard input state
+ * is managed by the parent component.
  * This separation allows:
  * - Easy testing (just pass props)
- * - Flexibility in how audio is managed
+ * - Flexibility in how input is managed
  * - Clear separation of concerns
  *
- * ## Usage with useVoiceRecorder
+ * ## Usage with Voice Mode (useVoiceRecorder)
  * ```tsx
  * const { isRecording, startRecording, stopRecording, analyserNode, transcript } = useVoiceRecorder()
  *
  * <SpeechInput
+ *   mode="voice"
  *   state={isRecording ? "recording" : "default"}
  *   analyserNode={analyserNode}
  *   inputText={transcript}
@@ -96,33 +166,101 @@ export interface SpeechInputProps extends React.ComponentProps<"div"> {
  *   onStopClick={stopRecording}
  * />
  * ```
+ *
+ * ## Usage with Keyboard Mode
+ * ```tsx
+ * const [text, setText] = useState("")
+ * const [isTyping, setIsTyping] = useState(false)
+ *
+ * <SpeechInput
+ *   mode="keyboard"
+ *   state={isTyping ? "recording" : "default"}
+ *   inputText={text}
+ *   onInputChange={(value) => {
+ *     setText(value)
+ *     if (!isTyping && value) setIsTyping(true)
+ *   }}
+ *   onSubmit={() => {
+ *     // Handle submission
+ *     setIsTyping(false)
+ *   }}
+ * />
+ * ```
  */
-function SpeechInput({
-  state = "default",
-  analyserNode,
-  playPressed = false,
-  dictionaryPressed = false,
-  sentencePressed = false,
-  inputText,
-  placeholder = "no voice input...",
-  definition,
-  onRecordClick,
-  onStopClick,
-  onPlayClick,
-  onDictionaryClick,
-  onSentenceClick,
-  className,
-  ...props
-}: SpeechInputProps) {
+function SpeechInput(props: SpeechInputProps) {
+  // Destructure with type narrowing for mode-specific props
+  const {
+    mode = "voice",
+    state = "default",
+    inputText,
+    placeholder,
+    definition,
+    playPressed = false,
+    dictionaryPressed = false,
+    sentencePressed = false,
+    onPlayClick,
+    onDictionaryClick,
+    onSentenceClick,
+    className,
+    ...restProps
+  } = props
+
+  // Type-safe access to mode-specific props
+  const analyserNode = mode === "voice" ? (props as VoiceModeProps).analyserNode : undefined
+  const onRecordClick = mode === "voice" ? (props as VoiceModeProps).onRecordClick : undefined
+  const onStopClick = mode === "voice" ? (props as VoiceModeProps).onStopClick : undefined
+  const onInputChange = mode === "keyboard" ? (props as KeyboardModeProps).onInputChange : undefined
+  const onSubmit = mode === "keyboard" ? (props as KeyboardModeProps).onSubmit : undefined
+
+  // Refs
+  const inputRef = React.useRef<HTMLInputElement>(null)
+
+  // Derived state
   const isRecording = state === "recording"
   const hasInput = Boolean(inputText)
+  const isKeyboardMode = mode === "keyboard"
 
-  // Only show active waveform when actually recording
+  // Default placeholder based on mode (using exported constant)
+  const displayPlaceholder = placeholder ?? INPUT_MODE_PLACEHOLDERS[mode]
+
+  // Only show active waveform when actually recording in voice mode
   // This prevents showing stale visualization when analyserNode is cached
   const activeAnalyserNode = isRecording ? analyserNode : null
 
-  // Determine footer text based on which button is pressed
-  const getFooterText = () => {
+  // ---------------------------------------------------------------------------
+  // Event Handlers
+  // ---------------------------------------------------------------------------
+
+  /** Focus the hidden input when "Type to start" is clicked */
+  const handleTypeClick = React.useCallback(() => {
+    inputRef.current?.focus()
+  }, [])
+
+  /** Handle keyboard input changes */
+  const handleInputChange = React.useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onInputChange?.(e.target.value)
+    },
+    [onInputChange]
+  )
+
+  /** Handle Enter key for submission */
+  const handleKeyDown = React.useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter") {
+        e.preventDefault()
+        onSubmit?.()
+      }
+    },
+    [onSubmit]
+  )
+
+  // ---------------------------------------------------------------------------
+  // Footer Text Logic
+  // ---------------------------------------------------------------------------
+
+  /** Determine footer text based on which helper button is pressed */
+  const getFooterText = (): string | null => {
     if (playPressed) {
       return "Word is being spoken. Make sure your volume is on."
     }
@@ -137,21 +275,31 @@ function SpeechInput({
 
   const footerText = getFooterText()
 
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
+
+  // Generate unique ID for accessibility associations
+  const inputId = React.useId()
+  const statusId = `${inputId}-status`
+
   return (
     <div
       data-slot="speech-input"
+      data-mode={mode}
       data-state={state}
-      data-has-waveform={analyserNode ? "true" : "false"}
+      data-has-waveform={!isKeyboardMode && analyserNode ? "true" : "false"}
       className={cn(
         "flex w-full max-w-[525px] flex-col items-center",
         // Gap between waveform and input area (24px per Figma)
         "gap-6",
         className
       )}
-      {...props}
+      // Filter out mode-specific props that shouldn't be spread to DOM
+      {...restProps}
     >
-      {/* Voice Waveform - only renders when analyserNode is provided */}
-      {analyserNode !== undefined && (
+      {/* Voice Waveform - only renders in voice mode when analyserNode is provided */}
+      {!isKeyboardMode && analyserNode !== undefined && (
         <VoiceWaveform
           analyserNode={activeAnalyserNode}
           className="shrink-0"
@@ -165,14 +313,37 @@ function SpeechInput({
       >
         {/* Main content area */}
         <div className="bg-background border-input flex h-[138px] w-full flex-col gap-2.5 rounded-lg border p-3">
-        {/* Voice input display */}
+        {/* Hidden input for keyboard mode - captures keystrokes */}
+        {isKeyboardMode && (
+          <input
+            ref={inputRef}
+            id={inputId}
+            type="text"
+            value={inputText ?? ""}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            className="sr-only"
+            aria-label="Type your spelling"
+            aria-describedby={footerText ? statusId : undefined}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+          />
+        )}
+
+        {/* Input text display - serves as live region for screen readers */}
         <p
+          id={statusId}
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
           className={cn(
             "w-full grow overflow-hidden text-ellipsis text-nowrap text-center text-xl leading-7 italic",
             hasInput ? "text-foreground" : "text-muted-foreground"
           )}
         >
-          {hasInput ? `"${inputText}"` : `"${placeholder}"`}
+          {hasInput ? `"${inputText}"` : `"${displayPlaceholder}"`}
         </p>
 
         {/* Controls row */}
@@ -199,17 +370,33 @@ function SpeechInput({
             </Button>
           </div>
 
-          {/* Center button - Record/Stop */}
-          {isRecording ? (
-            <Button variant="destructive" size="sm" onClick={onStopClick}>
-              <StopIcon data-icon="inline-start" />
-              Stop
-            </Button>
+          {/* Center button - Voice: Record/Stop, Keyboard: Type/Enter */}
+          {isKeyboardMode ? (
+            // Keyboard mode buttons
+            isRecording ? (
+              <Button variant="destructive" size="sm" onClick={onSubmit}>
+                <StopIcon data-icon="inline-start" />
+                Enter to stop
+              </Button>
+            ) : (
+              <Button variant="default" size="sm" onClick={handleTypeClick}>
+                <KeyboardIcon data-icon="inline-start" />
+                Type to start
+              </Button>
+            )
           ) : (
-            <Button variant="default" size="sm" onClick={onRecordClick}>
-              <MicIcon data-icon="inline-start" />
-              Record
-            </Button>
+            // Voice mode buttons
+            isRecording ? (
+              <Button variant="destructive" size="sm" onClick={onStopClick}>
+                <StopIcon data-icon="inline-start" />
+                Stop
+              </Button>
+            ) : (
+              <Button variant="default" size="sm" onClick={onRecordClick}>
+                <MicIcon data-icon="inline-start" />
+                Record
+              </Button>
+            )
           )}
 
           {/* Right button - Play (disabled while recording) */}

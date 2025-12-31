@@ -737,7 +737,8 @@ export default function ShowcasePage() {
       <section className="space-y-4">
         <h2 className="text-2xl font-semibold">Speech Input</h2>
         <p className="text-sm text-muted-foreground">
-          Voice input component for spelling bee / word practice. Click buttons to see different states.
+          Input component for spelling bee / word practice. Supports both voice and keyboard modes.
+          Per PRD, input mode is locked per game (no mid-game switching).
         </p>
         <SpeechInputDemo />
       </section>
@@ -895,15 +896,36 @@ function SpeechInputDemo() {
   const [dictionaryPressed, setDictionaryPressed] = useState(false)
   const [sentencePressed, setSentencePressed] = useState(false)
 
+  // Keyboard mode state
+  const [keyboardText, setKeyboardText] = useState("")
+  const [isTyping, setIsTyping] = useState(false)
+  const [keyboardPlayPressed, setKeyboardPlayPressed] = useState(false)
+  const [keyboardDictionaryPressed, setKeyboardDictionaryPressed] = useState(false)
+  const [keyboardSentencePressed, setKeyboardSentencePressed] = useState(false)
+
+  const handleKeyboardInputChange = (value: string) => {
+    setKeyboardText(value)
+    if (!isTyping && value) {
+      setIsTyping(true)
+    }
+  }
+
+  const handleKeyboardSubmit = () => {
+    console.log("Submitted:", keyboardText)
+    setIsTyping(false)
+    // In a real game, you'd validate the answer here
+  }
+
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Interactive Demo (with VoiceWaveform)</h3>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Voice Mode - Interactive Demo (with VoiceWaveform)</h3>
         <p className="text-sm text-muted-foreground mb-3">
           Pass <code className="bg-muted px-1 py-0.5 rounded text-xs">analyserNode</code> prop
           to render VoiceWaveform above the input. Click Record to capture microphone input.
         </p>
         <SpeechInput
+          mode="voice"
           state={isRecording ? "recording" : "default"}
           analyserNode={analyserNode}
           playPressed={playPressed}
@@ -928,13 +950,48 @@ function SpeechInputDemo() {
       </div>
 
       <div>
-        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Default State (No Input)</h3>
-        <SpeechInput />
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Keyboard Mode - Interactive Demo</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Click &quot;Type to start&quot; to focus the hidden input, then type your answer.
+          Press Enter or click &quot;Enter to stop&quot; to submit. No VoiceWaveform in keyboard mode.
+        </p>
+        <SpeechInput
+          mode="keyboard"
+          state={isTyping ? "recording" : "default"}
+          inputText={keyboardText}
+          playPressed={keyboardPlayPressed}
+          dictionaryPressed={keyboardDictionaryPressed}
+          sentencePressed={keyboardSentencePressed}
+          onInputChange={handleKeyboardInputChange}
+          onSubmit={handleKeyboardSubmit}
+          onPlayClick={() => setKeyboardPlayPressed(!keyboardPlayPressed)}
+          onDictionaryClick={() => {
+            setKeyboardDictionaryPressed(!keyboardDictionaryPressed)
+            setKeyboardPlayPressed(false)
+            setKeyboardSentencePressed(false)
+          }}
+          onSentenceClick={() => {
+            setKeyboardSentencePressed(!keyboardSentencePressed)
+            setKeyboardPlayPressed(false)
+            setKeyboardDictionaryPressed(false)
+          }}
+          definition="Definition: a male child or young man"
+        />
       </div>
 
       <div>
-        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Recording State</h3>
-        <SpeechInput state="recording" />
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Voice Mode - Default State (No Input)</h3>
+        <SpeechInput mode="voice" />
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Keyboard Mode - Default State</h3>
+        <SpeechInput mode="keyboard" />
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Keyboard Mode - Typing State</h3>
+        <SpeechInput mode="keyboard" state="recording" inputText="eleph" />
       </div>
 
       <div>
