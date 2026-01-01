@@ -188,8 +188,9 @@ export type SpeechInputProps = VoiceModeProps | KeyboardModeProps
  * ```
  */
 function SpeechInput(props: SpeechInputProps) {
-  // Destructure with type narrowing for mode-specific props
+  // Destructure all component-specific props to prevent them from spreading to DOM
   const {
+    // Shared props
     mode = "voice",
     state = "default",
     inputText,
@@ -202,15 +203,30 @@ function SpeechInput(props: SpeechInputProps) {
     onDictionaryClick,
     onSentenceClick,
     className,
-    ...restProps
-  } = props
+    // Voice mode props (extract to prevent DOM spread)
+    analyserNode: _analyserNode,
+    onRecordClick: _onRecordClick,
+    onStopClick: _onStopClick,
+    // Keyboard mode props (extract to prevent DOM spread)
+    onInputChange: _onInputChange,
+    onSubmit: _onSubmit,
+    // Remaining DOM-safe props
+    ...domProps
+  } = props as SpeechInputProps & {
+    // Type assertion needed because discriminated union makes these mutually exclusive
+    analyserNode?: AnalyserNode | null
+    onRecordClick?: () => void
+    onStopClick?: () => void
+    onInputChange?: (value: string) => void
+    onSubmit?: () => void
+  }
 
   // Type-safe access to mode-specific props
-  const analyserNode = mode === "voice" ? (props as VoiceModeProps).analyserNode : undefined
-  const onRecordClick = mode === "voice" ? (props as VoiceModeProps).onRecordClick : undefined
-  const onStopClick = mode === "voice" ? (props as VoiceModeProps).onStopClick : undefined
-  const onInputChange = mode === "keyboard" ? (props as KeyboardModeProps).onInputChange : undefined
-  const onSubmit = mode === "keyboard" ? (props as KeyboardModeProps).onSubmit : undefined
+  const analyserNode = mode === "voice" ? _analyserNode : undefined
+  const onRecordClick = mode === "voice" ? _onRecordClick : undefined
+  const onStopClick = mode === "voice" ? _onStopClick : undefined
+  const onInputChange = mode === "keyboard" ? _onInputChange : undefined
+  const onSubmit = mode === "keyboard" ? _onSubmit : undefined
 
   // Refs
   const inputRef = React.useRef<HTMLInputElement>(null)
@@ -231,7 +247,7 @@ function SpeechInput(props: SpeechInputProps) {
   // Event Handlers
   // ---------------------------------------------------------------------------
 
-  /** Focus the hidden input when "Type to start" is clicked */
+  /** Focus the input when "Type to start" is clicked */
   const handleTypeClick = React.useCallback(() => {
     inputRef.current?.focus()
   }, [])
@@ -254,6 +270,24 @@ function SpeechInput(props: SpeechInputProps) {
     },
     [onSubmit]
   )
+
+  // ---------------------------------------------------------------------------
+  // Effects
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Auto-focus the input when keyboard mode becomes active.
+   * This provides immediate typing capability without requiring a click.
+   */
+  React.useEffect(() => {
+    if (isKeyboardMode && !isRecording) {
+      // Small delay to ensure DOM is ready
+      const timer = setTimeout(() => {
+        inputRef.current?.focus()
+      }, 0)
+      return () => clearTimeout(timer)
+    }
+  }, [isKeyboardMode, isRecording])
 
   // ---------------------------------------------------------------------------
   // Footer Text Logic
@@ -295,8 +329,7 @@ function SpeechInput(props: SpeechInputProps) {
         "gap-6",
         className
       )}
-      // Filter out mode-specific props that shouldn't be spread to DOM
-      {...restProps}
+      {...domProps}
     >
       {/* Voice Waveform - only renders in voice mode when analyserNode is provided */}
       {!isKeyboardMode && analyserNode !== undefined && (
