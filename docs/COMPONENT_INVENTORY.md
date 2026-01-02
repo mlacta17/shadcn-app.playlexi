@@ -133,8 +133,6 @@ For new user flow.
 |-----------|-------------|---------------|----------------------|-------|
 | **TutorialCard** | Step card with illustration | Not Started | Not Started | Progress bar, skip link |
 | **TutorialStep** | Individual step content | Not Started | Not Started | Title, description, illustration |
-| **PlacementGameIntro** | Intro screen before placement | Not Started | Not Started | Explains what will happen |
-| **RankReveal** | Animation showing earned rank | Not Started | Not Started | Badge reveal after placement |
 | **ProfileCompletionForm** | Username, age, avatar form | Not Started | Not Started | Validation, unique username check |
 
 ---
@@ -218,8 +216,8 @@ Needed for a complete single-player experience:
 2. ~~CorrectAnswerFeedback~~ ✓ Done (now `GameFeedbackOverlay`)
 3. ~~WrongAnswerFeedback~~ ✓ Done (now `GameFeedbackOverlay`)
 4. TutorialCard
-5. PlacementGameIntro
-6. RankReveal
+5. ~~PlacementGameIntro~~ ✗ Removed (tutorial step 3 explains placement, no separate intro needed per PRD)
+6. ~~RankReveal~~ ✗ Removed (it's a page, not a component — see `/onboarding/rank-result/page.tsx`)
 7. ProfileCompletionForm
 
 ### P2 — Multiplayer
@@ -441,6 +439,8 @@ The project uses **OKLCH color space** for perceptually uniform colors. Key toke
 | 2025-12-26 | Removed RoundIndicator from inventory — it's just inline text, not a component. Added Architecture Decision #4: "When NOT to Create a Component" with guidelines on avoiding over-abstraction. | Claude |
 | 2025-12-26 | Created RankBadge component structure with placeholder SVG paths. 7 tiers × 2 modes = 14 variants. Auto theme switching, size presets (sm/md/lg/xl). Expects files in `public/badges/`. | Claude |
 | 2025-12-30 | Added keyboard mode to SpeechInput. New `mode="keyboard"` prop with "Type to start"/"Enter to stop" buttons. Uses discriminated union types for type-safe mode-specific props. Added InputMode, InputState types and INPUT_MODE_PLACEHOLDERS constant for reusability. Improved accessibility with ARIA live regions. KeyboardInput now marked as Done (implemented within SpeechInput). | Claude |
+| 2026-01-02 | Removed PlacementGameIntro from inventory — tutorial step 3 already explains placement, no separate intro screen per PRD. | Claude |
+| 2026-01-02 | Removed RankReveal from component inventory — it's a full-screen page, not a reusable component. Only used once for initial placement flow. Implemented as `/onboarding/rank-result/page.tsx` instead. Follows Architecture Decision #4 (avoid over-abstraction for single-use UI). Figma: node `2610:6076`. | Claude |
 
 ---
 
