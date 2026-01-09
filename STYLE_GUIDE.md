@@ -772,6 +772,50 @@ import { TopNavbar } from "@/components/ui/top-navbar"
 - Container: `bg-background border-b shadow-sm h-16 px-6`
 - Data attribute: `data-slot="top-navbar"`
 
+---
+
+### HexPattern
+- **Location:** [components/ui/hex-pattern.tsx](components/ui/hex-pattern.tsx)
+- **Type:** Decorative background pattern
+- **Use case:** Subtle hexagonal backgrounds for pages and sections
+- **Figma source:** Node `2641:7585`
+
+#### Props:
+| Prop | Type | Description |
+|------|------|-------------|
+| `className` | `string` | Additional classes for positioning/styling |
+
+#### Usage:
+```tsx
+import { HexPattern } from "@/components/ui/hex-pattern"
+
+// Full-page background
+<div className="relative min-h-screen">
+  <HexPattern className="absolute inset-0 -z-10" />
+  <main className="relative">Content</main>
+</div>
+
+// Section background with custom opacity
+<section className="relative overflow-hidden">
+  <HexPattern className="absolute inset-0 -z-10 opacity-30" />
+  <div className="relative">Section content</div>
+</section>
+```
+
+#### Architecture Note:
+This is a component (not a static SVG in `public/`) because we anticipate future dynamic theming needs. The component includes commented code for future enhancements:
+- Dynamic color via props or CSS variables
+- Theme-aware light/dark variants
+- Configurable density/scale
+- Animation support
+
+#### Design System Compliance:
+- Uses `#737373` at 5% opacity (matches Figma design)
+- Includes `aria-hidden="true"` for accessibility
+- Applies `pointer-events-none` to prevent interaction blocking
+
+---
+
 ## Component Checklist
 
 When adding a new shadcn component:
@@ -805,6 +849,7 @@ When adding a new shadcn component:
 - **Game sounds hook:** [hooks/use-game-sounds.ts](hooks/use-game-sounds.ts)
 - **Game components:** [components/game/](components/game/)
 - **Sound files:** [public/sounds/](public/sounds/) (add correct.mp3, wrong.mp3)
+- **Background patterns:** [components/ui/hex-pattern.tsx](components/ui/hex-pattern.tsx)
 
 ## Design Philosophy
 

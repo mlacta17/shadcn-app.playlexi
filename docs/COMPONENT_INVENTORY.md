@@ -145,6 +145,8 @@ Structural components.
 |-----------|-------------|---------------|----------------------|-------|
 | **Navbar** | Main navigation bar | Done | Done | Already exists |
 | **MobileNav** | Mobile navigation menu | Done | Done | Already exists |
+| **TopNavbar** | Minimal header for wizard flows | Done | Done | Close button + optional skip link. Located at `components/ui/top-navbar.tsx`. |
+| **HexPattern** | Decorative hexagonal background | Done | Done | **Presentational.** SVG pattern for page/section backgrounds. Static now, structured for future dynamic theming. Located at `components/ui/hex-pattern.tsx`. Figma: node `2641:7585`. |
 | **NotificationBell** | Bell icon with badge count | Not Started | Not Started | Dropdown with notification list |
 | **NotificationItem** | Individual notification | Not Started | Not Started | Icon, title, timestamp, read state |
 | **SettingsButton** | Floating settings button in game | Not Started | Not Started | Bottom-right corner |
@@ -441,6 +443,7 @@ The project uses **OKLCH color space** for perceptually uniform colors. Key toke
 | 2025-12-30 | Added keyboard mode to SpeechInput. New `mode="keyboard"` prop with "Type to start"/"Enter to stop" buttons. Uses discriminated union types for type-safe mode-specific props. Added InputMode, InputState types and INPUT_MODE_PLACEHOLDERS constant for reusability. Improved accessibility with ARIA live regions. KeyboardInput now marked as Done (implemented within SpeechInput). | Claude |
 | 2026-01-02 | Removed PlacementGameIntro from inventory — tutorial step 3 already explains placement, no separate intro screen per PRD. | Claude |
 | 2026-01-02 | Removed RankReveal from component inventory — it's a full-screen page, not a reusable component. Only used once for initial placement flow. Implemented as `/onboarding/rank-result/page.tsx` instead. Follows Architecture Decision #4 (avoid over-abstraction for single-use UI). Figma: node `2610:6076`. | Claude |
+| 2026-01-08 | Added HexPattern component for decorative hexagonal backgrounds. Created as component (not static SVG) for future dynamic theming. Includes commented code for future color/scale/opacity props. Added TopNavbar to inventory (was missing). Updated STYLE_GUIDE.md with HexPattern documentation. Figma: node `2641:7585`. | Claude |
 
 ---
 
