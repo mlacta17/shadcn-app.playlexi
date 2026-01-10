@@ -903,10 +903,18 @@ function getRankVariant(rank: number): "gold" | "silver" | "bronze" | "secondary
 ```
 
 #### Placement Colors (globals.css):
+Colors match Figma design using Tailwind equivalents. Foreground uses `--primary-foreground` for consistency with primary button text.
+
 ```css
---placement-gold: oklch(0.75 0.15 85);       /* 1st place */
---placement-silver: oklch(0.65 0.01 265);    /* 2nd place */
---placement-bronze: oklch(0.55 0.1 55);      /* 3rd place */
+/* Background colors (Tailwind equivalents) */
+--placement-gold: oklch(0.852 0.199 91.936);    /* yellow-400 (#facc15) - 1st place */
+--placement-silver: oklch(0.901 0.058 230.902); /* sky-200 (#bae6fd) - 2nd place */
+--placement-bronze: oklch(0.666 0.179 58.318);  /* amber-600 (#d97706) - 3rd place */
+
+/* Foreground colors (text) */
+--placement-gold-foreground: var(--primary-foreground);
+--placement-silver-foreground: var(--primary-foreground);
+--placement-bronze-foreground: var(--primary-foreground);
 ```
 
 #### Usage:

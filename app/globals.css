@@ -174,15 +174,18 @@
   /* ===== PLACEMENT BADGE COLORS ===== */
   /*
    * Used by: LeaderboardTable rank badges for top 3 positions
-   * Traditional gold/silver/bronze colors for 1st/2nd/3rd place
-   * Foreground uses --foreground for consistency with design system
+   * Colors match Figma design specifications using Tailwind color equivalents:
+   * - Gold: Tailwind yellow-400 (#facc15)
+   * - Silver: Tailwind sky-200 (#bae6fd)
+   * - Bronze: Tailwind amber-600 (#d97706)
+   * Foreground uses --primary-foreground for consistency with primary button text
    */
-  --placement-gold: oklch(0.75 0.15 85);          /* Gold - 1st place badge */
-  --placement-gold-foreground: var(--foreground); /* Uses standard text color */
-  --placement-silver: oklch(0.65 0.01 265);       /* Silver - 2nd place badge */
-  --placement-silver-foreground: var(--foreground); /* Uses standard text color */
-  --placement-bronze: oklch(0.55 0.1 55);         /* Bronze - 3rd place badge */
-  --placement-bronze-foreground: var(--foreground); /* Uses standard text color */
+  --placement-gold: oklch(0.852 0.199 91.936);    /* Tailwind yellow-400 - 1st place */
+  --placement-gold-foreground: var(--primary-foreground);
+  --placement-silver: oklch(0.901 0.058 230.902); /* Tailwind sky-200 - 2nd place */
+  --placement-silver-foreground: var(--primary-foreground);
+  --placement-bronze: oklch(0.666 0.179 58.318);  /* Tailwind amber-600 - 3rd place */
+  --placement-bronze-foreground: var(--primary-foreground);
 }
 
 /*
@@ -237,13 +240,13 @@
   --ring: oklch(0.556 0 0);                    /* UNUSED - kept for shadcn compatibility */
 
   /* ===== PLACEMENT BADGE COLORS ===== */
-  /* Same as light mode - placement badges are recognizable colors */
-  --placement-gold: oklch(0.75 0.15 85);
-  --placement-gold-foreground: var(--foreground);
-  --placement-silver: oklch(0.65 0.01 265);
-  --placement-silver-foreground: var(--foreground);
-  --placement-bronze: oklch(0.55 0.1 55);
-  --placement-bronze-foreground: var(--foreground);
+  /* Same as light mode - Tailwind colors work well on dark backgrounds */
+  --placement-gold: oklch(0.852 0.199 91.936);    /* Tailwind yellow-400 */
+  --placement-gold-foreground: var(--primary-foreground);
+  --placement-silver: oklch(0.901 0.058 230.902); /* Tailwind sky-200 */
+  --placement-silver-foreground: var(--primary-foreground);
+  --placement-bronze: oklch(0.666 0.179 58.318);  /* Tailwind amber-600 */
+  --placement-bronze-foreground: var(--primary-foreground);
 
   /* ===== CHART COLORS ===== */
   /* Same as light mode - chart colors work in both themes */
