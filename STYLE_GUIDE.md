@@ -108,8 +108,27 @@ These are built into the codebase and apply automatically to all components:
   - `bg-destructive` / `text-destructive-foreground`
   - `bg-muted` / `text-muted-foreground`
   - `bg-accent` / `text-accent-foreground`
+  - `text-success` / `bg-success-muted` - positive indicators, correct feedback
 - **Hover states:** `--primary-hover`, `--secondary-hover`, `--destructive-hover`
 - **Action:** Use semantic tokens instead of arbitrary colors
+
+#### Success Colors
+Used for positive states like correct answers, score increases, and success feedback.
+
+| Token | Light Mode | Dark Mode | Usage |
+|-------|------------|-----------|-------|
+| `--success` | emerald-600 | emerald-400 | Positive text (e.g., "+2" delta) |
+| `--success-muted` | green-500/20 | green-400/20 | Overlay backgrounds (e.g., correct answer flash) |
+
+```tsx
+// Positive delta indicator
+<span className={delta > 0 ? "text-success" : "text-destructive"}>
+  {delta > 0 ? "+" : ""}{delta}
+</span>
+
+// Success overlay
+<div className="bg-success-muted" />
+```
 
 ### 8. Button Hover States
 - **Pattern:** Darker shades on hover (not lighter)

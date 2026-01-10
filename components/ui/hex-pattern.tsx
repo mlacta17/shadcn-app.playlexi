@@ -48,48 +48,18 @@ export interface HexPatternProps {
  * Renders a repeating hexagonal SVG pattern.
  *
  * The pattern uses a single hexagon shape repeated via SVG `<pattern>`.
- * Color is currently hardcoded but structured for future dynamic theming.
+ * Color uses `currentColor` with `text-muted-foreground` for theme awareness.
  */
 function HexPattern({ className }: HexPatternProps) {
-  // ---------------------------------------------------------------------------
-  // FUTURE: Dynamic Color Support
-  // ---------------------------------------------------------------------------
-  // When we need dynamic theming, uncomment and use these props:
-  //
-  // interface HexPatternProps {
-  //   className?: string
-  //   /** Pattern color. Defaults to muted foreground. */
-  //   color?: string
-  //   /** Opacity of the pattern. Default: 0.05 */
-  //   opacity?: number
-  //   /** Scale of hexagons. Default: 1 */
-  //   scale?: number
-  // }
-  //
-  // function HexPattern({
-  //   className,
-  //   color = "currentColor",
-  //   opacity = 0.05,
-  //   scale = 1,
-  // }: HexPatternProps) {
-  //   const hexSize = 60 * scale
-  //   const patternHeight = hexSize * 1.732 // sqrt(3) for hex geometry
-  //
-  //   return (
-  //     <svg className={cn("pointer-events-none", className)} ...>
-  //       <pattern ... width={hexSize * 1.5} height={patternHeight}>
-  //         <path fill={color} fillOpacity={opacity} d="..." />
-  //       </pattern>
-  //       ...
-  //     </svg>
-  //   )
-  // }
-  // ---------------------------------------------------------------------------
-
+  // Uses currentColor so the pattern inherits from text-muted-foreground
+  // This follows the semantic color pattern - no hardcoded hex values
   return (
     <svg
       data-slot="hex-pattern"
-      className={cn("pointer-events-none", className)}
+      className={cn(
+        "pointer-events-none text-muted-foreground",
+        className
+      )}
       aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
       width="100%"
@@ -100,6 +70,7 @@ function HexPattern({ className }: HexPatternProps) {
         {/*
           Hexagon pattern definition.
           Each hexagon is ~60px wide, arranged in a honeycomb layout.
+          Uses currentColor for theme-aware coloring.
 
           Pattern math:
           - Hexagon width: 60px
@@ -115,17 +86,17 @@ function HexPattern({ className }: HexPatternProps) {
           height="104"
           patternUnits="userSpaceOnUse"
         >
-          {/* First hexagon */}
+          {/* First hexagon - uses currentColor for theme awareness */}
           <path
             d="M30 0 L60 15 L60 45 L30 60 L0 45 L0 15 Z"
-            fill="#737373"
+            fill="currentColor"
             fillOpacity="0.05"
             transform="translate(0, -8)"
           />
           {/* Second hexagon (offset for honeycomb) */}
           <path
             d="M30 0 L60 15 L60 45 L30 60 L0 45 L0 15 Z"
-            fill="#737373"
+            fill="currentColor"
             fillOpacity="0.05"
             transform="translate(45, 44)"
           />

@@ -61,6 +61,10 @@
   --color-focus: var(--focus-ring-color);
   --color-focus-offset: var(--focus-ring-color);
 
+  /* Success colors (positive indicators, correct feedback) */
+  --color-success: var(--success);
+  --color-success-muted: var(--success-muted);
+
   /* Placement badge colors (leaderboard) */
   --color-placement-gold: var(--placement-gold);
   --color-placement-gold-foreground: var(--placement-gold-foreground);
@@ -119,6 +123,16 @@
   /* Used by: Destructive button, destructive dropdown items, error focus rings, form validation error borders */
   --destructive: oklch(0.58 0.22 27);           /* Dark red - destructive button bg, error borders */
   --destructive-foreground: oklch(1 0 0);       /* White - text on destructive background */
+
+  /* ===== SUCCESS COLORS (Green) ===== */
+  /*
+   * Used by: Positive indicators, correct answer feedback, delta increases
+   * Colors match Tailwind emerald for consistency:
+   * - success: emerald-600 (#059669) - text/icons on light backgrounds
+   * - success-muted: green-500 at 20% opacity - overlay backgrounds
+   */
+  --success: oklch(0.596 0.145 163.225);        /* Tailwind emerald-600 - positive text */
+  --success-muted: oklch(0.723 0.191 142.303 / 20%); /* Tailwind green-500 at 20% - overlay bg */
 
   /* ===== BORDER & INPUT COLORS ===== */
   /* Used by: All borders, Input backgrounds */
@@ -231,6 +245,15 @@
   /* Used by: Destructive button, destructive dropdown items, error focus rings, form validation error borders */
   --destructive: oklch(0.58 0.22 27);          /* Dark red - destructive button bg, error borders (same as light mode) */
   --destructive-foreground: oklch(1 0 0);      /* White - text on destructive background */
+
+  /* ===== SUCCESS COLORS (Green) ===== */
+  /*
+   * Lighter green for dark mode visibility
+   * - success: emerald-400 (#34d399) - brighter for dark backgrounds
+   * - success-muted: green-400 at 20% opacity - overlay backgrounds
+   */
+  --success: oklch(0.765 0.177 163.223);       /* Tailwind emerald-400 - positive text */
+  --success-muted: oklch(0.792 0.209 151.711 / 20%); /* Tailwind green-400 at 20% - overlay bg */
 
   /* ===== BORDER & INPUT COLORS ===== */
   --border: oklch(1 0 0 / 10%);                /* White at 10% opacity - subtle borders */

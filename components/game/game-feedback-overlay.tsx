@@ -101,10 +101,8 @@ function GameFeedbackOverlay({
         "pointer-events-none fixed inset-0 z-50",
         // Animation
         "animate-feedback-flash",
-        // Color based on type
-        type === "correct"
-          ? "bg-green-500/20 dark:bg-green-400/20"
-          : "bg-destructive/20",
+        // Color based on type - uses semantic tokens
+        type === "correct" ? "bg-success-muted" : "bg-destructive/20",
         className
       )}
     />

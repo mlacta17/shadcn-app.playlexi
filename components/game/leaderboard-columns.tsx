@@ -106,7 +106,7 @@ function RoundCell({ round, delta }: RoundCellProps) {
         <span
           className={cn(
             "text-sm",
-            delta > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"
+            delta > 0 ? "text-success" : "text-destructive"
           )}
         >
           ({delta > 0 ? "+" : ""}
