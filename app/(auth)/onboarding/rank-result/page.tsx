@@ -54,7 +54,7 @@ export default function RankResultPage() {
 
       {/* Main content - centered vertically and horizontally */}
       <main className="flex flex-1 flex-col items-center justify-center px-6">
-        <div className="flex w-full max-w-[600px] flex-col items-center gap-12">
+        <div className="flex w-full max-w-xl flex-col items-center gap-12">
           {/* Rank badge and message */}
           <div className="flex flex-col items-center gap-6 text-center">
             <RankBadge rank={earnedRank} size="xl" />
@@ -71,7 +71,7 @@ export default function RankResultPage() {
           </div>
 
           {/* Sign up buttons */}
-          <div className="flex w-full max-w-[394px] flex-col gap-3">
+          <div className="flex w-full max-w-sm flex-col gap-3">
             <Button
               variant="outline"
               className="h-9 w-full gap-2"

@@ -18,13 +18,15 @@ These are built into the codebase and apply automatically to all components:
 - **Available utilities:**
   - `rounded-md` = 6px (Tailwind default) - **for tab triggers, badges**
   - `rounded-lg` = 8px (Tailwind default) - **for inputs, dropdowns, menu items, nav links**
-  - `rounded-3xl` = 24px (Tailwind default) - **for cards**
+  - `rounded-xl` = 12px (Tailwind default) - **for table containers, data displays**
+  - `rounded-3xl` = 24px (Tailwind default) - **for cards and card images**
   - `rounded-4xl` = 26px (`calc(var(--radius) + 16px)`) - **for individual combobox chips**
   - `rounded-full` = 9999px (Tailwind default) - **for buttons**
 - **Visual hierarchy:**
   - Extra Subtle (6px): Tab triggers, badges - minimal, clean
   - Subtle (8px): Form inputs, dropdown containers, menu items, nav links - cohesive, functional
-  - Medium (24px): Cards - structured, contained
+  - Medium-Subtle (12px): Table containers, data tables - structured data displays
+  - Medium (24px): Cards, card images - structured, contained
   - Medium-Bold (26px): Individual combobox chips - prominent but not fully rounded
   - Bold (fully rounded): Buttons - distinctive, pill-shaped
 - **Action:**
@@ -35,7 +37,8 @@ These are built into the codebase and apply automatically to all components:
     - Tab list containers
     - All menu items (dropdown items, select items, combobox items)
     - Nav links (navbar navigation items)
-  - Use `rounded-3xl` for cards
+  - Use `rounded-xl` for table containers (DataTable wrapper)
+  - Use `rounded-3xl` for cards AND images inside cards (must match for visual cohesion)
   - Use `rounded-4xl` for individual combobox chips (the pills inside ComboboxChips)
   - Use `rounded-full` for buttons
 
@@ -43,6 +46,43 @@ These are built into the codebase and apply automatically to all components:
 - **Pattern:** ~33% increase from shadcn defaults
 - **Implementation:** Achieved via larger border radius utilities
 - **Action:** None - use the rounded utilities above
+
+### 3.1. Z-Index Scale
+Consistent layering system for overlapping elements:
+
+| Value | Tailwind | Use For |
+|-------|----------|---------|
+| 10 | `z-10` | Badges, floating indicators (on top of content) |
+| 20 | `z-20` | Sticky headers, floating elements |
+| 30 | `z-30` | Tooltips, popovers |
+| 40 | `z-40` | Dropdowns, menus (navbar mobile menu) |
+| 50 | `z-50` | Modals, dialogs, overlays, game feedback |
+
+**Important:** Dropdown menus use `z-40` so modals (`z-50`) can appear above them.
+
+### 3.2. Spacing Scale (Tailwind Standard)
+**IMPORTANT:** Always use Tailwind's standard spacing scale. Never use arbitrary pixel values like `h-[138px]` or `max-w-[525px]`.
+
+Common values for Figma parity:
+
+| Tailwind | Pixels | Common Usage |
+|----------|--------|--------------|
+| `h-5` | 20px | Badge height |
+| `h-6` | 24px | Combobox chip height |
+| `h-7` | 28px | Button xs |
+| `h-9` | 36px | Button sm, Select sm, TabsList |
+| `h-10` | 40px | Input, Select, Button default |
+| `h-11` | 44px | Button lg |
+| `h-36` | 144px | SpeechInput main area |
+| `max-w-sm` | 384px | Narrow content containers |
+| `max-w-lg` | 512px | Medium content containers (SpeechInput) |
+| `max-w-xl` | 576px | Wide content containers |
+| `max-w-2xl` | 672px | Extra wide containers |
+
+**When Figma values don't match Tailwind:**
+- Round to the nearest Tailwind value
+- Update Figma to match Tailwind (not vice versa)
+- Document the decision in this guide
 
 ### 4. Focus Ring System
 - **Location:** [app/globals.css:269-302](app/globals.css:269-302)
@@ -310,9 +350,9 @@ When creating canvas-based components, follow this pattern:
 #### Design System Integration:
 | Aspect | Implementation |
 |--------|----------------|
-| **Max width** | 525px per Figma |
-| **Main area height** | 138px per Figma |
-| **Waveform gap** | 24px (`gap-6`) per Figma |
+| **Max width** | `max-w-lg` (512px) - Tailwind scale |
+| **Main area height** | `h-36` (144px) - Tailwind scale |
+| **Waveform gap** | `gap-6` (24px) |
 | **Container** | `bg-input/30 outline-input rounded-lg` |
 | **Voice buttons** | Primary (Record), Destructive (Stop), Outline (helpers) |
 | **Keyboard buttons** | Primary (Type to start), Destructive (Enter to stop), Outline (helpers) |
@@ -829,7 +869,8 @@ This is a component (not a static SVG in `public/`) because we anticipate future
 - Animation support
 
 #### Design System Compliance:
-- Uses `#737373` at 5% opacity (matches Figma design)
+- Uses `currentColor` with `text-muted-foreground` for theme-aware coloring
+- Fill opacity at 5% for subtle background effect
 - Includes `aria-hidden="true"` for accessibility
 - Applies `pointer-events-none` to prevent interaction blocking
 
@@ -870,7 +911,7 @@ import { columns } from "./columns"
 ```
 
 #### Design System Compliance:
-- Uses `rounded-lg border` for table container (per border radius scale)
+- Uses `rounded-xl border` for table container (per border radius scale - 12px for data displays)
 - Empty state uses `text-muted-foreground`
 - `data-slot="data-table"` attribute for styling hooks
 

@@ -324,8 +324,8 @@ function SpeechInput(props: SpeechInputProps) {
       data-state={state}
       data-has-waveform={!isKeyboardMode && analyserNode ? "true" : "false"}
       className={cn(
-        "flex w-full max-w-[525px] flex-col items-center",
-        // Gap between waveform and input area (24px per Figma)
+        "flex w-full max-w-lg flex-col items-center",
+        // Gap between waveform and input area (24px = gap-6)
         "gap-6",
         className
       )}
@@ -433,7 +433,7 @@ function SpeechInput(props: SpeechInputProps) {
           )}
 
           {/* Right button - Play (disabled while recording) */}
-          <div className="flex min-w-[80px] shrink-0 items-center justify-end gap-2">
+          <div className="flex min-w-20 shrink-0 items-center justify-end gap-2">
             <Button
               variant="outline"
               size="icon-sm"
