@@ -685,25 +685,6 @@ export default function ShowcasePage() {
             </Tabs>
           </div>
 
-          <div>
-            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Line Variant</h3>
-            <Tabs defaultValue="overview">
-              <TabsList variant="line">
-                <TabsTrigger value="overview">Overview</TabsTrigger>
-                <TabsTrigger value="analytics">Analytics</TabsTrigger>
-                <TabsTrigger value="reports">Reports</TabsTrigger>
-              </TabsList>
-              <TabsContent value="overview" className="mt-4">
-                <p className="text-sm text-muted-foreground">View your overview dashboard here.</p>
-              </TabsContent>
-              <TabsContent value="analytics" className="mt-4">
-                <p className="text-sm text-muted-foreground">View your analytics data here.</p>
-              </TabsContent>
-              <TabsContent value="reports" className="mt-4">
-                <p className="text-sm text-muted-foreground">View your reports here.</p>
-              </TabsContent>
-            </Tabs>
-          </div>
         </div>
       </section>
 
