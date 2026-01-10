@@ -65,7 +65,7 @@ import { SpeechInput } from "@/components/ui/speech-input"
 import { VoiceWaveform } from "@/components/ui/voice-waveform"
 import { Navbar } from "@/components/ui/navbar"
 import { TopNavbar } from "@/components/ui/top-navbar"
-import { HeartsDisplay, GameTimer, GameFeedbackOverlay, RankBadge, RANK_LABELS, type RankTier } from "@/components/game"
+import { HeartsDisplay, GameTimer, GameFeedbackOverlay, RankBadge, RANK_LABELS, type RankTier, LeaderboardTable, type LeaderboardPlayer } from "@/components/game"
 import { useVoiceRecorder } from "@/hooks/use-voice-recorder"
 import { useGameTimer } from "@/hooks/use-game-timer"
 import { useGameFeedback } from "@/hooks/use-game-feedback"
@@ -592,6 +592,16 @@ export default function ShowcasePage() {
           Game component showing remaining lives. Includes shake + fade animation when hearts are lost.
         </p>
         <HeartsDisplayDemo />
+      </section>
+
+      {/* Leaderboard Table Section */}
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold">Leaderboard Table</h2>
+        <p className="text-sm text-muted-foreground">
+          Ranked player list with pagination. Uses TanStack Table following shadcn/ui data table pattern.
+          Features gold/silver/bronze placement badges, avatars with fallback initials, and delta indicators.
+        </p>
+        <LeaderboardTableDemo />
       </section>
 
       {/* Game Timer Section */}
@@ -1506,6 +1516,91 @@ function HeartsDisplayDemo() {
           The component includes <code className="bg-muted px-1 py-0.5 rounded text-xs">aria-live=&quot;polite&quot;</code> and <code className="bg-muted px-1 py-0.5 rounded text-xs">aria-label</code> for screen reader support.
           Animation respects <code className="bg-muted px-1 py-0.5 rounded text-xs">prefers-reduced-motion</code>.
         </p>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * LeaderboardTable demo with mock player data.
+ * Showcases placement badges, avatars, delta indicators, and pagination.
+ */
+function LeaderboardTableDemo() {
+  // Sample player data for demonstration
+  const samplePlayers: LeaderboardPlayer[] = [
+    { id: "1", name: "Luffy", description: "luffy@grandline.com", round: 11, delta: 1, accuracy: 99 },
+    { id: "2", name: "Zoro", description: "zoro@grandline.com", round: 10, delta: -1, accuracy: 98 },
+    { id: "3", name: "Nami", description: "nami@grandline.com", round: 10, delta: 0, accuracy: 97 },
+    { id: "4", name: "Sanji", description: "sanji@grandline.com", round: 9, delta: 2, accuracy: 95 },
+    { id: "5", name: "Chopper", description: "chopper@grandline.com", avatarUrl: "https://github.com/shadcn.png", round: 9, delta: -2, accuracy: 94 },
+    { id: "6", name: "Robin", description: "robin@grandline.com", round: 8, delta: 0, accuracy: 93 },
+    { id: "7", name: "Franky", description: "franky@grandline.com", round: 8, delta: 1, accuracy: 92 },
+    { id: "8", name: "Brook", description: "brook@grandline.com", round: 7, delta: -1, accuracy: 91 },
+    { id: "9", name: "Jinbe", description: "jinbe@grandline.com", round: 7, delta: 3, accuracy: 90 },
+    { id: "10", name: "Usopp", description: "usopp@grandline.com", round: 6, delta: -3, accuracy: 89 },
+    { id: "11", name: "Vivi", description: "vivi@alabasta.com", round: 6, delta: 0, accuracy: 88 },
+    { id: "12", name: "Ace", description: "ace@whitebeard.com", round: 5, delta: 1, accuracy: 87 },
+    { id: "13", name: "Sabo", description: "sabo@revolutionary.com", round: 5, delta: -1, accuracy: 86 },
+    { id: "14", name: "Law", description: "law@heart.com", round: 4, delta: 2, accuracy: 85 },
+  ]
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Full Table with Pagination</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          14 players with 7 per page. Navigate through pages to see pagination controls.
+        </p>
+        <LeaderboardTable data={samplePlayers} pageSize={7} />
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Badge Placement Variants</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Top 3 positions use Badge component with <code className="bg-muted px-1 py-0.5 rounded text-xs">gold</code>, <code className="bg-muted px-1 py-0.5 rounded text-xs">silver</code>, <code className="bg-muted px-1 py-0.5 rounded text-xs">bronze</code> variants.
+        </p>
+        <div className="flex items-center gap-6">
+          <div className="flex flex-col items-center gap-2">
+            <Badge variant="gold">1</Badge>
+            <span className="text-xs text-muted-foreground">Gold (1st)</span>
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <Badge variant="silver">2</Badge>
+            <span className="text-xs text-muted-foreground">Silver (2nd)</span>
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <Badge variant="bronze">3</Badge>
+            <span className="text-xs text-muted-foreground">Bronze (3rd)</span>
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <span className="text-muted-foreground">4</span>
+            <span className="text-xs text-muted-foreground">4th+ (no badge)</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Architecture</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Following shadcn/ui data table pattern with separated concerns:
+        </p>
+        <div className="bg-muted/50 p-4 rounded-lg font-mono text-xs space-y-1">
+          <p className="text-muted-foreground">components/ui/data-table.tsx    // Reusable TanStack Table wrapper</p>
+          <p className="text-muted-foreground">components/game/leaderboard-columns.tsx  // Column definitions + cell components</p>
+          <p className="text-muted-foreground">components/game/leaderboard-table.tsx    // Composed table with pagination</p>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Design System Colors</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Placement badges use semantic tokens defined in <code className="bg-muted px-1 py-0.5 rounded text-xs">globals.css</code>:
+        </p>
+        <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
+          <li><code className="bg-muted px-1 py-0.5 rounded text-xs">--placement-gold</code> - 1st place</li>
+          <li><code className="bg-muted px-1 py-0.5 rounded text-xs">--placement-silver</code> - 2nd place</li>
+          <li><code className="bg-muted px-1 py-0.5 rounded text-xs">--placement-bronze</code> - 3rd place</li>
+        </ul>
       </div>
     </div>
   )

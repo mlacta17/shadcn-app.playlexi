@@ -30,3 +30,13 @@ export type { GameFeedbackOverlayProps, FeedbackOverlayType } from "./game-feedb
 
 export { RankBadge, RANK_LABELS, BADGE_PATHS, BADGE_SIZES } from "./rank-badge"
 export type { RankBadgeProps, RankTier, BadgeSize } from "./rank-badge"
+
+export { LeaderboardTable } from "./leaderboard-table"
+export type { LeaderboardTableProps } from "./leaderboard-table"
+
+export {
+  leaderboardColumns,
+  PlayerCell,
+  RoundCell,
+} from "./leaderboard-columns"
+export type { LeaderboardPlayer } from "./leaderboard-columns"

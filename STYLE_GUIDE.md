@@ -816,6 +816,94 @@ This is a component (not a static SVG in `public/`) because we anticipate future
 
 ---
 
+## Data Table Components
+
+### DataTable (Reusable)
+- **Location:** [components/ui/data-table.tsx](components/ui/data-table.tsx)
+- **Type:** Generic TanStack Table wrapper
+- **Use case:** Any paginated data display (leaderboards, match history, user lists)
+
+#### Architecture:
+Following the official shadcn/ui data table pattern:
+```
+app/{feature}/
+├── columns.tsx      (column definitions - client component)
+├── data-table.tsx   (OR use shared DataTable from components/ui/)
+└── page.tsx         (server component for data fetching)
+```
+
+#### Props:
+| Prop | Type | Description |
+|------|------|-------------|
+| `columns` | `ColumnDef<TData>[]` | TanStack Table column definitions |
+| `data` | `TData[]` | Array of row data |
+| `pageSize` | `number` | Rows per page (default: 10) |
+| `emptyMessage` | `string` | Message when no data |
+| `renderPagination` | `(table) => ReactNode` | Custom pagination controls |
+
+#### Usage:
+```tsx
+import { DataTable } from "@/components/ui/data-table"
+import { columns } from "./columns"
+
+// In page.tsx
+<DataTable columns={columns} data={payments} pageSize={10} />
+```
+
+#### Design System Compliance:
+- Uses `rounded-lg border` for table container (per border radius scale)
+- Empty state uses `text-muted-foreground`
+- `data-slot="data-table"` attribute for styling hooks
+
+### LeaderboardTable (Domain-Specific)
+- **Location:** [components/game/leaderboard-table.tsx](components/game/leaderboard-table.tsx)
+- **Columns:** [components/game/leaderboard-columns.tsx](components/game/leaderboard-columns.tsx)
+- **Type:** Game-specific data table with custom cells
+
+#### Column Cell Components:
+| Component | Purpose | Design Notes |
+|-----------|---------|--------------|
+| Rank cell | Top 3 rank badges | Uses `<Badge variant="gold/silver/bronze">` directly |
+| `PlayerCell` | Avatar + name + description | Uses Avatar component |
+| `RoundCell` | Score with delta indicator | Green (+) / destructive (-) |
+
+#### Badge Placement Variants:
+The Badge component (`components/ui/badge.tsx`) includes placement variants for leaderboard rankings.
+Use the Badge component directly - no wrapper needed:
+
+| Variant | Color Token | Use Case |
+|---------|-------------|----------|
+| `gold` | `--placement-gold` | 1st place |
+| `silver` | `--placement-silver` | 2nd place |
+| `bronze` | `--placement-bronze` | 3rd place |
+
+```tsx
+import { Badge } from "@/components/ui/badge"
+
+<Badge variant="gold">1</Badge>
+<Badge variant="silver">2</Badge>
+<Badge variant="bronze">3</Badge>
+```
+
+#### Placement Colors (globals.css):
+```css
+--placement-gold: oklch(0.75 0.15 85);       /* 1st place */
+--placement-silver: oklch(0.65 0.01 265);    /* 2nd place */
+--placement-bronze: oklch(0.55 0.1 55);      /* 3rd place */
+```
+
+#### Usage:
+```tsx
+import { LeaderboardTable } from "@/components/game"
+
+<LeaderboardTable
+  data={players}
+  pageSize={7}
+/>
+```
+
+---
+
 ## Component Checklist
 
 When adding a new shadcn component:
@@ -850,6 +938,8 @@ When adding a new shadcn component:
 - **Game components:** [components/game/](components/game/)
 - **Sound files:** [public/sounds/](public/sounds/) (add correct.mp3, wrong.mp3)
 - **Background patterns:** [components/ui/hex-pattern.tsx](components/ui/hex-pattern.tsx)
+- **Data table:** [components/ui/data-table.tsx](components/ui/data-table.tsx)
+- **Leaderboard:** [components/game/leaderboard-table.tsx](components/game/leaderboard-table.tsx)
 
 ## Design Philosophy
 

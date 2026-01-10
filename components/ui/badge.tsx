@@ -13,6 +13,9 @@ const badgeVariants = cva(
         secondary: "bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80",
         destructive: "bg-destructive text-destructive-foreground [a]:hover:bg-destructive/80",
         outline: "text-foreground border-border",
+        gold: "bg-placement-gold text-placement-gold-foreground",
+        silver: "bg-placement-silver text-placement-silver-foreground",
+        bronze: "bg-placement-bronze text-placement-bronze-foreground",
       },
     },
     defaultVariants: {

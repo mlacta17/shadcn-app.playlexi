@@ -42,6 +42,7 @@ export { IconChevronRightOutline24 as ChevronRightIcon } from "nucleo-core-outli
 // Menu icons
 export { IconMenuOutline24 as MenuIcon } from "nucleo-core-outline-24"
 export { IconDotsVerticalOutline24 as MoreVerticalIcon } from "nucleo-core-outline-24"
+export { IconDotsOutline24 as MoreHorizontalIcon } from "nucleo-core-outline-24"
 
 // User/Account icons (Navbar)
 export { IconUserOutline24 as UserIcon } from "nucleo-core-outline-24"
@@ -72,6 +73,10 @@ export { IconBookOutline24 as DictionaryIcon } from "nucleo-core-outline-24"
 // Alert/Feedback icons (AlertDialog)
 export { IconAlertWarningOutline24 as AlertWarningIcon } from "nucleo-core-outline-24"
 export { IconCircleCheckOutline24 as CircleCheckIcon } from "nucleo-core-outline-24"
+
+// Search/Filter icons (Leaderboard, tables)
+export { IconMagnifierOutline24 as SearchIcon } from "nucleo-core-outline-24"
+export { IconBarsFilterOutline24 as FilterIcon } from "nucleo-core-outline-24"
 
 // =============================================================================
 // RESERVED ICONS - Planned for upcoming features

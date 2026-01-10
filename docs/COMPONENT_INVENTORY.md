@@ -81,10 +81,12 @@ For the leaderboard tab.
 
 | Component | Description | Design Status | Implementation Status | Notes |
 |-----------|-------------|---------------|----------------------|-------|
-| **LeaderboardTable** | Table of ranked players | Not Started | Not Started | May use existing Table component |
-| **LeaderboardRow** | Individual player row | Not Started | Not Started | Rank #, avatar, name, tier, XP, accuracy |
-| **LeaderboardFilters** | Mode/input method filter pills | Not Started | Not Started | Toggle buttons or select |
-| **LeaderboardTabs** | Solo/Friends/Global tabs | Not Started | Not Started | May use existing Tabs component |
+| **LeaderboardTable** | Table of ranked players with pagination | Done | Done | **Presentational.** TanStack React Table + shadcn Table. Includes rank badges (gold/silver/bronze for top 3), player avatars, round +/- delta, accuracy. Built-in pagination. Located at `components/game/leaderboard-table.tsx`. Figma: node `2435:33026`. |
+| **Pagination** | Navigation for multi-page content | Done | Done | **Presentational.** Summary text, prev/next buttons, page numbers, ellipsis. Located at `components/ui/pagination.tsx`. |
+| **SearchInput** | Input with search icon prefix | Done | Done | **Composite.** Pre-composed InputGroup with magnifier icon. Located at `components/ui/search-input.tsx`. |
+| ~~**LeaderboardRow**~~ | Individual player row | N/A | N/A | Merged into LeaderboardTable (inline cell components) |
+| ~~**LeaderboardFilters**~~ | Mode/input method filter pills | N/A | N/A | Implemented with Select component on Leaderboard page |
+| ~~**LeaderboardTabs**~~ | Solo/Friends/Global tabs | N/A | N/A | Uses existing Tabs component on Leaderboard page |
 | **BeeKeeperHighlight** | Special styling for Bee Keeper | Not Started | Not Started | Crown icon, gold border |
 | **SkeletonRow** | Loading placeholder for results | Not Started | Not Started | Shimmer animation |
 
@@ -184,6 +186,9 @@ Components that already exist and can be used directly or with minor customizati
 | Progress | shadcn/ui | Add timer styling variants |
 | Tabs | shadcn/ui | None |
 | Table | shadcn/ui | None |
+| DataTable | Custom | TanStack Table wrapper following shadcn pattern. Located at `components/ui/data-table.tsx`. |
+| Pagination | Custom | Composable pagination controls. Located at `components/ui/pagination.tsx`. |
+| SearchInput | Custom | InputGroup with search icon. Located at `components/ui/search-input.tsx`. |
 | Dialog | shadcn/ui | None |
 | Sheet | shadcn/ui | For mobile sidebar |
 | Separator | shadcn/ui | None |
@@ -240,7 +245,7 @@ Nice to have for v1:
 1. FriendsList
 2. PresetMessagePill
 3. NotificationBell
-4. LeaderboardTable
+4. ~~LeaderboardTable~~ ✓ Done
 5. All remaining components
 
 ---
@@ -444,6 +449,8 @@ The project uses **OKLCH color space** for perceptually uniform colors. Key toke
 | 2026-01-02 | Removed PlacementGameIntro from inventory — tutorial step 3 already explains placement, no separate intro screen per PRD. | Claude |
 | 2026-01-02 | Removed RankReveal from component inventory — it's a full-screen page, not a reusable component. Only used once for initial placement flow. Implemented as `/onboarding/rank-result/page.tsx` instead. Follows Architecture Decision #4 (avoid over-abstraction for single-use UI). Figma: node `2610:6076`. | Claude |
 | 2026-01-08 | Added HexPattern component for decorative hexagonal backgrounds. Created as component (not static SVG) for future dynamic theming. Includes commented code for future color/scale/opacity props. Added TopNavbar to inventory (was missing). Updated STYLE_GUIDE.md with HexPattern documentation. Figma: node `2641:7585`. | Claude |
+| 2026-01-08 | Implemented Leaderboard components: LeaderboardTable (TanStack React Table + pagination), Pagination (composable nav), SearchInput (InputGroup composite). Added SearchIcon and FilterIcon to lib/icons.ts. Created Leaderboard page at `/leaderboard`. Marked LeaderboardRow, LeaderboardFilters, LeaderboardTabs as N/A (merged/existing components used). Figma: node `2435:33026`. | Claude |
+| 2026-01-08 | Refactored Leaderboard to follow shadcn data table patterns. Created reusable `DataTable` component in `components/ui/`. Separated column definitions to `leaderboard-columns.tsx`. Added semantic `--placement-gold/silver/bronze` color tokens to globals.css (replacing hardcoded Tailwind colors). Added `data-slot` attributes to all cell components. | Claude |
 
 ---
 
