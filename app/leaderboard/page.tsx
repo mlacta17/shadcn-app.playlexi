@@ -37,17 +37,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 // Mock data for demonstration
 const MOCK_PLAYERS: LeaderboardPlayer[] = [
-  { id: "1", name: "Luffy", description: "Description Text", round: 11, delta: 1, accuracy: 99 },
-  { id: "2", name: "felicia.reid@example.com", description: "Description Text", round: 10, delta: -1, accuracy: 99 },
-  { id: "3", name: "georgia.young@example.com", description: "Description Text", round: 9, delta: -1, accuracy: 99 },
-  { id: "4", name: "alma.lawson@example.com", description: "Description Text", round: 8, delta: 1, accuracy: 99 },
-  { id: "5", name: "dolores.chambers@example.com", description: "Description Text", round: 7, delta: -1, accuracy: 99 },
-  { id: "6", name: "alma.lawson@example.com", description: "Description Text", round: 6, delta: -1, accuracy: 99 },
-  { id: "7", name: "dolores.chambers@example.com", description: "Description Text", round: 5, delta: 1, accuracy: 99 },
+  { id: "1", name: "Luffy", description: "Description Text", round: 11, delta: 1, accuracy: 99, points: 15420 },
+  { id: "2", name: "felicia.reid@example.com", description: "Description Text", round: 10, delta: -1, accuracy: 99, points: 14850 },
+  { id: "3", name: "georgia.young@example.com", description: "Description Text", round: 9, delta: -1, accuracy: 99, points: 14200 },
+  { id: "4", name: "alma.lawson@example.com", description: "Description Text", round: 8, delta: 1, accuracy: 99, points: 13500 },
+  { id: "5", name: "dolores.chambers@example.com", description: "Description Text", round: 7, delta: -1, accuracy: 99, points: 12900 },
+  { id: "6", name: "alma.lawson@example.com", description: "Description Text", round: 6, delta: -1, accuracy: 99, points: 12100 },
+  { id: "7", name: "dolores.chambers@example.com", description: "Description Text", round: 5, delta: 1, accuracy: 99, points: 11500 },
   // Additional mock data for pagination
-  { id: "8", name: "player8@example.com", description: "Description Text", round: 4, delta: 0, accuracy: 98 },
-  { id: "9", name: "player9@example.com", description: "Description Text", round: 3, delta: 2, accuracy: 97 },
-  { id: "10", name: "player10@example.com", description: "Description Text", round: 2, delta: -2, accuracy: 96 },
+  { id: "8", name: "player8@example.com", description: "Description Text", round: 4, delta: 0, accuracy: 98, points: 10800 },
+  { id: "9", name: "player9@example.com", description: "Description Text", round: 3, delta: 2, accuracy: 97, points: 10200 },
+  { id: "10", name: "player10@example.com", description: "Description Text", round: 2, delta: -2, accuracy: 96, points: 9500 },
 ]
 
 // Generate more mock data
@@ -60,6 +60,7 @@ const EXTENDED_MOCK_PLAYERS: LeaderboardPlayer[] = [
     round: Math.max(1, 100 - i),
     delta: Math.random() > 0.5 ? 1 : -1,
     accuracy: Math.floor(Math.random() * 10) + 90,
+    points: Math.max(100, 9000 - i * 80),
   })),
 ]
 

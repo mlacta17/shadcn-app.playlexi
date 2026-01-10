@@ -54,6 +54,20 @@ export interface DataTableProps<TData, TValue> {
   className?: string
   /** Render function for custom pagination controls */
   renderPagination?: (table: TanStackTable<TData>) => React.ReactNode
+  /**
+   * Function to determine if a row should be highlighted as "current user".
+   * Return true to apply highlight styling (subtle primary background).
+   *
+   * @example
+   * ```tsx
+   * <DataTable
+   *   data={players}
+   *   columns={columns}
+   *   isCurrentUserRow={(player) => player.id === currentUserId}
+   * />
+   * ```
+   */
+  isCurrentUserRow?: (row: TData) => boolean
 }
 
 /**
@@ -69,6 +83,7 @@ function DataTable<TData, TValue>({
   emptyMessage = "No results.",
   className,
   renderPagination,
+  isCurrentUserRow,
 }: DataTableProps<TData, TValue>) {
   const table = useReactTable({
     data,
@@ -111,21 +126,26 @@ function DataTable<TData, TValue>({
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+              table.getRowModel().rows.map((row) => {
+                const isCurrentUser = isCurrentUserRow?.(row.original) ?? false
+                return (
+                  <TableRow
+                    key={row.id}
+                    data-state={row.getIsSelected() && "selected"}
+                    data-current-user={isCurrentUser || undefined}
+                    className={cn(isCurrentUser && "bg-highlight")}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                )
+              })
             ) : (
               <TableRow>
                 <TableCell

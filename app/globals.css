@@ -65,6 +65,9 @@
   --color-success: var(--success);
   --color-success-muted: var(--success-muted);
 
+  /* Highlight colors (current user row, "this is you" indicators) */
+  --color-highlight: var(--highlight);
+
   /* Placement badge colors (leaderboard) */
   --color-placement-gold: var(--placement-gold);
   --color-placement-gold-foreground: var(--placement-gold-foreground);
@@ -133,6 +136,14 @@
    */
   --success: oklch(0.596 0.145 163.225);        /* Tailwind emerald-600 - positive text */
   --success-muted: oklch(0.723 0.191 142.303 / 20%); /* Tailwind green-500 at 20% - overlay bg */
+
+  /* ===== HIGHLIGHT COLORS ===== */
+  /*
+   * Used by: Current user row highlighting in tables, "this is you" indicators
+   * Uses primary color at low opacity for brand consistency
+   * - highlight: primary at 5% opacity - subtle row background
+   */
+  --highlight: oklch(0.852 0.199 91.936 / 5%);  /* Primary yellow at 5% - subtle highlight bg */
 
   /* ===== BORDER & INPUT COLORS ===== */
   /* Used by: All borders, Input backgrounds */
@@ -254,6 +265,12 @@
    */
   --success: oklch(0.765 0.177 163.223);       /* Tailwind emerald-400 - positive text */
   --success-muted: oklch(0.792 0.209 151.711 / 20%); /* Tailwind green-400 at 20% - overlay bg */
+
+  /* ===== HIGHLIGHT COLORS ===== */
+  /*
+   * Uses dark mode primary at slightly higher opacity for visibility on dark backgrounds
+   */
+  --highlight: oklch(0.795 0.184 86.047 / 8%); /* Primary yellow at 8% - subtle highlight bg */
 
   /* ===== BORDER & INPUT COLORS ===== */
   --border: oklch(1 0 0 / 10%);                /* White at 10% opacity - subtle borders */

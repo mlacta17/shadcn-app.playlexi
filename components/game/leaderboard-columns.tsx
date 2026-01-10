@@ -24,6 +24,8 @@ export interface LeaderboardPlayer {
   delta?: number
   /** Accuracy percentage (0-100) */
   accuracy: number
+  /** Points earned (optional - displays "-" if not provided) */
+  points?: number
 }
 
 /**
@@ -118,6 +120,24 @@ function RoundCell({ round, delta }: RoundCellProps) {
 }
 
 /**
+ * PointsCell — Formatted points display.
+ *
+ * Displays points with locale-aware formatting (e.g., 15,420).
+ * Shows "-" placeholder when points are not available.
+ */
+interface PointsCellProps {
+  points?: number
+}
+
+function PointsCell({ points }: PointsCellProps) {
+  return (
+    <span data-slot="points-cell">
+      {points !== undefined ? points.toLocaleString() : "-"}
+    </span>
+  )
+}
+
+/**
  * Column definitions for the leaderboard table.
  *
  * Following shadcn/ui data table pattern:
@@ -166,6 +186,12 @@ export const leaderboardColumns: ColumnDef<LeaderboardPlayer>[] = [
     cell: ({ row }) => <span>{row.original.accuracy}%</span>,
     size: 100,
   },
+  {
+    accessorKey: "points",
+    header: "Points",
+    cell: ({ row }) => <PointsCell points={row.original.points} />,
+    size: 100,
+  },
 ]
 
-export { PlayerCell, RoundCell }
+export { PlayerCell, RoundCell, PointsCell }

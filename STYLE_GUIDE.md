@@ -149,6 +149,7 @@ Common values for Figma parity:
   - `bg-muted` / `text-muted-foreground`
   - `bg-accent` / `text-accent-foreground`
   - `text-success` / `bg-success-muted` - positive indicators, correct feedback
+  - `bg-highlight` - current user row highlighting, "this is you" indicators
 - **Hover states:** `--primary-hover`, `--secondary-hover`, `--destructive-hover`
 - **Action:** Use semantic tokens instead of arbitrary colors
 
@@ -168,6 +169,31 @@ Used for positive states like correct answers, score increases, and success feed
 
 // Success overlay
 <div className="bg-success-muted" />
+```
+
+#### Highlight Colors
+Used for "this is you" indicators like current user row in tables.
+
+| Token | Light Mode | Dark Mode | Usage |
+|-------|------------|-----------|-------|
+| `--highlight` | primary/5% | primary/8% | Subtle row background for current user |
+
+**UX Rationale:**
+- Uses primary color at low opacity for brand consistency
+- Avoids yellow/warning semantics ("attention needed")
+- Dark mode uses slightly higher opacity (8%) for visibility on dark backgrounds
+- Subtle enough to not distract, clear enough to spot yourself
+
+```tsx
+// Current user row highlighting (DataTable)
+<DataTable
+  columns={columns}
+  data={players}
+  isCurrentUserRow={(player) => player.id === currentUserId}
+/>
+
+// Custom usage
+<div className="bg-highlight">You are here</div>
 ```
 
 ### 8. Button Hover States
@@ -799,6 +825,7 @@ import { Navbar } from "@/components/ui/navbar"
 |------|------|-------------|
 | `onClose` | `() => void` | Callback when close button clicked |
 | `closeHref` | `string` | URL for close button (alternative to callback) |
+| `centerContent` | `ReactNode` | Content for center (e.g., title, game mode label) |
 | `skipLabel` | `string` | Text for skip link (default: "Skip") |
 | `skipHref` | `string` | URL for skip link |
 | `onSkip` | `() => void` | Callback when skip clicked |
@@ -814,6 +841,13 @@ import { TopNavbar } from "@/components/ui/top-navbar"
   skipHref="/dashboard"
 />
 
+// With center content (e.g., game mode title)
+<TopNavbar
+  onClose={() => router.back()}
+  centerContent="Game mode: Endless"
+  hideSkip
+/>
+
 // With links
 <TopNavbar
   closeHref="/"
@@ -827,8 +861,9 @@ import { TopNavbar } from "@/components/ui/top-navbar"
 
 #### Design System Compliance:
 - Close button: `Button variant="outline" size="icon-sm"` with Nucleo XIcon
+- Center content: Absolutely positioned, `text-sm font-medium` for subtlety
 - Skip link: `Button variant="link" size="xs"`
-- Container: `bg-background border-b shadow-sm h-16 px-6`
+- Container: `relative bg-background border-b shadow-sm h-16 px-6`
 - Data attribute: `data-slot="top-navbar"`
 
 ---
@@ -900,20 +935,44 @@ app/{feature}/
 | `pageSize` | `number` | Rows per page (default: 10) |
 | `emptyMessage` | `string` | Message when no data |
 | `renderPagination` | `(table) => ReactNode` | Custom pagination controls |
+| `isCurrentUserRow` | `(row: TData) => boolean` | Function to highlight current user's row |
 
 #### Usage:
 ```tsx
 import { DataTable } from "@/components/ui/data-table"
 import { columns } from "./columns"
 
-// In page.tsx
+// Basic usage
 <DataTable columns={columns} data={payments} pageSize={10} />
+
+// With current user highlighting (e.g., leaderboard)
+<DataTable
+  columns={leaderboardColumns}
+  data={players}
+  isCurrentUserRow={(player) => player.id === currentUserId}
+/>
 ```
+
+#### Current User Row Highlighting:
+Use the `isCurrentUserRow` prop to highlight a specific row (e.g., the logged-in user in a leaderboard).
+
+**Implementation:**
+- Uses semantic `bg-highlight` token (see Section 7 - Highlight Colors)
+- Light mode: primary at 5% opacity
+- Dark mode: primary at 8% opacity for visibility
+
+**UX Rationale:**
+- Uses semantic `--highlight` token for brand-consistent highlighting
+- Avoids yellow/warning colors which have semantic meaning ("attention needed")
+- `data-current-user` attribute added for CSS hooks if needed
+- Subtle enough to not distract but clear enough for users to find themselves
 
 #### Design System Compliance:
 - Uses `rounded-xl border` for table container (per border radius scale - 12px for data displays)
+- Current user row: `bg-highlight` (semantic token - 5%/8% primary)
 - Empty state uses `text-muted-foreground`
 - `data-slot="data-table"` attribute for styling hooks
+- `data-current-user` attribute on highlighted rows
 
 ### LeaderboardTable (Domain-Specific)
 - **Location:** [components/game/leaderboard-table.tsx](components/game/leaderboard-table.tsx)
@@ -926,6 +985,13 @@ import { columns } from "./columns"
 | Rank cell | All rank badges | Uses `getRankVariant()` helper for consistent Badge styling |
 | `PlayerCell` | Avatar + name + description | Uses Avatar component |
 | `RoundCell` | Score with delta indicator | Green (+) / destructive (-) |
+| `PointsCell` | Total points earned | `toLocaleString()` formatting, shows "-" if undefined |
+
+All cell components follow the same pattern:
+- Dedicated component with typed props interface
+- `data-slot` attribute for styling hooks
+- Defensive handling of optional values
+- Exported for reuse outside the table context
 
 #### Badge Rank Variants:
 All ranks use the Badge component for consistent visual alignment.

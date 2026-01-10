@@ -11,6 +11,8 @@ export interface TopNavbarProps {
   onClose?: () => void
   /** URL for close button link (alternative to onClose callback) */
   closeHref?: string
+  /** Content to display in the center (e.g., title, game mode) */
+  centerContent?: React.ReactNode
   /** Text for the skip link (default: "Skip") */
   skipLabel?: string
   /** URL for the skip link */
@@ -41,6 +43,7 @@ export interface TopNavbarProps {
 function TopNavbar({
   onClose,
   closeHref,
+  centerContent,
   skipLabel = "Skip",
   skipHref,
   onSkip,
@@ -62,7 +65,7 @@ function TopNavbar({
     <nav
       data-slot="top-navbar"
       className={cn(
-        "bg-background border-b shadow-sm flex h-16 w-full items-center justify-between px-6",
+        "relative bg-background border-b shadow-sm flex h-16 w-full items-center justify-between px-6",
         className
       )}
     >
@@ -75,6 +78,13 @@ function TopNavbar({
         </Button>
       ) : (
         closeButton
+      )}
+
+      {/* Center content (title, game mode, etc.) */}
+      {centerContent && (
+        <div className="absolute left-1/2 -translate-x-1/2 text-sm font-medium text-foreground">
+          {centerContent}
+        </div>
       )}
 
       {/* Skip link */}
