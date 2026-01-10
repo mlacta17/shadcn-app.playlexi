@@ -863,26 +863,43 @@ import { columns } from "./columns"
 #### Column Cell Components:
 | Component | Purpose | Design Notes |
 |-----------|---------|--------------|
-| Rank cell | Top 3 rank badges | Uses `<Badge variant="gold/silver/bronze">` directly |
+| Rank cell | All rank badges | Uses `getRankVariant()` helper for consistent Badge styling |
 | `PlayerCell` | Avatar + name + description | Uses Avatar component |
 | `RoundCell` | Score with delta indicator | Green (+) / destructive (-) |
 
-#### Badge Placement Variants:
-The Badge component (`components/ui/badge.tsx`) includes placement variants for leaderboard rankings.
-Use the Badge component directly - no wrapper needed:
+#### Badge Rank Variants:
+All ranks use the Badge component for consistent visual alignment.
+The `getRankVariant()` helper function returns the appropriate variant:
 
 | Variant | Color Token | Use Case |
 |---------|-------------|----------|
 | `gold` | `--placement-gold` | 1st place |
 | `silver` | `--placement-silver` | 2nd place |
 | `bronze` | `--placement-bronze` | 3rd place |
+| `secondary` | `--secondary` | 4th place onwards |
 
 ```tsx
 import { Badge } from "@/components/ui/badge"
 
+// Top 3 use placement colors
 <Badge variant="gold">1</Badge>
 <Badge variant="silver">2</Badge>
 <Badge variant="bronze">3</Badge>
+
+// 4th+ use secondary (gray)
+<Badge variant="secondary">4</Badge>
+```
+
+The `getRankVariant()` helper in `leaderboard-columns.tsx` encapsulates this logic:
+```tsx
+function getRankVariant(rank: number): "gold" | "silver" | "bronze" | "secondary" {
+  switch (rank) {
+    case 1: return "gold"
+    case 2: return "silver"
+    case 3: return "bronze"
+    default: return "secondary"
+  }
+}
 ```
 
 #### Placement Colors (globals.css):

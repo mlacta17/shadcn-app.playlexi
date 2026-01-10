@@ -1555,9 +1555,9 @@ function LeaderboardTableDemo() {
       </div>
 
       <div>
-        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Badge Placement Variants</h3>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Badge Rank Variants</h3>
         <p className="text-sm text-muted-foreground mb-3">
-          Top 3 positions use Badge component with <code className="bg-muted px-1 py-0.5 rounded text-xs">gold</code>, <code className="bg-muted px-1 py-0.5 rounded text-xs">silver</code>, <code className="bg-muted px-1 py-0.5 rounded text-xs">bronze</code> variants.
+          All ranks use the Badge component for consistent alignment. Top 3 use placement colors, 4th+ use <code className="bg-muted px-1 py-0.5 rounded text-xs">secondary</code>.
         </p>
         <div className="flex items-center gap-6">
           <div className="flex flex-col items-center gap-2">
@@ -1573,8 +1573,8 @@ function LeaderboardTableDemo() {
             <span className="text-xs text-muted-foreground">Bronze (3rd)</span>
           </div>
           <div className="flex flex-col items-center gap-2">
-            <span className="text-muted-foreground">4</span>
-            <span className="text-xs text-muted-foreground">4th+ (no badge)</span>
+            <Badge variant="secondary">4</Badge>
+            <span className="text-xs text-muted-foreground">Secondary (4th+)</span>
           </div>
         </div>
       </div>

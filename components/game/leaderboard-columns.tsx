@@ -27,14 +27,28 @@ export interface LeaderboardPlayer {
 }
 
 /**
- * Variant mapping for placement badges.
- * Maps rank position to Badge variant.
+ * Get the Badge variant for a given rank position.
+ *
+ * Per Figma design (node 2599:5079):
+ * - 1st place: gold variant
+ * - 2nd place: silver variant
+ * - 3rd place: bronze variant
+ * - 4th place onwards: secondary variant (gray)
+ *
+ * All ranks use the Badge component for consistent visual alignment.
  */
-const PLACEMENT_VARIANTS = {
-  1: "gold",
-  2: "silver",
-  3: "bronze",
-} as const
+function getRankVariant(rank: number): "gold" | "silver" | "bronze" | "secondary" {
+  switch (rank) {
+    case 1:
+      return "gold"
+    case 2:
+      return "silver"
+    case 3:
+      return "bronze"
+    default:
+      return "secondary"
+  }
+}
 
 /**
  * PlayerCell — Avatar with name and description.
@@ -119,14 +133,11 @@ export const leaderboardColumns: ColumnDef<LeaderboardPlayer>[] = [
     header: "Rank",
     cell: ({ row }) => {
       const rank = row.index + 1
-      if (rank <= 3) {
-        return (
-          <Badge variant={PLACEMENT_VARIANTS[rank as 1 | 2 | 3]}>
-            {rank}
-          </Badge>
-        )
-      }
-      return <span className="text-muted-foreground">{rank}</span>
+      return (
+        <Badge variant={getRankVariant(rank)}>
+          {rank}
+        </Badge>
+      )
     },
     size: 80,
   },
