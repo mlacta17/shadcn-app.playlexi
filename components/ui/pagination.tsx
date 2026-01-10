@@ -4,16 +4,32 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ChevronLeftIcon, ChevronRightIcon, MoreHorizontalIcon } from "@/lib/icons"
 
+/**
+ * Pagination — Root container for pagination controls.
+ *
+ * Layout: `justify-between` per Figma design (node 2435:34161)
+ * - Left: PaginationSummary (e.g., "1-7 of 120")
+ * - Right: PaginationContent with controls
+ *
+ * @example
+ * ```tsx
+ * <Pagination>
+ *   <PaginationSummary>1-7 of 120</PaginationSummary>
+ *   <PaginationContent>
+ *     <PaginationItem><PaginationPrevious /></PaginationItem>
+ *     <PaginationItem><PaginationLink>1</PaginationLink></PaginationItem>
+ *     <PaginationItem><PaginationNext /></PaginationItem>
+ *   </PaginationContent>
+ * </Pagination>
+ * ```
+ */
 function Pagination({ className, ...props }: React.ComponentProps<"nav">) {
   return (
     <nav
       role="navigation"
       aria-label="pagination"
       data-slot="pagination"
-      className={cn(
-        "mx-auto flex w-full justify-center",
-        className
-      )}
+      className={cn("flex w-full items-center justify-between", className)}
       {...props}
     />
   )
