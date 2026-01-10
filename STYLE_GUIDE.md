@@ -921,6 +921,36 @@ import { LeaderboardTable } from "@/components/game"
 
 ---
 
+## ⚠️ Adding shadcn Components Safely
+
+**CRITICAL:** The shadcn CLI can overwrite customized components. Always use these flags:
+
+```bash
+# Preview changes before applying (recommended)
+npx shadcn@latest add <component> --diff
+
+# Prevent overwriting existing files
+npx shadcn@latest add <component> --no-overwrite
+```
+
+### Protected Components (DO NOT overwrite)
+These components have custom styling that differs from shadcn defaults:
+
+| Component | Custom Modifications |
+|-----------|---------------------|
+| `button.tsx` | Larger sizes (h-10 default), CSS variable hover states, solid destructive |
+| `badge.tsx` | Placement variants (gold/silver/bronze), rounded-md |
+| `card.tsx` | rounded-3xl border radius |
+| `input.tsx` | bg-input/30, aria-invalid states |
+| `pagination.tsx` | Custom layout, Nucleo icons, size-10 elements |
+
+### If a component gets overwritten:
+1. Check `git diff components/ui/<component>.tsx`
+2. Restore with `git checkout HEAD~1 -- components/ui/<component>.tsx`
+3. Manually merge any new features needed
+
+---
+
 ## Component Checklist
 
 When adding a new shadcn component:
