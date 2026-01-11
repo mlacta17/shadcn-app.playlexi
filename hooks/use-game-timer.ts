@@ -47,7 +47,7 @@ export interface UseGameTimerReturn {
  * Hook for managing countdown timer state.
  *
  * This hook owns the timer logic and provides all values needed by GameTimer.
- * Follows the same pattern as useVoiceRecorder: hook owns logic, component is presentational.
+ * Follows the same pattern as useSpeechRecognition: hook owns logic, component is presentational.
  *
  * ## Architecture
  * ```

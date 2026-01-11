@@ -31,10 +31,10 @@ These components are **blocking for MVP** — the game cannot function without t
 
 | Component | Description | Design Status | Implementation Status | Notes |
 |-----------|-------------|---------------|----------------------|-------|
-| **VoiceWaveform** | Animated audio visualization during recording | Done | Done | **Presentational only.** Canvas-based, uses AnalyserNode, has idle/active states. Located at `components/ui/voice-waveform.tsx`. Does NOT handle audio capture or Whisper — that's `useVoiceRecorder` hook. |
+| **VoiceWaveform** | Animated audio visualization during recording | Done | Done | **Presentational only.** Canvas-based, uses AnalyserNode, has idle/active states. Located at `components/ui/voice-waveform.tsx`. Does NOT handle audio capture — that's `useSpeechRecognition` hook. |
 | **HeartsDisplay** | 3 heart icons showing remaining lives | Done | Done | **Presentational.** Shows remaining hearts with shake+fade animation on loss. Uses `--destructive` color, 20px hearts, 2px gap. Located at `components/game/hearts-display.tsx`. Animation defined in `globals.css`. Respects `prefers-reduced-motion`. |
 | **GameTimer** | Progress bar countdown timer | Done | Done | **Wrapper pattern.** Wraps existing `Progress` component. Uses `--primary` (yellow) for normal state, `--destructive` (red) for critical (≤5 seconds). Located at `components/game/game-timer.tsx`. Use with `useGameTimer` hook for countdown logic. |
-| **SpeechInput** | Microphone recording interface | Done | Done | **Presentational component** with optional VoiceWaveform integration. Pass `analyserNode` prop to render waveform above input. Handles record/stop buttons, shows transcript, **includes helper buttons (Sentence/Dictionary/Play)**. Located at `components/ui/speech-input.tsx`. Use with `useVoiceRecorder` hook for voice capture. |
+| **SpeechInput** | Microphone recording interface | Done | Done | **Presentational component** with optional VoiceWaveform integration. Pass `analyserNode` prop to render waveform above input. Handles record/stop buttons, shows transcript, **includes helper buttons (Sentence/Dictionary/Play)**. Located at `components/ui/speech-input.tsx`. Use with `useSpeechRecognition` hook for voice capture. |
 | **KeyboardInput** | Text input for typing spelling | Done | Done | **Implemented as `mode="keyboard"` in SpeechInput.** Uses hidden input with auto-focus, discriminated union types for type safety. See SpeechInput above. |
 | **GameResultCard** | Final placement display after game | Not Started | Not Started | Shows rank badge, XP earned, stats |
 | **GameFeedbackOverlay** | Visual feedback overlay for correct/wrong answers | Done | Done | **Presentational.** Full-screen flash overlay. Green for correct, `--destructive` for wrong. 400ms animation. Located at `components/game/game-feedback-overlay.tsx`. Use with `useGameFeedback` hook for state and `useGameSounds` hook for audio. |
@@ -256,7 +256,7 @@ Hooks that manage state and side effects for components.
 
 | Hook | Description | Implementation Status | Notes |
 |------|-------------|----------------------|-------|
-| **useVoiceRecorder** | Audio capture, visualization, and speech recognition | Done | Single source of truth for voice input. Returns `isRecording`, `startRecording`, `stopRecording`, `analyserNode`, `transcript`, `isSupported`, `error`. Located at `hooks/use-voice-recorder.ts`. Uses Web Speech API for transcription. |
+| **useSpeechRecognition** | Audio capture, visualization, and speech recognition | Done | Single source of truth for voice input. Returns `isRecording`, `startRecording`, `stopRecording`, `analyserNode`, `transcript`, `provider`. Located at `hooks/use-speech-recognition.ts`. Uses provider abstraction: Deepgram (~95% accuracy) with Web Speech API fallback. Service layer at `lib/speech-recognition-service.ts`. |
 | **useGameTimer** | Countdown timer with state management | Done | Single source of truth for timer. Returns `totalSeconds`, `remainingSeconds`, `state`, `isRunning`, `isExpired`, `start`, `pause`, `reset`, `restart`. Located at `hooks/use-game-timer.ts`. Supports callbacks for `onTimeUp` and `onTick`. |
 | **useGameFeedback** | Feedback overlay state management | Done | Owns overlay state and timing. Returns `feedbackType`, `isShowing`, `showCorrect`, `showWrong`, `clear`. Auto-clears after animation (400ms). Located at `hooks/use-game-feedback.ts`. |
 | **useGameSounds** | Audio playback for game sounds | Done | Preloads and plays game sounds. Returns `playCorrect`, `playWrong`, `play`, `isReady`, `setEnabled`, `setVolume`. Graceful fallback if files missing. Located at `hooks/use-game-sounds.ts`. Expects MP3 files in `public/sounds/`. |
@@ -300,7 +300,7 @@ const timer = useGameTimer(15, { onTimeUp: handleTimeout })
 
 **Decision:** One hook owns the entire audio pipeline; SpeechInput integrates VoiceWaveform directly.
 
-**Example:** `useVoiceRecorder` provides `analyserNode`, `transcript`, `isRecording`, etc. SpeechInput accepts these as props.
+**Example:** `useSpeechRecognition` provides `analyserNode`, `transcript`, `isRecording`, etc. SpeechInput accepts these as props.
 
 **Why:**
 - Single source of truth for audio state
@@ -310,7 +310,7 @@ const timer = useGameTimer(15, { onTimeUp: handleTimeout })
 - Junior developers only need to understand one component, not composition
 
 ```
-useVoiceRecorder (owns audio pipeline)
+useSpeechRecognition (owns audio pipeline + provider selection)
     │
     └── All values → SpeechInput (presentational, but fully featured)
                          │
@@ -319,7 +319,7 @@ useVoiceRecorder (owns audio pipeline)
 
 **Usage:**
 ```tsx
-const { isRecording, startRecording, stopRecording, analyserNode, transcript } = useVoiceRecorder()
+const { isRecording, startRecording, stopRecording, analyserNode, transcript } = useSpeechRecognition()
 
 <SpeechInput
   state={isRecording ? "recording" : "default"}
@@ -440,7 +440,7 @@ The project uses **OKLCH color space** for perceptually uniform colors. Key toke
 | 2025-12-21 | Added Section 11 (Custom Hooks) and Architecture Decisions section. Documented wrapper pattern for GameTimer, single-hook pattern for voice input, presentational vs. smart component distinction. Updated VoiceWaveform and VoiceInput notes to reflect architecture. | Claude |
 | 2025-12-21 | Updated Design System Notes to reference OKLCH color system from globals.css, added explicit references to STYLE_GUIDE.md and lib/icons.ts, added border radius scale table. | Claude |
 | 2025-12-22 | Implemented HeartsDisplay component. Added HeartIcon to lib/icons.ts. Added heart-loss animation to globals.css. | Claude |
-| 2025-12-22 | Integrated VoiceWaveform into SpeechInput. Renamed VoiceInput to SpeechInput in inventory (already existed). Added `analyserNode` prop for optional waveform rendering. Updated useVoiceRecorder status to Done. Updated Architecture Decisions to reflect integration pattern. | Claude |
+| 2025-12-22 | Integrated VoiceWaveform into SpeechInput. Renamed VoiceInput to SpeechInput in inventory (already existed). Added `analyserNode` prop for optional waveform rendering. Updated useSpeechRecognition status to Done. Updated Architecture Decisions to reflect integration pattern. | Claude |
 | 2025-12-26 | Implemented GameTimer component and useGameTimer hook. Uses wrapper pattern around Progress. Two states: normal (--primary) and critical (--destructive, ≤5 seconds). Added demo to showcase page. | Claude |
 | 2025-12-26 | Implemented GameFeedbackOverlay component, useGameFeedback hook, and useGameSounds hook. Combines CorrectAnswerFeedback and WrongAnswerFeedback into single overlay component. Created public/sounds/ folder for audio files. Added demo to showcase page. | Claude |
 | 2025-12-26 | Removed RoundIndicator from inventory — it's just inline text, not a component. Added Architecture Decision #4: "When NOT to Create a Component" with guidelines on avoiding over-abstraction. | Claude |
@@ -451,6 +451,7 @@ The project uses **OKLCH color space** for perceptually uniform colors. Key toke
 | 2026-01-08 | Added HexPattern component for decorative hexagonal backgrounds. Created as component (not static SVG) for future dynamic theming. Includes commented code for future color/scale/opacity props. Added TopNavbar to inventory (was missing). Updated STYLE_GUIDE.md with HexPattern documentation. Figma: node `2641:7585`. | Claude |
 | 2026-01-08 | Implemented Leaderboard components: LeaderboardTable (TanStack React Table + pagination), Pagination (composable nav), SearchInput (InputGroup composite). Added SearchIcon and FilterIcon to lib/icons.ts. Created Leaderboard page at `/leaderboard`. Marked LeaderboardRow, LeaderboardFilters, LeaderboardTabs as N/A (merged/existing components used). Figma: node `2435:33026`. | Claude |
 | 2026-01-08 | Refactored Leaderboard to follow shadcn data table patterns. Created reusable `DataTable` component in `components/ui/`. Separated column definitions to `leaderboard-columns.tsx`. Added semantic `--placement-gold/silver/bronze` color tokens to globals.css (replacing hardcoded Tailwind colors). Added `data-slot` attributes to all cell components. | Claude |
+| 2026-01-10 | Implemented speech recognition provider abstraction for improved accuracy. Created `lib/speech-recognition-service.ts` with Deepgram (~95%) and Web Speech API fallback. Created `useSpeechRecognition` hook. Deprecated old `useVoiceRecorder` hook. Added aggressive phonetic mapping and `formatTranscriptForDisplay()` for real-time letter display. Added `.env.example` for Deepgram API key. Updated all documentation. | Claude |
 
 ---
 

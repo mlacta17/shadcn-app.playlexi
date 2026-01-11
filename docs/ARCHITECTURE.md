@@ -1077,30 +1077,39 @@ async alarm() {
 
 ### 8.1 Architecture Overview
 
-The voice input system follows a **single-hook, multiple-consumer** pattern:
+The voice input system follows a **single-hook, provider-abstraction** pattern:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     useVoiceRecorder                         │
+│                   useSpeechRecognition                       │
+│                          (hook)                              │
 │                                                              │
 │  Responsibilities:                                           │
 │  • Request microphone permission                             │
 │  • Create MediaStream                                        │
 │  • Create AnalyserNode (for visualization)                   │
-│  • Capture audio blob                                        │
-│  • Send blob to Whisper API                                  │
-│  • Return transcript                                         │
+│  • Select speech recognition provider (Deepgram/Web Speech)  │
+│  • Return real-time transcript                               │
 │                                                              │
 │  Returns:                                                    │
 │  {                                                           │
 │    analyserNode,      // For VoiceWaveform                   │
 │    isRecording,       // UI state                            │
-│    isTranscribing,    // Loading state                       │
-│    transcript,        // Result from Whisper                 │
-│    error,             // Error state                         │
+│    transcript,        // Real-time result                    │
+│    provider,          // Current provider info               │
 │    startRecording,    // Action                              │
 │    stopRecording,     // Action                              │
 │  }                                                           │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│               SpeechRecognitionService                       │
+│                    (lib/speech-recognition-service.ts)       │
+│                                                              │
+│  Provider Selection:                                         │
+│  • Deepgram (~95% accuracy, $0.0043/min) — if API key set   │
+│  • Web Speech API (~70-80%, free) — fallback                │
 └─────────────────────────────────────────────────────────────┘
                               │
               ┌───────────────┴───────────────┐
@@ -1122,178 +1131,80 @@ The voice input system follows a **single-hook, multiple-consumer** pattern:
 | Principle | Implementation |
 |-----------|----------------|
 | Single Source of Truth | Hook owns entire audio pipeline |
+| Provider Abstraction | Easy to switch between Deepgram/Web Speech API |
 | Separation of Concerns | Visualization separate from transcription |
 | Testability | Each piece testable in isolation |
-| Reusability | VoiceWaveform usable without Whisper |
+| Scalability | Deepgram for production, Web Speech for dev/fallback |
 
-### 8.2 Whisper API Integration
+### 8.2 Provider Abstraction (lib/speech-recognition-service.ts)
+
+The speech recognition service provides a unified interface for multiple providers:
 
 ```typescript
-// lib/whisper.ts
+// Provider types
+export type SpeechProvider = "web-speech" | "deepgram" | "whisper"
 
-/**
- * Transcribes audio using Cloudflare Workers AI (Whisper model).
- * Audio is processed in-memory and never stored.
- */
-export async function transcribeAudio(audioBlob: Blob): Promise<string> {
-  const formData = new FormData()
-  formData.append('audio', audioBlob)
-
-  const response = await fetch('/api/voice/transcribe', {
-    method: 'POST',
-    body: formData,
-  })
-
-  if (!response.ok) {
-    throw new Error('Transcription failed')
-  }
-
-  const data = await response.json()
-  return data.text
+// Provider interface
+export interface ISpeechRecognitionProvider {
+  name: SpeechProvider
+  isSupported: () => boolean
+  start: (config: SpeechRecognitionConfig) => Promise<SpeechRecognitionSession>
 }
+
+// Get best available provider (Deepgram if API key set, else Web Speech API)
+export function getSpeechProvider(): ISpeechRecognitionProvider
 ```
 
-### 8.3 API Route (Cloudflare Workers AI)
+### 8.3 Deepgram Provider (Recommended)
+
+Deepgram provides ~95% accuracy with keyword boosting for letter recognition:
+
+- **Cost**: $0.0043 per minute (~$0.0007 per 10-second spelling round)
+- **Features**: Real-time WebSocket streaming, keyword boosting for letters
+- **Setup**: Set `NEXT_PUBLIC_DEEPGRAM_API_KEY` in `.env.local`
 
 ```typescript
-// app/api/voice/transcribe/route.ts
-
-export async function POST(req: Request) {
-  const formData = await req.formData()
-  const audio = formData.get('audio') as Blob
-
-  if (!audio) {
-    return Response.json({ error: 'No audio provided' }, { status: 400 })
-  }
-
-  // Convert to array buffer for Workers AI
-  const arrayBuffer = await audio.arrayBuffer()
-
-  // Call Cloudflare Workers AI Whisper model
-  const result = await env.AI.run('@cf/openai/whisper', {
-    audio: [...new Uint8Array(arrayBuffer)],
-  })
-
-  return Response.json({
-    text: result.text,
-    // No confidence score exposed to prevent gaming
-  })
-}
+// Keywords boosted for letter recognition
+export const SPELLING_KEYWORDS: string[] = [
+  // Single letters
+  "a", "b", "c", /* ... */
+  // Spoken letter names
+  "ay", "bee", "see", /* ... */
+  // NATO phonetic alphabet
+  "alpha", "bravo", "charlie", /* ... */
+]
 ```
 
-### 8.4 Voice Recorder Hook
+### 8.4 Web Speech API Provider (Fallback)
+
+Free browser-based fallback when Deepgram is not configured:
+
+- **Cost**: Free
+- **Accuracy**: ~70-80% (lower for letter-by-letter spelling)
+- **Features**: Real-time, continuous recognition
+- **Limitation**: No keyword boosting
+
+### 8.5 useSpeechRecognition Hook
 
 ```typescript
-// hooks/use-voice-recorder.ts
+// hooks/use-speech-recognition.ts
 
-export interface UseVoiceRecorderReturn {
-  /** AnalyserNode for VoiceWaveform visualization */
-  analyserNode: AnalyserNode | null
-  /** Whether currently recording */
+export interface UseSpeechRecognitionReturn {
   isRecording: boolean
-  /** Whether audio is being transcribed */
-  isTranscribing: boolean
-  /** Transcription result from Whisper */
-  transcript: string | null
-  /** Error state */
-  error: Error | null
-  /** Start recording audio */
   startRecording: () => Promise<void>
-  /** Stop recording and transcribe */
-  stopRecording: () => Promise<string>
+  stopRecording: () => void
+  analyserNode: AnalyserNode | null  // For VoiceWaveform
+  transcript: string                  // Real-time transcript
+  provider: SpeechProvider | null     // Current provider
 }
 
-export function useVoiceRecorder(): UseVoiceRecorderReturn {
-  const [isRecording, setIsRecording] = useState(false)
-  const [isTranscribing, setIsTranscribing] = useState(false)
-  const [transcript, setTranscript] = useState<string | null>(null)
-  const [error, setError] = useState<Error | null>(null)
-  const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null)
-
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
-  const chunksRef = useRef<Blob[]>([])
-
-  const startRecording = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-
-      // Set up audio context for visualization
-      const audioContext = new AudioContext()
-      const source = audioContext.createMediaStreamSource(stream)
-      const analyser = audioContext.createAnalyser()
-      analyser.fftSize = 256
-      source.connect(analyser)
-
-      audioContextRef.current = audioContext
-      setAnalyserNode(analyser)
-
-      // Set up recording
-      const mediaRecorder = new MediaRecorder(stream)
-      mediaRecorderRef.current = mediaRecorder
-      chunksRef.current = []
-
-      mediaRecorder.ondataavailable = (e) => {
-        chunksRef.current.push(e.data)
-      }
-
-      mediaRecorder.start()
-      setIsRecording(true)
-      setTranscript(null)
-      setError(null)
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to start recording'))
-    }
-  }, [])
-
-  const stopRecording = useCallback(async () => {
-    const mediaRecorder = mediaRecorderRef.current
-    if (!mediaRecorder) return ''
-
-    return new Promise<string>((resolve) => {
-      mediaRecorder.onstop = async () => {
-        setIsRecording(false)
-        setAnalyserNode(null)
-
-        // Clean up audio context
-        audioContextRef.current?.close()
-
-        // Stop all tracks
-        mediaRecorder.stream.getTracks().forEach((track) => track.stop())
-
-        // Create blob and transcribe
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
-        setIsTranscribing(true)
-
-        try {
-          const result = await transcribeAudio(blob)
-          setTranscript(result)
-          resolve(result)
-        } catch (err) {
-          setError(err instanceof Error ? err : new Error('Transcription failed'))
-          resolve('')
-        } finally {
-          setIsTranscribing(false)
-        }
-      }
-
-      mediaRecorder.stop()
-    })
-  }, [])
-
-  return {
-    analyserNode,
-    isRecording,
-    isTranscribing,
-    transcript,
-    error,
-    startRecording,
-    stopRecording,
-  }
-}
+export function useSpeechRecognition(options?: {
+  spellingMode?: boolean  // Enable spelling optimizations
+  onTranscript?: (text: string) => void
+}): UseSpeechRecognitionReturn
 ```
 
-### 8.5 SpeechInput Component (Presentational — ✅ Done)
+### 8.6 SpeechInput Component (Presentational — ✅ Done)
 
 The `SpeechInput` component at `components/ui/speech-input.tsx` is **presentational only**:
 
@@ -1303,7 +1214,7 @@ The `SpeechInput` component at `components/ui/speech-input.tsx` is **presentatio
 - No hooks or state management internally
 
 ```typescript
-// Usage with useVoiceRecorder hook
+// Usage with useSpeechRecognition hook
 function GameVoiceInput({ onSubmit, disabled }: GameVoiceInputProps) {
   const {
     analyserNode,
@@ -1311,44 +1222,43 @@ function GameVoiceInput({ onSubmit, disabled }: GameVoiceInputProps) {
     transcript,
     startRecording,
     stopRecording,
-  } = useVoiceRecorder()
+  } = useSpeechRecognition({ spellingMode: true })
 
   return (
     <SpeechInput
       state={isRecording ? "recording" : "default"}
       analyserNode={analyserNode}
-      inputText={transcript}
+      inputText={formatTranscriptForDisplay(transcript)}  // Shows "R-U-N" instead of "are you in"
       onRecordClick={startRecording}
       onStopClick={stopRecording}
-      onSubmit={() => onSubmit(transcript)}
-      // ... other props
     />
   )
 }
 ```
 
-### 8.6 VoiceWaveform Component (Presentational — ✅ Done)
+### 8.7 VoiceWaveform Component (Presentational — ✅ Done)
 
 The `VoiceWaveform` component is **purely presentational**:
 
 - Located at `components/ui/voice-waveform.tsx`
 - Takes only an `AnalyserNode` prop
 - Draws frequency bars on a canvas
-- Has no knowledge of recording, transcription, or Whisper
+- Has no knowledge of recording or transcription
 - Respects `prefers-reduced-motion` for accessibility
 - **Integrated into SpeechInput**: Pass `analyserNode` prop to SpeechInput to auto-render waveform
 
 This separation allows `VoiceWaveform` to be reused in other contexts (e.g., audio playback visualization) without modification.
 
-### 8.7 Component Relationships
+### 8.8 Component Relationships
 
 | Component/Hook | Type | Responsibility | Status |
 |----------------|------|----------------|--------|
-| `useVoiceRecorder` | Hook | Audio pipeline, Whisper API calls | ✅ Done |
+| `useSpeechRecognition` | Hook | Provider selection, audio pipeline | ✅ Done |
+| `SpeechRecognitionService` | Service | Provider abstraction (Deepgram/Web Speech) | ✅ Done |
 | `VoiceWaveform` | UI Component | Draw frequency bars from AnalyserNode | ✅ Done |
 | `SpeechInput` | UI Component | Presentational voice input with waveform + helper buttons | ✅ Done |
 
-### 8.8 Error Handling
+### 8.9 Error Handling
 
 | Scenario | Handling |
 |----------|----------|
@@ -2394,9 +2304,9 @@ function GameTimer({ totalSeconds, remainingSeconds }: GameTimerProps) {
 | **Status** | Accepted |
 | **Deciders** | Project team |
 
-**Context:** Voice input requires: (1) microphone access, (2) audio visualization via AnalyserNode, (3) recording, (4) Whisper transcription. Should each concern have its own hook, or one hook that owns the entire pipeline?
+**Context:** Voice input requires: (1) microphone access, (2) audio visualization via AnalyserNode, (3) recording, (4) speech-to-text transcription. Should each concern have its own hook, or one hook that owns the entire pipeline?
 
-**Decision:** One hook (`useVoiceRecorder`) owns the entire audio pipeline; multiple components consume from it.
+**Decision:** One hook (`useSpeechRecognition`) owns the entire audio pipeline with provider abstraction; multiple components consume from it.
 
 **Rationale:**
 - Single source of truth for audio state
@@ -2404,6 +2314,7 @@ function GameTimer({ totalSeconds, remainingSeconds }: GameTimerProps) {
 - No risk of two hooks fighting over the same MediaStream
 - Clear separation: hook handles logic, components handle UI
 - Easier to test — mock one hook, not three
+- Provider abstraction allows switching between Deepgram (~95% accuracy) and Web Speech API (fallback)
 
 **Consequences:**
 - Hook is larger and more complex
@@ -2413,7 +2324,7 @@ function GameTimer({ totalSeconds, remainingSeconds }: GameTimerProps) {
 
 **Architecture:**
 ```
-useVoiceRecorder (owns audio pipeline)
+useSpeechRecognition (owns audio pipeline + provider selection)
     │
     ├── analyserNode → SpeechInput (presentational, includes VoiceWaveform)
     │
@@ -2613,17 +2524,18 @@ After Phase 2 is working locally, complete these before Phase 3:
 
 | Task | Type | Details | Status |
 |------|------|---------|--------|
-| 2.1 | Hook | `useVoiceRecorder` — mic access, AnalyserNode, Whisper transcription | ✅ Done |
+| 2.1 | Hook | `useSpeechRecognition` — mic access, AnalyserNode, Deepgram/Web Speech API | ✅ Done |
+| 2.1b | Service | `SpeechRecognitionService` — provider abstraction for speech-to-text | ✅ Done |
 | 2.2 | Hook | `useGameTimer` — countdown with warning/critical states | ✅ Done |
 | 2.2b | Hook | `useGameFeedback` — overlay state and timing | ✅ Done |
 | 2.2c | Hook | `useGameSounds` — audio playback for game sounds | ✅ Done |
 | 2.3 | Component | `SpeechInput` — presentational voice input with VoiceWaveform + helper buttons | ✅ Done |
-| 2.4 | Component | `KeyboardInput` — text input alternative | Not Started |
+| 2.4 | Component | `KeyboardInput` — text input alternative (mode="keyboard" in SpeechInput) | ✅ Done |
 | 2.5 | Component | `GameTimer` — wrapper around Progress with timer logic | ✅ Done |
 | 2.6 | Component | `HeartsDisplay` — 3 hearts with loss animation | ✅ Done |
 | 2.6b | Component | `GameFeedbackOverlay` — correct/wrong answer flash overlay | ✅ Done |
 | 2.7 | Component | `RoundIndicator` — "Round 1" badge | ✗ Removed (inline text, not a component) |
-| 2.9 | API | `/api/voice/transcribe` — Whisper via Workers AI | Not Started |
+| 2.9 | API | Speech recognition via Deepgram WebSocket API | ✅ Done (client-side) |
 | 2.10 | API | `/api/games` — create solo game session | Not Started |
 | 2.11 | API | `/api/games/[gameId]/submit` — submit answer, check correctness | Not Started |
 | 2.12 | Page | `/play/single/endless/page.tsx` — mode selection | Not Started |

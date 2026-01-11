@@ -95,7 +95,7 @@ interface SpeechInputBaseProps extends React.ComponentProps<"div"> {
 interface VoiceModeProps extends SpeechInputBaseProps {
   mode?: "voice"
   /**
-   * Audio analyser node from useVoiceRecorder hook.
+   * Audio analyser node from useSpeechRecognition hook.
    * When provided, renders VoiceWaveform above the input controls.
    * The waveform shows active state when state="recording".
    */
@@ -146,16 +146,16 @@ export type SpeechInputProps = VoiceModeProps | KeyboardModeProps
  *
  * ## Architecture
  * The component is intentionally "dumb" — it doesn't manage audio or input state.
- * Audio capture is handled by `useVoiceRecorder` hook. Keyboard input state
+ * Audio capture is handled by `useSpeechRecognition` hook. Keyboard input state
  * is managed by the parent component.
  * This separation allows:
  * - Easy testing (just pass props)
  * - Flexibility in how input is managed
  * - Clear separation of concerns
  *
- * ## Usage with Voice Mode (useVoiceRecorder)
+ * ## Usage with Voice Mode (useSpeechRecognition)
  * ```tsx
- * const { isRecording, startRecording, stopRecording, analyserNode, transcript } = useVoiceRecorder()
+ * const { isRecording, startRecording, stopRecording, analyserNode, transcript } = useSpeechRecognition()
  *
  * <SpeechInput
  *   mode="voice"

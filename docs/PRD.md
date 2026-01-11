@@ -880,11 +880,86 @@ When an answer is submitted:
 
 | Decision | Choice |
 |----------|--------|
-| Provider | OpenAI Whisper (self-hosted) |
-| Mode | Strict — what Whisper hears is final |
+| Primary Provider | **Deepgram** (Nova-2 model) |
+| Fallback Provider | Web Speech API (browser built-in) |
+| Mode | Strict — what the provider hears is final |
 | No editing | Players cannot correct misheard words |
 
 **Rationale:** Allowing edits on low confidence is exploitable (mumble intentionally to get typing fallback).
+
+#### 12.1.0 Provider Selection
+
+We evaluated multiple speech recognition providers for spelling accuracy:
+
+| Provider | Cost | Real-Time | Spelling Accuracy | Decision |
+|----------|------|-----------|-------------------|----------|
+| **Deepgram** | $0.0043/min | ✅ Yes | ~95% | **✅ Selected** |
+| OpenAI Whisper | $0.006/min | ❌ No | ~85-90% | Rejected (batch only) |
+| AssemblyAI | $0.015/min | ✅ Yes | ~90% | Too expensive |
+| Google Cloud | $0.016/min | ✅ Yes | ~90% | Too expensive |
+| Web Speech API | Free | ✅ Yes | ~70-80% | **Fallback only** |
+
+**Why Deepgram:**
+1. **Keywords Feature** — Boosts recognition of letter names (A, B, C, "bee", "see", "dee")
+2. **Real-Time Streaming** — Sub-200ms latency for instant feedback
+3. **Cost-Effective** — ~$0.0007 per 10-second spelling round
+4. **Scalability** — At 1000 players × 20 rounds/day = ~$14/day
+
+**Cost Projection:**
+| Scale | Daily Rounds | Daily Cost | Monthly Cost |
+|-------|--------------|------------|--------------|
+| MVP (100 users) | 2,000 | ~$1.40 | ~$42 |
+| Growth (1,000 users) | 20,000 | ~$14 | ~$420 |
+| Scale (10,000 users) | 200,000 | ~$140 | ~$4,200 |
+
+**Implementation:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     useSpeechRecognition Hook                    │
+│                            │                                     │
+│                            ▼                                     │
+│              SpeechRecognitionService (abstraction)              │
+│                            │                                     │
+│          ┌─────────────────┼─────────────────┐                  │
+│          ▼                 ▼                 ▼                  │
+│   DeepgramProvider   WebSpeechProvider   (Future: Whisper)      │
+│   (primary)          (fallback)                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Environment Variables:**
+- `NEXT_PUBLIC_DEEPGRAM_API_KEY` — Required for Deepgram (falls back to Web Speech API if not set)
+
+#### 12.1.1 Anti-Cheat: Spelled Letters vs Whole Word
+
+For voice mode, players **must spell the word letter-by-letter**. Simply saying the whole word is NOT valid and will be marked as incorrect.
+
+| Input | Word | Result | Why |
+|-------|------|--------|-----|
+| "D O G" | dog | ✅ Valid | Letters separated by spaces |
+| "dee oh gee" | dog | ✅ Valid | Spoken letter names |
+| "delta oscar golf" | dog | ✅ Valid | NATO phonetic alphabet |
+| "dog" | dog | ❌ Invalid | Said the whole word |
+| "beautiful" | beautiful | ❌ Invalid | Said the whole word |
+
+**Detection Strategies:**
+1. **Separator detection**: Input contains spaces/dashes between single characters
+2. **NATO phonetic**: Recognizes "alpha", "bravo", "charlie", etc.
+3. **Spoken letter names**: Recognizes "bee", "see", "dee", "double-u", etc.
+4. **Exact match rejection**: If input exactly matches the word without separators, reject
+
+**Edge Cases:**
+- Single-letter words (a, I): Allow direct match
+- Homophones: "see" could mean letter C or the word "see" — context of word length helps disambiguate
+
+**Implementation:**
+- `isSpelledOut(input, correctWord)` — Returns true if input appears spelled out
+- `extractLettersFromVoice(input)` — Converts phonetic/spoken letters to actual letters
+- `validateAnswer(answer, word, inputMode)` — Uses input mode to apply voice-specific rules
+
+**User Feedback:**
+When a player says the whole word instead of spelling it, show a message:
+> "Please spell the word letter by letter (e.g., 'D-O-G')"
 
 ### 12.2 Architecture
 

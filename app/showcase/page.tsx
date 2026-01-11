@@ -66,7 +66,7 @@ import { VoiceWaveform } from "@/components/ui/voice-waveform"
 import { Navbar } from "@/components/ui/navbar"
 import { TopNavbar } from "@/components/ui/top-navbar"
 import { HeartsDisplay, GameTimer, GameFeedbackOverlay, RankBadge, RANK_LABELS, type RankTier, LeaderboardTable, type LeaderboardPlayer } from "@/components/game"
-import { useVoiceRecorder } from "@/hooks/use-voice-recorder"
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition"
 import { useGameTimer } from "@/hooks/use-game-timer"
 import { useGameFeedback } from "@/hooks/use-game-feedback"
 import { useGameSounds } from "@/hooks/use-game-sounds"
@@ -836,7 +836,7 @@ function ComboboxErrorDemo() {
 }
 
 function VoiceWaveformDemo() {
-  const { isRecording, startRecording, stopRecording, analyserNode, transcript } = useVoiceRecorder({
+  const { isRecording, startRecording, stopRecording, analyserNode, transcript } = useSpeechRecognition({
     onTranscript: (text) => console.log("Transcript:", text),
   })
 
@@ -878,11 +878,11 @@ function VoiceWaveformDemo() {
 }
 
 /**
- * SpeechInput demo with real voice recording via useVoiceRecorder.
+ * SpeechInput demo with real voice recording via useSpeechRecognition.
  * Uses the integrated VoiceWaveform (pass analyserNode prop).
  */
 function SpeechInputDemo() {
-  const { isRecording, startRecording, stopRecording, analyserNode, transcript } = useVoiceRecorder()
+  const { isRecording, startRecording, stopRecording, analyserNode, transcript } = useSpeechRecognition()
   const [playPressed, setPlayPressed] = useState(false)
   const [dictionaryPressed, setDictionaryPressed] = useState(false)
   const [sentencePressed, setSentencePressed] = useState(false)

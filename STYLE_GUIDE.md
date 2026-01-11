@@ -318,7 +318,7 @@ Some components use HTML Canvas for performance-critical rendering. These can't 
 
 ### Voice Waveform
 - **Location:** [components/ui/voice-waveform.tsx](components/ui/voice-waveform.tsx)
-- **Hook:** [hooks/use-voice-recorder.ts](hooks/use-voice-recorder.ts)
+- **Hook:** [hooks/use-speech-recognition.ts](hooks/use-speech-recognition.ts)
 - **Type:** Canvas-based audio visualizer
 
 #### Design System Integration:
@@ -332,9 +332,10 @@ Some components use HTML Canvas for performance-critical rendering. These can't 
 
 #### Architecture:
 ```
-useVoiceRecorder (hook) - owns microphone + speech recognition
+useSpeechRecognition (hook) - owns microphone + speech recognition
 ├── analyserNode → VoiceWaveform (presentational)
 ├── transcript → display recognized speech
+├── provider → current provider info (deepgram or web-speech)
 └── isRecording, startRecording, stopRecording → controls
 ```
 
@@ -342,12 +343,12 @@ useVoiceRecorder (hook) - owns microphone + speech recognition
 VoiceWaveform can be used standalone if needed, but **the recommended approach is to use SpeechInput with `analyserNode` prop** for full integration.
 
 ```tsx
-import { useVoiceRecorder } from "@/hooks/use-voice-recorder"
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition"
 import { VoiceWaveform } from "@/components/ui/voice-waveform"
 
 // Standalone (just waveform, no controls)
 function WaveformOnly() {
-  const { analyserNode } = useVoiceRecorder()
+  const { analyserNode } = useSpeechRecognition()
   return <VoiceWaveform analyserNode={analyserNode} />
 }
 
@@ -370,7 +371,7 @@ When creating canvas-based components, follow this pattern:
 
 ### SpeechInput
 - **Location:** [components/ui/speech-input.tsx](components/ui/speech-input.tsx)
-- **Hook:** [hooks/use-voice-recorder.ts](hooks/use-voice-recorder.ts) (voice mode)
+- **Hook:** [hooks/use-speech-recognition.ts](hooks/use-speech-recognition.ts) (voice mode)
 - **Type:** Presentational input component with voice and keyboard modes
 
 #### Design System Integration:
@@ -396,7 +397,7 @@ When creating canvas-based components, follow this pattern:
 #### Architecture:
 ```
 Voice mode:
-useVoiceRecorder (hook)
+useSpeechRecognition (hook)
 └── SpeechInput (presentational)
     ├── analyserNode → VoiceWaveform (auto-rendered when provided)
     ├── transcript → inputText display
@@ -432,11 +433,11 @@ VoiceWaveform is **only shown in voice mode**. When you pass `analyserNode` in v
 
 #### Usage - Voice Mode:
 ```tsx
-import { useVoiceRecorder } from "@/hooks/use-voice-recorder"
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition"
 import { SpeechInput } from "@/components/ui/speech-input"
 
 function VoiceInputScreen() {
-  const { isRecording, startRecording, stopRecording, analyserNode, transcript } = useVoiceRecorder()
+  const { isRecording, startRecording, stopRecording, analyserNode, transcript } = useSpeechRecognition()
 
   return (
     <SpeechInput
@@ -581,7 +582,7 @@ useGameTimer (hook) - owns countdown logic
 └── start, pause, reset, restart → controls
 ```
 
-GameTimer is **presentational only**. It receives values from `useGameTimer` hook and renders a styled Progress bar. This follows the same pattern as SpeechInput + useVoiceRecorder.
+GameTimer is **presentational only**. It receives values from `useGameTimer` hook and renders a styled Progress bar. This follows the same pattern as SpeechInput + useSpeechRecognition.
 
 #### Props:
 | Prop | Type | Description |
@@ -1112,7 +1113,8 @@ When adding a new shadcn component:
 - **Showcase page:** [app/showcase/page.tsx](app/showcase/page.tsx)
 - **Canvas component:** [components/ui/voice-waveform.tsx](components/ui/voice-waveform.tsx)
 - **Voice input:** [components/ui/speech-input.tsx](components/ui/speech-input.tsx)
-- **Voice recorder hook:** [hooks/use-voice-recorder.ts](hooks/use-voice-recorder.ts)
+- **Speech recognition hook:** [hooks/use-speech-recognition.ts](hooks/use-speech-recognition.ts)
+- **Speech recognition service:** [lib/speech-recognition-service.ts](lib/speech-recognition-service.ts)
 - **Game timer hook:** [hooks/use-game-timer.ts](hooks/use-game-timer.ts)
 - **Game feedback hook:** [hooks/use-game-feedback.ts](hooks/use-game-feedback.ts)
 - **Game sounds hook:** [hooks/use-game-sounds.ts](hooks/use-game-sounds.ts)

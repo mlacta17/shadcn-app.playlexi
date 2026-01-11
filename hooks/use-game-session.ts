@@ -10,7 +10,11 @@ import {
   playWordSentence,
   playWordDefinition,
 } from "@/lib/word-service"
-import { validateAnswer, isEmptyAnswer } from "@/lib/answer-validation"
+import {
+  validateAnswer,
+  isEmptyAnswer,
+  type InputMode,
+} from "@/lib/answer-validation"
 
 // =============================================================================
 // TYPES
@@ -217,7 +221,7 @@ function createInitialState(
  *     ├── useGameTimer (manages per-word timer)
  *     ├── useGameFeedback (manages overlay)
  *     ├── useGameSounds (manages audio)
- *     └── useVoiceRecorder (manages voice input)
+ *     └── useSpeechRecognition (manages voice input)
  *
  * All these hooks are used in the Game Page component,
  * but useGameSession is the orchestrator.
@@ -326,6 +330,9 @@ export function useGameSession(
 
   /**
    * Submit an answer.
+   *
+   * For voice mode, validates that the player spelled the word letter-by-letter
+   * rather than just saying the whole word (anti-cheat).
    */
   const submitAnswer = React.useCallback((answer: string) => {
     setState((prev) => {
@@ -356,13 +363,18 @@ export function useGameSession(
         }
       }
 
-      // Validate the answer
-      const result = validateAnswer(answer, prev.currentWord.word)
+      // Validate the answer with input mode for voice anti-cheat
+      const inputMode: InputMode = prev.inputMethod
+      const result = validateAnswer(answer, prev.currentWord.word, inputMode)
+
+      // If voice mode and player didn't spell it out, treat as wrong
+      // The rejectionReason helps with user feedback
+      const isCorrect = result.isCorrect && !result.rejectionReason
 
       const record: AnswerRecord = {
         word: prev.currentWord,
         playerAnswer: answer,
-        isCorrect: result.isCorrect,
+        isCorrect,
         timeTaken,
         round: prev.currentRound,
       }
@@ -371,7 +383,7 @@ export function useGameSession(
         ...prev,
         phase: "checking",
         answers: [...prev.answers, record],
-        lastAnswerCorrect: result.isCorrect,
+        lastAnswerCorrect: isCorrect,
       }
     })
   }, [])

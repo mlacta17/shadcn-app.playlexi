@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils"
  */
 
 export interface VoiceWaveformProps {
-  /** Audio analyser node from useVoiceRecorder hook - when provided, shows active state */
+  /** Audio analyser node from useSpeechRecognition hook - when provided, shows active state */
   analyserNode?: AnalyserNode | null
   /** Number of bars in the waveform (default: 34) */
   barCount?: number
@@ -49,15 +49,15 @@ export interface VoiceWaveformProps {
  *
  * ## Architecture
  * This is a **presentational component**. Audio capture logic should live in
- * the `useVoiceRecorder` hook, which provides the analyserNode.
+ * the `useSpeechRecognition` hook, which provides the analyserNode.
  *
  * @example
  * ```tsx
- * import { useVoiceRecorder } from "@/hooks/use-voice-recorder"
+ * import { useSpeechRecognition } from "@/hooks/use-speech-recognition"
  * import { VoiceWaveform } from "@/components/ui/voice-waveform"
  *
  * function MyComponent() {
- *   const { analyserNode, startRecording, stopRecording } = useVoiceRecorder()
+ *   const { analyserNode, startRecording, stopRecording } = useSpeechRecognition()
  *
  *   return (
  *     <div className="flex flex-col items-center gap-6">

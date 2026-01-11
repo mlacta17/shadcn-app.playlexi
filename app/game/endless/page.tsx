@@ -14,7 +14,8 @@ import { useGameSession } from "@/hooks/use-game-session"
 import { useGameTimer } from "@/hooks/use-game-timer"
 import { useGameFeedback } from "@/hooks/use-game-feedback"
 import { useGameSounds } from "@/hooks/use-game-sounds"
-import { useVoiceRecorder } from "@/hooks/use-voice-recorder"
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition"
+import { formatTranscriptForDisplay } from "@/lib/answer-validation"
 
 /**
  * Endless Mode Game Screen
@@ -38,7 +39,7 @@ import { useVoiceRecorder } from "@/hooks/use-voice-recorder"
  * - useGameTimer: Manages per-word countdown
  * - useGameFeedback: Manages correct/wrong overlay
  * - useGameSounds: Plays feedback sounds
- * - useVoiceRecorder: Handles voice input and visualization
+ * - useSpeechRecognition: Handles voice input and visualization
  *
  * @see PRD Section 4.1.1 — Endless Mode
  */
@@ -74,13 +75,16 @@ export default function EndlessGamePage() {
   // ---------------------------------------------------------------------------
   // Voice Recording
   // ---------------------------------------------------------------------------
+  // Uses provider abstraction: Deepgram (~95% accuracy) or Web Speech API (fallback)
+  // Deepgram is used automatically if NEXT_PUBLIC_DEEPGRAM_API_KEY is set
   const {
     isRecording,
     startRecording,
     stopRecording,
     analyserNode,
     transcript,
-  } = useVoiceRecorder()
+    provider,
+  } = useSpeechRecognition({ spellingMode: true })
 
   // ---------------------------------------------------------------------------
   // Local UI State
@@ -259,6 +263,13 @@ export default function EndlessGamePage() {
   const isPlaying = gameState.phase === "playing"
   const currentWord = gameState.currentWord
 
+  // Transform raw transcript to display-friendly letter format
+  // Shows "R-U-N" instead of "are you in" for better UX
+  const displayTranscript = React.useMemo(
+    () => formatTranscriptForDisplay(transcript),
+    [transcript]
+  )
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -316,10 +327,11 @@ export default function EndlessGamePage() {
             />
 
             {/* Speech Input - without integrated waveform since we show it separately above */}
+            {/* Uses displayTranscript to show interpreted letters (e.g., "R-U-N") instead of raw speech */}
             <SpeechInput
               mode="voice"
               state={isRecording ? "recording" : "default"}
-              inputText={transcript}
+              inputText={displayTranscript}
               definition={currentWord?.definition}
               playPressed={activeHelper === "play"}
               sentencePressed={activeHelper === "sentence"}
