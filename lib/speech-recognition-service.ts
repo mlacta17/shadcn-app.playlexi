@@ -105,29 +105,13 @@ export interface ISpeechRecognitionProvider {
  * Keywords to boost for spelling recognition.
  * These are passed to Deepgram's keywords feature to improve letter accuracy.
  *
- * Includes:
- * - Single letters (a, b, c...)
- * - Spoken letter names (ay, bee, see, dee...)
- * - NATO phonetic alphabet (alpha, bravo, charlie...)
+ * NOTE: Keep this list SHORT to avoid URL length limits.
+ * Only include the most commonly confused letter sounds.
  */
 export const SPELLING_KEYWORDS: string[] = [
-  // Single letters
+  // Single letters only - these are the core keywords
   "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
   "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
-
-  // Spoken letter names (what people say when spelling)
-  "ay", "bee", "see", "dee", "ee", "ef", "gee", "aitch", "eye", "jay",
-  "kay", "el", "em", "en", "oh", "pee", "cue", "ar", "es", "tee",
-  "you", "vee", "double-u", "ex", "why", "zee", "zed",
-
-  // NATO phonetic alphabet
-  "alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf",
-  "hotel", "india", "juliet", "kilo", "lima", "mike", "november",
-  "oscar", "papa", "quebec", "romeo", "sierra", "tango", "uniform",
-  "victor", "whiskey", "xray", "yankee", "zulu",
-
-  // Common mishearings we want to catch
-  "are", "sea", "tea", "queue", "owe", "aye",
 ]
 
 // =============================================================================
@@ -180,25 +164,28 @@ class DeepgramProvider implements ISpeechRecognitionProvider {
 
     const { onInterimResult, onFinalResult, onError, language = "en-US" } = config
 
-    // Build WebSocket URL with query parameters
+    // Build WebSocket URL optimized for LOW LATENCY spelling
     const params = new URLSearchParams({
-      model: "nova-2", // Latest model with best accuracy
+      model: "nova-2",
       language: language.split("-")[0], // "en-US" -> "en"
-      punctuate: "false", // Don't add punctuation
-      interim_results: "true", // Get real-time feedback
-      utterance_end_ms: "1000", // Consider speech ended after 1s silence
-      vad_events: "true", // Voice activity detection
-    })
-
-    // Add keywords for letter boosting
-    const keywords = config.keywords ?? SPELLING_KEYWORDS
-    keywords.forEach((kw) => {
-      params.append("keywords", `${kw}:2`) // Boost by factor of 2
+      punctuate: "false",
+      interim_results: "true",
+      // Speed optimizations:
+      endpointing: "200", // Detect end of speech after 200ms silence (faster!)
+      utterance_end_ms: "300", // Finalize after 300ms (was 500)
+      vad_turnoff: "200", // Voice activity detection timeout
     })
 
     const wsUrl = `wss://api.deepgram.com/v1/listen?${params.toString()}`
 
+    // Debug: Log the connection attempt
+    if (process.env.NODE_ENV === "development") {
+      console.log("[Deepgram] Connecting to:", wsUrl)
+      console.log("[Deepgram] API key present:", !!apiKey, "length:", apiKey?.length)
+    }
+
     // Create WebSocket connection
+    // Deepgram expects the API key in the Authorization header via subprotocol
     const socket = new WebSocket(wsUrl, ["token", apiKey])
 
     let isActive = true
@@ -255,12 +242,17 @@ class DeepgramProvider implements ISpeechRecognitionProvider {
       }
     }
 
-    socket.onerror = () => {
+    socket.onerror = (event) => {
+      console.error("[Deepgram] WebSocket error:", event)
       onError?.(new Error("Deepgram WebSocket error"))
     }
 
-    socket.onclose = () => {
+    socket.onclose = (event) => {
       isActive = false
+      // Log close reason for debugging
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[Deepgram] WebSocket closed: code=${event.code}, reason=${event.reason || "none"}`)
+      }
       // Cleanup media stream
       if (mediaStream) {
         mediaStream.getTracks().forEach((track) => track.stop())

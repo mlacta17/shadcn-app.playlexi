@@ -77,6 +77,9 @@ export default function EndlessGamePage() {
   // ---------------------------------------------------------------------------
   // Uses provider abstraction: Deepgram (~95% accuracy) or Web Speech API (fallback)
   // Deepgram is used automatically if NEXT_PUBLIC_DEEPGRAM_API_KEY is set
+  //
+  // Auto-submit: When Deepgram sends a FINAL transcript, we automatically
+  // submit the answer. This makes the game faster - no need to press "Stop".
   const {
     isRecording,
     startRecording,
@@ -84,7 +87,16 @@ export default function EndlessGamePage() {
     analyserNode,
     transcript,
     provider,
-  } = useSpeechRecognition({ spellingMode: true })
+  } = useSpeechRecognition({
+    spellingMode: true,
+    onTranscript: (finalTranscript) => {
+      // Auto-submit when we get a final transcript
+      if (finalTranscript && gameState.phase === "playing") {
+        stopRecording()
+        gameActions.submitAnswer(finalTranscript)
+      }
+    },
+  })
 
   // ---------------------------------------------------------------------------
   // Local UI State

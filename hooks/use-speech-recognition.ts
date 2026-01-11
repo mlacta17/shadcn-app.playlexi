@@ -161,6 +161,11 @@ export function useSpeechRecognition(
       providerRef.current = speechProvider
       setProvider(speechProvider.name)
 
+      // Debug: Log which provider is being used
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[Speech] Using provider: ${speechProvider.name}`)
+      }
+
       // Set up audio context for visualization
       // (We need our own media stream for the analyser)
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -180,9 +185,17 @@ export function useSpeechRecognition(
       // Start recognition session
       const session = await speechProvider.start({
         onInterimResult: (text) => {
+          // Debug: Log raw interim transcripts from speech provider
+          if (process.env.NODE_ENV === "development") {
+            console.log(`[Speech:${speechProvider.name}] interim:`, text)
+          }
           setTranscript(text)
         },
         onFinalResult: (text) => {
+          // Debug: Log raw final transcripts from speech provider
+          if (process.env.NODE_ENV === "development") {
+            console.log(`[Speech:${speechProvider.name}] FINAL:`, text)
+          }
           setTranscript(text)
           onTranscript?.(text)
         },

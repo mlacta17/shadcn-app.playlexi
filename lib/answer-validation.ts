@@ -303,11 +303,14 @@ const SPOKEN_LETTER_NAMES: Record<string, string> = {
 
   // === Common phrase fragments ===
   // These handle cases where speech API hears multi-word phrases
-  // when letters are spoken quickly
+  // when letters are spoken quickly. Based on real Deepgram output testing.
+
+  // Two-letter combinations
   "are you": "ru", // "R U" heard as "are you"
   "are we": "rv", // "R V" heard as "are we"
   "you are": "ur", // "U R" heard as "you are"
   "you and": "un", // "U N" heard as "you and"
+  "you an": "un", // "U N" heard as "you an" (from your console!)
   "see you": "cu", // "C U" heard as "see you"
   "i see": "ic", // "I C" heard as "I see"
   "i am": "im", // "I M" heard as "I am"
@@ -316,9 +319,30 @@ const SPOKEN_LETTER_NAMES: Record<string, string> = {
   "and i": "ni", // "N I" heard as "and I"
   "be a": "ba", // "B A" heard as "be a"
   "see a": "ca", // "C A" heard as "see a"
+  "a a": "aa", // "A A" heard as "a a"
+  "see i": "ci", // "C I" heard as "see I"
+  "i a": "ia", // "I A" heard as "I a"
+  "a t": "at", // "A T" heard as "a t"
+  "i t": "it", // "I T" heard as "I t"
+  "s u": "su", // "S U" heard as "s u"
+  "c a": "ca", // "C A" heard as "c a"
+  "u n": "un", // "U N" heard as "u n"
+
+  // Three-letter combinations
   "i am a": "ima", // "I M A" heard as "I am a"
   "are you in": "run", // "R U N" heard as "are you in"
   "are you and": "run", // Alternative mishearing
+  "are you an": "run", // "R U N" heard as "are you an" (from your console!)
+  "see a t": "cat", // "C A T" heard as "see a t"
+  "see a tea": "cat", // "C A T" heard as "see a tea"
+  "see ay tea": "cat", // "C A T" phonetic
+  "see ay t": "cat", // "C A T" variant
+  "a a t": "aat", // "A A T" heard as "a a t" (from your console - partial)
+  "you you an": "uun", // Mishearing variant
+
+  // Four+ letter combinations
+  "are you and i": "runi", // "R U N I"
+  "see a tea es": "cats", // "C A T S"
 }
 
 /**
@@ -714,6 +738,11 @@ export function formatTranscriptForDisplay(transcript: string): string {
 
   // Extract letters using our existing function
   const letters = extractLettersFromVoice(transcript)
+
+  // Debug: Log the transformation
+  if (process.env.NODE_ENV === "development") {
+    console.log(`[Display] "${transcript}" → "${letters}" → "${letters.toUpperCase().split("").join("-")}"`)
+  }
 
   if (letters.length === 0) {
     return ""
