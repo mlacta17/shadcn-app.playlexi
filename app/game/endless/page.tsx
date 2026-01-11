@@ -85,7 +85,19 @@ export default function EndlessGamePage() {
   // ---------------------------------------------------------------------------
   // Local UI State
   // ---------------------------------------------------------------------------
-  const [showDefinition, setShowDefinition] = React.useState(false)
+
+  /**
+   * Track which helper button is currently "pressed" (audio playing).
+   * Only one can be active at a time. Auto-clears after audio duration.
+   *
+   * - "play": Word is being spoken
+   * - "sentence": Word is being used in a sentence
+   * - "definition": Definition is shown (and optionally read aloud)
+   * - null: No helper active
+   */
+  const [activeHelper, setActiveHelper] = React.useState<
+    "play" | "sentence" | "definition" | null
+  >(null)
 
   // Track if game has been started (prevents double-start in StrictMode)
   const hasStartedRef = React.useRef(false)
@@ -102,27 +114,54 @@ export default function EndlessGamePage() {
     }
   }, [gameActions])
 
+  // Store timer methods in refs to avoid dependency array issues during HMR
+  const timerRestartRef = React.useRef(timer.restart)
+  const timerPauseRef = React.useRef(timer.pause)
+  React.useEffect(() => {
+    timerRestartRef.current = timer.restart
+    timerPauseRef.current = timer.pause
+  })
+
   // Start timer when entering "playing" phase
   React.useEffect(() => {
     if (gameState.phase === "playing") {
-      timer.restart(gameState.timerDuration)
+      timerRestartRef.current(gameState.timerDuration)
     } else if (gameState.phase !== "ready") {
-      timer.pause()
+      timerPauseRef.current()
     }
-  }, [gameState.phase, gameState.timerDuration, timer])
+  }, [gameState.phase, gameState.timerDuration])
+
+  // Store feedback/sound methods in refs to prevent double-firing
+  const feedbackRef = React.useRef({ showCorrect: feedback.showCorrect, showWrong: feedback.showWrong })
+  const soundsRef = React.useRef({ playCorrect, playWrong })
+  React.useEffect(() => {
+    feedbackRef.current = { showCorrect: feedback.showCorrect, showWrong: feedback.showWrong }
+    soundsRef.current = { playCorrect, playWrong }
+  })
+
+  // Track if feedback has been played for current phase (prevents double-fire in StrictMode)
+  const hasPlayedFeedbackRef = React.useRef(false)
 
   // Show feedback overlay when answer is checked
+  // Uses refs to ensure sound/feedback only fires once per phase change
   React.useEffect(() => {
     if (gameState.phase === "feedback" && gameState.lastAnswerCorrect !== null) {
+      // Guard against double-firing (React StrictMode or HMR)
+      if (hasPlayedFeedbackRef.current) return
+      hasPlayedFeedbackRef.current = true
+
       if (gameState.lastAnswerCorrect) {
-        feedback.showCorrect()
-        playCorrect()
+        feedbackRef.current.showCorrect()
+        soundsRef.current.playCorrect()
       } else {
-        feedback.showWrong()
-        playWrong()
+        feedbackRef.current.showWrong()
+        soundsRef.current.playWrong()
       }
+    } else {
+      // Reset guard when phase changes away from feedback
+      hasPlayedFeedbackRef.current = false
     }
-  }, [gameState.phase, gameState.lastAnswerCorrect, feedback, playCorrect, playWrong])
+  }, [gameState.phase, gameState.lastAnswerCorrect])
 
   // Navigate to results when game is over
   React.useEffect(() => {
@@ -135,9 +174,9 @@ export default function EndlessGamePage() {
     }
   }, [gameState.phase, router])
 
-  // Reset definition display when word changes
+  // Reset helper state when word changes
   React.useEffect(() => {
-    setShowDefinition(false)
+    setActiveHelper(null)
   }, [gameState.currentWord?.id])
 
   // ---------------------------------------------------------------------------
@@ -162,18 +201,56 @@ export default function EndlessGamePage() {
     }
   }
 
+  /**
+   * Helper button handlers.
+   *
+   * Each handler:
+   * 1. Cancels any pending auto-clear timeout (prevents glitching)
+   * 2. Sets the active helper state (shows footer message)
+   * 3. Triggers the audio playback
+   * 4. Auto-clears after estimated speech duration
+   *
+   * Speech Synthesis timing varies, but we estimate:
+   * - Word: ~2 seconds ("The word is [word]")
+   * - Sentence: ~4-6 seconds (full sentence)
+   * - Definition: stays visible (not auto-cleared)
+   */
+  const helperTimeoutRef = React.useRef<NodeJS.Timeout | null>(null)
+
+  const clearHelperTimeout = () => {
+    if (helperTimeoutRef.current) {
+      clearTimeout(helperTimeoutRef.current)
+      helperTimeoutRef.current = null
+    }
+  }
+
   const handlePlayWord = () => {
+    clearHelperTimeout()
+    setActiveHelper("play")
     gameActions.playWord()
+    // Clear after estimated speech duration
+    helperTimeoutRef.current = setTimeout(() => setActiveHelper(null), 2500)
   }
 
   const handlePlaySentence = () => {
+    clearHelperTimeout()
+    setActiveHelper("sentence")
     gameActions.playSentence()
+    // Clear after estimated speech duration (sentences are longer)
+    helperTimeoutRef.current = setTimeout(() => setActiveHelper(null), 5000)
   }
 
   const handlePlayDefinition = () => {
-    setShowDefinition(true)
+    clearHelperTimeout()
+    // Definition stays visible until user dismisses or word changes
+    setActiveHelper("definition")
     gameActions.playDefinition()
   }
+
+  // Cleanup timeout on unmount
+  React.useEffect(() => {
+    return () => clearHelperTimeout()
+  }, [])
 
   // ---------------------------------------------------------------------------
   // Derived State
@@ -224,17 +301,18 @@ export default function EndlessGamePage() {
           </div>
 
           {/* Voice Waveform + Hearts + Speech Input */}
-          <div className="flex w-full flex-col items-center gap-2">
+          <div className="flex w-full max-w-lg flex-col items-center gap-2">
             {/* Voice Waveform - shows audio visualization when recording */}
             <VoiceWaveform
               analyserNode={isRecording ? analyserNode : null}
               className="mb-4"
             />
 
-            {/* Hearts Display - positioned above SpeechInput per Figma (node 2582:22581) */}
+            {/* Hearts Display - left-aligned above SpeechInput per Figma (node 2582:22581) */}
             <HeartsDisplay
               remaining={gameState.hearts}
               total={3}
+              className="self-start"
             />
 
             {/* Speech Input - without integrated waveform since we show it separately above */}
@@ -243,7 +321,9 @@ export default function EndlessGamePage() {
               state={isRecording ? "recording" : "default"}
               inputText={transcript}
               definition={currentWord?.definition}
-              dictionaryPressed={showDefinition}
+              playPressed={activeHelper === "play"}
+              sentencePressed={activeHelper === "sentence"}
+              dictionaryPressed={activeHelper === "definition"}
               onRecordClick={handleRecordStart}
               onStopClick={handleRecordStop}
               onPlayClick={handlePlayWord}

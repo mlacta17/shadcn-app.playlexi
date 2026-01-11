@@ -168,17 +168,32 @@ function useGameTimer(
     setIsRunning(true)
   }, [totalSeconds])
 
-  return {
-    totalSeconds,
-    remainingSeconds,
-    state,
-    isRunning,
-    isExpired,
-    start,
-    pause,
-    reset,
-    restart,
-  }
+  // Memoize the return object to provide stable references
+  // This prevents unnecessary re-renders and effect re-runs in consuming components
+  return React.useMemo(
+    () => ({
+      totalSeconds,
+      remainingSeconds,
+      state,
+      isRunning,
+      isExpired,
+      start,
+      pause,
+      reset,
+      restart,
+    }),
+    [
+      totalSeconds,
+      remainingSeconds,
+      state,
+      isRunning,
+      isExpired,
+      start,
+      pause,
+      reset,
+      restart,
+    ]
+  )
 }
 
 export { useGameTimer }

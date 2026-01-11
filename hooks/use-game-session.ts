@@ -496,11 +496,18 @@ export function useGameSession(
 
   /**
    * Auto-play word intro when entering "ready" phase.
+   *
+   * Uses word ID to prevent re-triggering on object reference changes.
+   * The 1.5s delay allows "The word is [word]" to be spoken before
+   * the timer starts.
    */
+  const currentWordId = state.currentWord?.id
   React.useEffect(() => {
-    if (state.phase === "ready" && state.currentWord) {
+    if (state.phase === "ready" && currentWordId) {
       // Play word intro, then transition to playing
-      playWordIntro(state.currentWord)
+      if (state.currentWord) {
+        playWordIntro(state.currentWord)
+      }
 
       // Give time for audio to play before starting timer
       const timeout = setTimeout(() => {
@@ -509,7 +516,7 @@ export function useGameSession(
 
       return () => clearTimeout(timeout)
     }
-  }, [state.phase, state.currentWord, beginPlaying])
+  }, [state.phase, currentWordId, state.currentWord, beginPlaying])
 
   /**
    * Auto-advance after feedback (with delay matching animation).

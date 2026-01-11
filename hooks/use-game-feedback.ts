@@ -141,13 +141,18 @@ function useGameFeedback(
     setFeedbackType(null)
   }, [])
 
-  return {
-    feedbackType,
-    isShowing,
-    showCorrect,
-    showWrong,
-    clear,
-  }
+  // Memoize the return object to provide stable reference
+  // This prevents unnecessary effect re-runs in consuming components
+  return React.useMemo(
+    () => ({
+      feedbackType,
+      isShowing,
+      showCorrect,
+      showWrong,
+      clear,
+    }),
+    [feedbackType, isShowing, showCorrect, showWrong, clear]
+  )
 }
 
 export { useGameFeedback }

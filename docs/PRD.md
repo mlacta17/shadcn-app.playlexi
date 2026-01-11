@@ -1,7 +1,7 @@
 # PlayLexi — Product Requirements Document (PRD)
 
-> **Version:** 1.2
-> **Last Updated:** December 21, 2025
+> **Version:** 1.3
+> **Last Updated:** January 10, 2026
 > **Status:** Final Draft
 
 ---
@@ -227,6 +227,38 @@ To prevent Bee Keepers from going inactive:
 | Timer | Per-word, adjusts based on word difficulty (10-35 seconds) |
 | Wrong answer | Lose 1 heart, move to new word (don't repeat) |
 
+**Wrong Answer Behavior:** When a player spells a word incorrectly, they lose 1 heart and immediately advance to a new word. The incorrect word is not repeated. This is intentional — the goal is progression and learning, not frustration.
+
+#### 4.1.1.1 Learning from Mistakes
+
+When a player answers incorrectly, they see a **feedback overlay** that includes:
+
+| Element | Description |
+|---------|-------------|
+| Your answer | What the player spelled (with incorrect letters highlighted in red) |
+| Correct spelling | The correct word spelling (highlighted in green) |
+| Visual diff | Side-by-side or inline comparison showing where they went wrong |
+
+**Example Display:**
+```
+┌─────────────────────────────────────┐
+│           ❌ Incorrect              │
+│                                     │
+│   You spelled:    RECIEVE           │
+│                      ^^^            │
+│   Correct:        RECEIVE           │
+│                      ^^^            │
+│                                     │
+│   "I before E, except after C"      │
+│                                     │
+│        [ Continue to next word ]    │
+└─────────────────────────────────────┘
+```
+
+**Rationale:** Showing the correct spelling immediately after a mistake reinforces learning. The player sees exactly where they went wrong, which improves retention more than simply saying "wrong" and moving on.
+
+**Future Enhancement:** A "Review Mistakes" section in the results screen could show all words the player missed during that session, allowing them to study before playing again.
+
 #### 4.1.2 Blitz Mode
 
 | Attribute | Value |
@@ -273,6 +305,17 @@ To prevent Bee Keepers from going inactive:
 - Player can replay using the play button (right side of input)
 - Flow: "Ready?" → Click → "The word is [blank]" → Player spells → Result → Next round auto-plays
 
+#### 4.4.1 Game Start Flow
+
+When the game loads:
+1. Game enters "ready" phase
+2. Word audio plays automatically ("The word is [word]")
+3. Brief delay (~1.5 seconds) for player to prepare
+4. Timer starts and game enters "playing" phase
+5. Player can use helper buttons (Play, Sentence, Dictionary) while playing
+
+**Rationale:** Auto-playing the word on game start ensures players immediately know what to spell without needing to press a button first. This reduces friction and matches user expectations from traditional spelling bees.
+
 ---
 
 ## 5. Multiplayer
@@ -284,6 +327,52 @@ To prevent Bee Keepers from going inactive:
 | **Local** | Players in same physical location, each on their own device |
 | **Online Private** | Remote players, join via room code |
 | **Online Public** | Matchmaking queue, auto-matched with similar ranks |
+
+### 5.1.1 Multiplayer Match Types (Casual vs Ranked)
+
+Multiplayer games are divided into two match types, inspired by competitive games like Valorant:
+
+| Match Type | Hearts | Stakes | Matchmaking | Target Audience |
+|------------|--------|--------|-------------|-----------------|
+| **Casual (Quick Match)** | 3 | Low — play for fun | Relaxed, friends can join | Social players, practice |
+| **Ranked (Competitive)** | 1 | High — one mistake eliminates | Strict ELO-based | Competitive players |
+
+**Casual (Quick Match):**
+- Default multiplayer mode
+- 3 hearts (same as solo Endless)
+- Friends can join via room code or matchmaking
+- Lower pressure, encourages experimentation
+- Still earns XP, but with reduced stakes
+
+**Ranked (Competitive):**
+- Traditional spelling bee rules — one wrong answer = elimination
+- Strictly ELO-matched opponents
+- Higher XP gains/losses
+- Displays rank prominently
+- Unlocked after completing placement game
+
+**Mode Selection UI:**
+```
+┌─────────────────────────────────────┐
+│         How do you want to play?    │
+│                                     │
+│  ┌─────────────┐  ┌─────────────┐  │
+│  │   CASUAL    │  │   RANKED    │  │
+│  │             │  │             │  │
+│  │ 3 lives     │  │ 1 mistake   │  │
+│  │ Play for    │  │ Climb the   │  │
+│  │ fun         │  │ ladder      │  │
+│  └─────────────┘  └─────────────┘  │
+│                                     │
+│        [ Solo Practice ]            │
+└─────────────────────────────────────┘
+```
+
+**Rationale:** This hybrid approach serves both casual and competitive players:
+- Casual players get a forgiving, social experience (3 hearts)
+- Competitive players get authentic spelling bee stakes (1 strike)
+- Players can progress from Casual → Ranked as they improve
+- "I play Ranked mode" becomes a badge of honor
 
 ### 5.2 Local Multiplayer
 
@@ -342,9 +431,24 @@ To balance fair matches vs. queue times:
 
 #### 5.5.2 Hearts
 
+Hearts work differently based on match type:
+
+| Match Type | Starting Hearts | Elimination Condition |
+|------------|-----------------|----------------------|
+| **Casual** | 3 | All hearts lost |
+| **Ranked** | 1 | First wrong answer |
+
+**Casual Mode:**
 - All players start with 3 hearts
 - Lose heart on wrong answer
 - Eliminated when all hearts lost
+- Allows comebacks and reduces frustration
+
+**Ranked Mode:**
+- All players start with 1 heart (effectively 1 strike)
+- One wrong answer = immediate elimination
+- Authentic spelling bee experience
+- Higher tension, every word matters
 
 #### 5.5.3 Viewing Other Players' Turns
 
@@ -480,6 +584,48 @@ Shows player's match history:
 - Table columns: Placement, Ranking, Round, Accuracy, XP Earned
 - Pagination for long history
 - Filter by mode/input
+
+#### 7.4.1 Game Result Details
+
+Clicking on a game in the Solo tab expands to show:
+
+| Section | Content |
+|---------|---------|
+| Summary | Round reached, accuracy %, time played, XP earned |
+| Words Attempted | List of all words from that session |
+| **Review Mistakes** | Words spelled incorrectly with comparison view |
+
+**Review Mistakes Section:**
+
+For each incorrect word, displays:
+- The word the player attempted
+- Their incorrect spelling (highlighted in red)
+- The correct spelling (highlighted in green)
+- Definition (for context)
+- Option to hear the word pronounced
+
+```
+┌─────────────────────────────────────────────────────┐
+│  📚 Review Your Mistakes (3 words)                  │
+├─────────────────────────────────────────────────────┤
+│  1. RECEIVE                                         │
+│     You spelled: RECIEVE  ❌                        │
+│     Tip: "I before E, except after C"              │
+│     🔊 [ Hear word ]                                │
+├─────────────────────────────────────────────────────┤
+│  2. NECESSARY                                       │
+│     You spelled: NECCESSARY  ❌                     │
+│     Tip: One C, two S's                            │
+│     🔊 [ Hear word ]                                │
+├─────────────────────────────────────────────────────┤
+│  3. ACCOMMODATE                                     │
+│     You spelled: ACCOMODATE  ❌                     │
+│     Tip: Two C's, two M's                          │
+│     🔊 [ Hear word ]                                │
+└─────────────────────────────────────────────────────┘
+```
+
+**Rationale:** This feature turns mistakes into learning opportunities. Players can review what went wrong after the game ends, reinforcing correct spellings through spaced repetition.
 
 ### 7.5 Friends Tab
 
@@ -652,9 +798,9 @@ Controlled by settings toggles (Social, Security, Marketing).
 | **Header** | X button, game mode label, timer progress bar |
 | **Round indicator** | "Round 1", "Round 2", etc. |
 | **Voice waveform** | Animated visualization, current player's avatar above (multiplayer) |
-| **Hearts** | 3 red hearts above input component, disappear on mistakes |
+| **Hearts** | 3 red hearts **left-aligned** above input component, disappear on mistakes |
 | **Input component** | Sentence button, dictionary button, record/type area, play button |
-| **Definition footer** | Shows definition when dictionary button pressed |
+| **Helper text footer** | Shows contextual text when helper buttons are pressed (see 11.4.1) |
 | **Settings button** | Bottom-right corner, floating |
 
 ### 11.2 Multiplayer-Specific Components
@@ -680,6 +826,51 @@ Controlled by settings toggles (Social, Security, Marketing).
 | Sentence | MessageSquareText | Plays example sentence using the word |
 | Dictionary | BookA | Shows/plays word definition |
 | Play | Volume | Replays word audio |
+
+#### 11.4.1 Helper Button States
+
+Helper buttons have a "pressed" state that shows feedback text below the input component:
+
+| Button | Pressed State Text | Auto-Clear |
+|--------|-------------------|------------|
+| Play | "The word is being spoken..." | Yes, after ~2.5 seconds |
+| Sentence | "The word is being used in a sentence..." | Yes, after ~5 seconds |
+| Dictionary | Shows the word definition | No, stays visible until word changes |
+
+**UX Behavior:**
+- Only one helper can be active at a time
+- Pressing a different helper cancels the previous one (prevents glitching)
+- Timeouts are cleared when switching between helpers
+- Helper state resets when advancing to a new word
+
+**Implementation Notes:**
+- Use a single `activeHelper` state to track which helper is pressed
+- Clear any pending timeouts before setting a new helper
+- Auto-clear Play/Sentence after speech duration estimate
+- Definition stays visible (no auto-clear) for reference
+
+### 11.5 Audio Feedback
+
+#### 11.5.1 Answer Sounds
+
+| Event | Sound | Duration |
+|-------|-------|----------|
+| Correct answer | `CorrectAnswerFeedback_sound.mp3` | ~1 second |
+| Wrong answer | `WrongAnswerFeedback_sound.mp3` | ~1 second |
+
+**Implementation Notes:**
+- Sounds are preloaded on component mount for instant playback
+- Sounds play exactly once per answer (no double-firing)
+- Volume controlled by user settings (future)
+- Graceful fallback if audio fails to load
+
+#### 11.5.2 Visual Feedback Overlay
+
+When an answer is submitted:
+1. Screen flashes with feedback color (green = correct, red = wrong)
+2. Sound plays simultaneously
+3. Overlay auto-clears after ~400ms
+4. Game advances to next phase
 
 ---
 

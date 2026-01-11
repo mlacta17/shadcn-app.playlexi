@@ -168,14 +168,19 @@ function useGameSounds(options: UseGameSoundsOptions = {}): UseGameSoundsReturn 
   const playCorrect = React.useCallback(() => play("correct"), [play])
   const playWrong = React.useCallback(() => play("wrong"), [play])
 
-  return {
-    playCorrect,
-    playWrong,
-    play,
-    isReady,
-    setEnabled,
-    setVolume,
-  }
+  // Memoize the return object to provide stable reference
+  // This prevents unnecessary effect re-runs in consuming components
+  return React.useMemo(
+    () => ({
+      playCorrect,
+      playWrong,
+      play,
+      isReady,
+      setEnabled,
+      setVolume,
+    }),
+    [playCorrect, playWrong, play, isReady, setEnabled, setVolume]
+  )
 }
 
 export { useGameSounds, SOUND_PATHS }
