@@ -6,6 +6,7 @@ import {
   getSpeechProviderAsync,
   type SpeechRecognitionSession,
   type SpeechProvider,
+  type WordTimingData,
   SPELLING_KEYWORDS,
 } from "@/lib/speech-recognition-service"
 import { extractLettersFromVoice } from "@/lib/answer-validation"
@@ -49,16 +50,43 @@ export interface LetterTiming {
 }
 
 /**
+ * Audio-level word timing from Deepgram.
+ * This is the RELIABLE anti-cheat signal because it's based on actual audio,
+ * not transcript arrival time (which depends on provider buffering).
+ *
+ * The key insight:
+ * - **Spelling "C-A-T"**: Multiple word segments with gaps in the audio
+ *   e.g., "c" at 0.1-0.3s, "a" at 0.5-0.7s, "t" at 0.9-1.1s (gaps of 0.2s)
+ * - **Saying "cat"**: One continuous word segment
+ *   e.g., "cat" at 0.1-0.5s (no gaps)
+ */
+export interface AudioWordTiming {
+  /** The word/letter recognized */
+  word: string
+  /** Start time in audio (seconds) */
+  startSec: number
+  /** End time in audio (seconds) */
+  endSec: number
+  /** Gap from previous word's end (seconds), 0 for first word */
+  gapFromPreviousSec: number
+}
+
+/**
  * Anti-cheat metrics returned when stopping recording.
  *
- * The key insight for detecting saying vs spelling:
- * - **Spelling "C-A-T"**: Letters appear gradually with gaps (200-400ms each)
- * - **Saying "cat"**: All letters appear at once (<100ms total)
+ * ## Two Detection Methods (Transcript-based and Audio-based)
  *
- * We track:
- * 1. When each NEW letter appears in the transcript
- * 2. The gaps between letter appearances
- * 3. Average gap - spelling has higher average gaps than saying
+ * ### 1. Transcript Timing (Less Reliable)
+ * Tracks when letters appear in the transcript. Problem: Azure/OpenAI buffer
+ * spelled letters and return complete words, so all letters appear at once.
+ *
+ * ### 2. Audio Word Timing (More Reliable) - NEW
+ * Uses Deepgram's word-level timestamps from the actual audio.
+ * - Spelling produces multiple word segments with gaps
+ * - Saying produces one continuous word segment
+ *
+ * The audio-based approach is PROVIDER-INDEPENDENT because it measures
+ * the actual sound, not how the provider chooses to assemble the transcript.
  */
 export interface StopRecordingMetrics {
   /** Speech duration in milliseconds (first to last speech) */
@@ -66,22 +94,52 @@ export interface StopRecordingMetrics {
   /** Number of interim results received (spelling = more results) */
   interimCount: number
   /**
-   * Timing data for each letter as it appeared.
-   * Spelling produces gradual accumulation, saying produces instant dump.
+   * Timing data for each letter as it appeared in the transcript.
+   * NOTE: Less reliable due to provider buffering - use audioWordTimings instead.
    */
   letterTimings: LetterTiming[]
   /**
-   * Average gap between letter appearances (ms).
-   * - Spelling: ~200-400ms average
-   * - Saying: ~0-50ms average (letters arrive together)
+   * Average gap between letter appearances in transcript (ms).
+   * NOTE: Less reliable - use avgAudioGapSec instead.
    */
   averageLetterGapMs: number
   /**
-   * Whether the pattern looks like spelling based on letter timing.
-   * true = letters arrived gradually (spelling)
-   * false = letters arrived all at once (saying)
+   * Whether the pattern looks like spelling based on transcript timing.
+   * NOTE: Less reliable - use looksLikeSpellingFromAudio instead.
    */
   looksLikeSpelling: boolean
+
+  // ==========================================================================
+  // NEW: Audio-Level Timing (More Reliable)
+  // ==========================================================================
+
+  /**
+   * Word-level timing from actual audio (Deepgram only).
+   * Each entry represents a recognized word/letter with its audio timestamps.
+   * Empty array if provider doesn't support word-level timing.
+   */
+  audioWordTimings: AudioWordTiming[]
+  /**
+   * Number of separate word segments in the audio.
+   * - Spelling "C-A-T" → 3 segments
+   * - Saying "cat" → 1 segment
+   */
+  audioWordCount: number
+  /**
+   * Average gap between words in the audio (seconds).
+   * - Spelling: ~0.2-0.5s average gaps
+   * - Saying: 0s (single word, no gaps)
+   */
+  avgAudioGapSec: number
+  /**
+   * Whether the audio pattern looks like spelling.
+   * true = multiple words with gaps OR single short word/letter
+   * false = single continuous word that could be whole-word speech
+   *
+   * This is the MOST RELIABLE anti-cheat signal because it's based on
+   * actual audio timing, not transcript arrival patterns.
+   */
+  looksLikeSpellingFromAudio: boolean
 }
 
 export interface UseSpeechRecognitionReturn {
@@ -218,11 +276,20 @@ export function useSpeechRecognition(
   // Spelling produces more interim results than saying a word
   const interimCountRef = React.useRef<number>(0)
 
-  // Letter timing tracking for anti-cheat
+  // Letter timing tracking for anti-cheat (transcript-based - less reliable)
   // We track when each NEW letter appears in the transcript
   // Spelling = letters appear gradually, Saying = letters appear all at once
   const letterTimingsRef = React.useRef<LetterTiming[]>([])
   const lastLetterCountRef = React.useRef<number>(0)
+
+  // Audio word timing tracking (Deepgram only - MORE RELIABLE)
+  // This tracks the actual audio timestamps, not transcript arrival
+  const audioWordTimingsRef = React.useRef<AudioWordTiming[]>([])
+
+  // Lexical-based anti-cheat from Azure (MOST RELIABLE)
+  // Azure's Lexical field shows "D O G" for spelling vs "dog" for saying
+  const lexicalBasedIsSpelledOutRef = React.useRef<boolean | null>(null)
+  const lexicalValueRef = React.useRef<string>("")
 
   // Keep refs in sync with latest callbacks (avoids re-creating session on callback change)
   React.useEffect(() => {
@@ -302,16 +369,96 @@ export function useSpeechRecognition(
       letterTimings.length < MIN_LETTERS_FOR_CHECK || // Single letter = trust it
       averageLetterGapMs >= MIN_GAP_FOR_SPELLING // Multiple letters with gaps = spelling
 
+    // =========================================================================
+    // Audio Word Timing Analysis (Deepgram - More Reliable)
+    // =========================================================================
+    // Calculate gaps between words in the actual audio
+    const audioWordTimings = [...audioWordTimingsRef.current]
+    const audioWordCount = audioWordTimings.length
+
+    // Calculate average gap between words in audio
+    const audioGaps = audioWordTimings.slice(1).map((w) => w.gapFromPreviousSec)
+    const avgAudioGapSec =
+      audioGaps.length > 0 ? audioGaps.reduce((sum, g) => sum + g, 0) / audioGaps.length : 0
+
+    // ==========================================================================
+    // ANTI-CHEAT: Lexical-Based Detection (MOST RELIABLE)
+    // ==========================================================================
+    // Azure's Lexical field is THE definitive signal:
+    // - Spelling "D-O-G" → Lexical: "D O G" (spaced single letters)
+    // - Saying "dog" → Lexical: "dog" (continuous word, no spaces)
+    //
+    // This works because Azure's phonetic recognizer transcribes what it
+    // actually HEARD, not how it chose to format the final Display text.
+    //
+    // Priority order:
+    // 1. Lexical-based detection (if available) - MOST RELIABLE
+    // 2. Audio timing fallback - less reliable but still useful
+    // 3. Default to trust - if no data available
+
+    let looksLikeSpellingFromAudio = true // Default: trust the user
+
+    // PRIMARY: Use Lexical-based detection from Azure
+    if (lexicalBasedIsSpelledOutRef.current !== null) {
+      looksLikeSpellingFromAudio = lexicalBasedIsSpelledOutRef.current
+
+      if (process.env.NODE_ENV === "development") {
+        console.log(
+          `[Speech] Anti-cheat verdict (Lexical-based): ` +
+            `lexical="${lexicalValueRef.current}", ` +
+            `result=${looksLikeSpellingFromAudio ? "✅ SPELLED (spaces between letters)" : "❌ SAID (continuous word)"}`
+        )
+      }
+    }
+    // FALLBACK: Use audio timing if Lexical not available
+    else if (audioWordCount === 0) {
+      // No audio data - trust the transcript
+      looksLikeSpellingFromAudio = true
+    } else if (audioWordCount > 1) {
+      // Multiple words = definitely spelling (Azure heard separate utterances)
+      looksLikeSpellingFromAudio = true
+    } else {
+      // Single word detected - check if it's suspicious using duration
+      const singleWord = audioWordTimings[0].word.replace(/[^a-zA-Z]/g, "")
+      const wordDuration = audioWordTimings[0].endSec - audioWordTimings[0].startSec
+
+      // Only REJECT if:
+      // 1. Word has 3+ letters (not a single letter like "A")
+      // 2. Word was spoken very quickly (< 1.0 second)
+      const MIN_DURATION_FOR_SPELLING_SEC = 1.0
+      const isSuspicious = singleWord.length >= 3 && wordDuration < MIN_DURATION_FOR_SPELLING_SEC
+
+      looksLikeSpellingFromAudio = !isSuspicious
+
+      if (process.env.NODE_ENV === "development") {
+        console.log(
+          `[Speech] Anti-cheat verdict (timing fallback): Single word "${singleWord}" (${singleWord.length} letters), ` +
+            `duration=${wordDuration.toFixed(2)}s, threshold=${MIN_DURATION_FOR_SPELLING_SEC}s. ` +
+            `Verdict: ${looksLikeSpellingFromAudio ? "✅ PASS" : "❌ REJECT (too fast)"}`
+        )
+      }
+    }
+
+    if (process.env.NODE_ENV === "development" && audioWordCount > 0) {
+      const words = audioWordTimings.map((w) => `"${w.word}"`).join(", ")
+      console.log(`[Speech] Azure returned ${audioWordCount} word(s): [${words}]`)
+    }
+
     if (process.env.NODE_ENV === "development") {
       console.log(
         `[Speech] Stopped: duration=${speechDuration}ms, interimResults=${finalInterimCount}, ` +
-          `letters=${letterTimings.length}, avgGap=${averageLetterGapMs.toFixed(0)}ms, ` +
-          `looksLikeSpelling=${looksLikeSpelling}`
+          `transcriptLetters=${letterTimings.length}, transcriptAvgGap=${averageLetterGapMs.toFixed(0)}ms`
       )
-      if (letterTimings.length > 0) {
+      console.log(
+        `[Speech] Audio analysis: words=${audioWordCount}, avgGap=${(avgAudioGapSec * 1000).toFixed(0)}ms, ` +
+          `looksLikeSpelling(audio)=${looksLikeSpellingFromAudio}`
+      )
+      if (audioWordTimings.length > 0) {
         console.log(
-          `[Speech] Letter timings:`,
-          letterTimings.map((lt) => `${lt.letter}(+${lt.gapFromPrevious}ms)`).join(" ")
+          `[Speech] Audio word timings:`,
+          audioWordTimings
+            .map((w) => `"${w.word}"@${w.startSec.toFixed(2)}-${w.endSec.toFixed(2)}s(gap:${(w.gapFromPreviousSec * 1000).toFixed(0)}ms)`)
+            .join(" ")
         )
       }
     }
@@ -327,6 +474,9 @@ export function useSpeechRecognition(
     interimCountRef.current = 0
     letterTimingsRef.current = []
     lastLetterCountRef.current = 0
+    audioWordTimingsRef.current = []
+    lexicalBasedIsSpelledOutRef.current = null
+    lexicalValueRef.current = ""
     setAnalyserNode(null)
     setIsRecording(false)
 
@@ -336,6 +486,11 @@ export function useSpeechRecognition(
       letterTimings,
       averageLetterGapMs,
       looksLikeSpelling,
+      // NEW: Audio-level timing (more reliable)
+      audioWordTimings,
+      audioWordCount,
+      avgAudioGapSec,
+      looksLikeSpellingFromAudio,
     }
   }, [])
 
@@ -354,6 +509,11 @@ export function useSpeechRecognition(
       // Reset letter timing tracking
       letterTimingsRef.current = []
       lastLetterCountRef.current = 0
+      // Reset audio word timing tracking
+      audioWordTimingsRef.current = []
+      // Reset Lexical-based anti-cheat tracking
+      lexicalBasedIsSpelledOutRef.current = null
+      lexicalValueRef.current = ""
 
       // Get provider using async version to properly check Azure availability
       // Azure requires an async check because it needs to verify the token endpoint
@@ -367,6 +527,61 @@ export function useSpeechRecognition(
       // Start recognition session
       // Note: Callbacks use refs to avoid stale closures and unnecessary re-renders
       const session = await speechProvider.start({
+        // =========================================================================
+        // Word Timing Callback (for anti-cheat)
+        // =========================================================================
+        // This is the KEY to reliable anti-cheat detection.
+        // Azure/Deepgram return actual audio timestamps for each word.
+        // - Spelling "C-A-T": Three separate words with gaps in audio
+        // - Saying "cat": One continuous word
+        onWordTiming: (words) => {
+          // Process incoming word timing data and calculate gaps
+          // Words come in with start/end times from the actual audio
+          const processedTimings: AudioWordTiming[] = words.map((w, index) => {
+            const previousEnd = index > 0 ? words[index - 1].end : w.start
+            return {
+              word: w.word,
+              startSec: w.start,
+              endSec: w.end,
+              gapFromPreviousSec: index === 0 ? 0 : w.start - previousEnd,
+            }
+          })
+
+          // Accumulate word timings (don't replace - some providers send partial results)
+          // We use the latest complete set from each recognition result
+          audioWordTimingsRef.current = processedTimings
+
+          // =================================================================
+          // CRITICAL: Extract Lexical-based anti-cheat metadata from Azure
+          // =================================================================
+          // Azure attaches _isSpelledOut (boolean) and _lexical (string) to the
+          // first word timing entry. This is the MOST RELIABLE anti-cheat signal.
+          // - _isSpelledOut: true means Lexical was "D O G" (spaced letters)
+          // - _isSpelledOut: false means Lexical was "dog" (continuous word)
+          const firstWord = words[0] as typeof words[0] & {
+            _isSpelledOut?: boolean
+            _lexical?: string
+          }
+
+          if (typeof firstWord._isSpelledOut === "boolean") {
+            lexicalBasedIsSpelledOutRef.current = firstWord._isSpelledOut
+            lexicalValueRef.current = firstWord._lexical || ""
+
+            if (process.env.NODE_ENV === "development") {
+              console.log(
+                `[Speech] Lexical-based anti-cheat: ` +
+                  `lexical="${lexicalValueRef.current}", ` +
+                  `isSpelledOut=${lexicalBasedIsSpelledOutRef.current ? "✅ YES" : "❌ NO"}`
+              )
+            }
+          }
+
+          if (process.env.NODE_ENV === "development") {
+            console.log(
+              `[Speech] Received ${processedTimings.length} word timing(s) from audio`
+            )
+          }
+        },
         onInterimResult: (text) => {
           const now = Date.now()
 

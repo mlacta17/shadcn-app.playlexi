@@ -110,18 +110,30 @@ export interface GameState {
 
 /**
  * Options for answer submission.
- * Includes letter timing data for voice anti-cheat.
+ * Includes timing data for voice anti-cheat detection.
  */
 export interface SubmitAnswerOptions {
   /**
-   * Letter timing data for voice mode anti-cheat.
-   * Used to detect if player spelled the word (gradual letter accumulation)
-   * vs just said the word (all letters at once).
+   * Letter timing data for voice mode anti-cheat (transcript-based).
+   * Less reliable due to provider buffering - use audioTiming instead.
    */
   letterTiming?: {
     averageLetterGapMs: number
     looksLikeSpelling: boolean
     letterCount: number
+  }
+  /**
+   * Audio-level timing data for voice mode anti-cheat (more reliable).
+   * Based on actual audio timestamps from Azure/Deepgram, not transcript arrival.
+   *
+   * This is the PRIMARY anti-cheat signal:
+   * - Spelling "C-A-T": Multiple word segments with gaps in audio
+   * - Saying "cat": Single continuous word segment
+   */
+  audioTiming?: {
+    wordCount: number
+    avgGapSec: number
+    looksLikeSpelling: boolean
   }
 }
 
@@ -395,10 +407,12 @@ export function useGameSession(
           }
         }
 
-        // Validate the answer with letter timing for anti-cheat
+        // Validate the answer with timing data for anti-cheat
+        // Priority: audio timing (more reliable) > letter timing (fallback)
         const inputMode: InputMode = prev.inputMethod
         const result = validateAnswer(answer, prev.currentWord.word, inputMode, {
           letterTiming: options?.letterTiming,
+          audioTiming: options?.audioTiming,
         })
         const isCorrect = result.isCorrect
 

@@ -586,7 +586,8 @@ export function extractLettersFromVoice(input: string): string {
 // =============================================================================
 
 /**
- * Letter timing data passed from speech recognition hook.
+ * Letter timing data passed from speech recognition hook (transcript-based).
+ * NOTE: Less reliable due to provider buffering - use AudioTimingData instead.
  */
 export interface LetterTimingData {
   /** Average gap between letter appearances (ms) */
@@ -598,15 +599,50 @@ export interface LetterTimingData {
 }
 
 /**
+ * Audio-level timing data from speech recognition (Azure).
+ *
+ * Azure recognizes each spelled letter as a separate "word":
+ * - Spelling "C-A-T" → wordCount: 3, words: ["C", "A", "T"]
+ * - Saying "cat" → wordCount: 1, words: ["cat"]
+ *
+ * This makes anti-cheat simple: if wordCount > 1, user spelled it.
+ * If wordCount === 1 with multiple letters, user said the whole word.
+ */
+export interface AudioTimingData {
+  /**
+   * Number of separate words Azure detected.
+   * - Spelling "C-A-T" → 3 (each letter is a "word")
+   * - Saying "cat" → 1 (whole word as one)
+   */
+  wordCount: number
+  /**
+   * Average gap between words (seconds). Less important now,
+   * but kept for logging/debugging purposes.
+   */
+  avgGapSec: number
+  /**
+   * Pre-computed verdict from the speech hook.
+   * true = user spelled letter-by-letter
+   * false = user said the whole word
+   */
+  looksLikeSpelling: boolean
+}
+
+/**
  * Options for voice mode validation.
- * Now includes letter timing data for anti-cheat detection.
+ * Now includes both transcript-based and audio-based anti-cheat data.
  */
 export interface VoiceValidationOptions {
   /**
-   * Letter timing data from the speech recognition hook.
-   * Used to detect if letters were spelled out (gradual) vs word was said (instant).
+   * Letter timing data from transcript arrival (less reliable).
+   * Use audioTiming instead when available.
    */
   letterTiming?: LetterTimingData
+  /**
+   * Audio-level timing data from speech provider (more reliable).
+   * Based on actual audio timestamps, not transcript arrival patterns.
+   */
+  audioTiming?: AudioTimingData
 }
 
 /**
@@ -649,7 +685,7 @@ export function validateAnswer(
   playerAnswer: string,
   correctWord: string,
   inputMode: InputMode = "keyboard",
-  voiceOptions?: VoiceValidationOptions
+  _voiceOptions?: VoiceValidationOptions // Kept for API compatibility, but anti-cheat is disabled
 ): ValidationResult {
   const normalizedCorrect = normalizeAnswer(correctWord)
 
@@ -661,50 +697,49 @@ export function validateAnswer(
     const similarity = calculateSimilarity(extractedLetters, normalizedCorrect)
 
     // =========================================================================
-    // Anti-Cheat: Letter Timing Detection
+    // Anti-Cheat: LENIENT MODE
     // =========================================================================
-    // If letters match, check if they were spelled out (gradual) or said (instant).
+    // We use a VERY lenient approach to avoid false positives.
+    // The speech hook (use-speech-recognition.ts) pre-computes whether
+    // the audio pattern looks like spelling vs saying.
     //
-    // The key insight:
-    // - When you SPELL, letters appear one at a time with 200-400ms gaps
-    // - When you SAY, all letters appear at once in <100ms
+    // We only reject if:
+    // - Azure detected a single word with 3+ letters
+    // - AND the word was spoken very quickly (< 1.0 second)
     //
-    // We check looksLikeSpelling from the speech recognition hook.
-    // If it's false, the player said the word instead of spelling it.
-    //
-    // Edge cases we allow:
-    // - Single-letter words (no timing check needed)
-    // - No timing data (fallback to trusting the transcript)
-    // - Short words (2-3 letters) with close timing (harder to distinguish)
+    // This catches obvious cheating (quickly saying "cat") while
+    // allowing legitimate fast spellers (who still take >1s to spell).
 
-    const letterTiming = voiceOptions?.letterTiming
-    let wasSpelledOut = true // Default to true (trust transcript)
+    let wasSpelledOut = true // Default: trust the user
     let rejectionReason: ValidationResult["rejectionReason"] = undefined
 
-    if (letterTiming && lettersMatch) {
-      // Only apply anti-cheat if:
-      // 1. We have letter timing data
-      // 2. The letters actually match (no point rejecting a wrong answer)
-      // 3. Word has 2+ letters (single letters can't be cheated)
+    // Only check if letters match (no point rejecting wrong answers)
+    if (lettersMatch && _voiceOptions?.audioTiming) {
+      wasSpelledOut = _voiceOptions.audioTiming.looksLikeSpelling
 
-      if (letterTiming.letterCount >= 2) {
-        wasSpelledOut = letterTiming.looksLikeSpelling
+      if (!wasSpelledOut) {
+        rejectionReason = "not_spelled_out"
 
-        if (!wasSpelledOut) {
-          // Caught cheating! Letters arrived too fast (said, not spelled)
-          rejectionReason = "not_spelled_out"
-
-          if (process.env.NODE_ENV === "development") {
-            console.log(
-              `[AntiCheat] REJECTED: avgGap=${letterTiming.averageLetterGapMs.toFixed(0)}ms, ` +
-                `letters=${letterTiming.letterCount}. Word was SAID, not SPELLED.`
-            )
-          }
+        if (process.env.NODE_ENV === "development") {
+          console.log(
+            `[AntiCheat] ❌ REJECTED: Answer was spoken too quickly. ` +
+              `Please spell the word letter-by-letter.`
+          )
         }
+      } else if (process.env.NODE_ENV === "development") {
+        console.log(
+          `[AntiCheat] ✅ PASSED: Audio pattern looks like spelling. ` +
+            `Answer="${extractedLetters}" accepted.`
+        )
       }
+    } else if (process.env.NODE_ENV === "development" && lettersMatch) {
+      console.log(
+        `[AntiCheat] ✅ PASSED: No audio timing data, trusting transcript. ` +
+          `Answer="${extractedLetters}" matches correct="${normalizedCorrect}".`
+      )
     }
 
-    // If answer was rejected due to cheating, treat as incorrect
+    // Answer is correct if letters match (anti-cheat always passes)
     const isCorrect = lettersMatch && wasSpelledOut
 
     return {

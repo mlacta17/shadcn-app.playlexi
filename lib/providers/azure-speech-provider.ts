@@ -51,6 +51,7 @@ import type {
   SpeechRecognitionConfig,
   SpeechRecognitionSession,
   SpeechProvider,
+  WordTimingData,
 } from "../speech-recognition-service"
 
 // =============================================================================
@@ -181,7 +182,7 @@ export class AzureSpeechProvider implements ISpeechRecognitionProvider {
    * for audio visualization.
    */
   async start(config: SpeechRecognitionConfig): Promise<SpeechRecognitionSession> {
-    const { onInterimResult, onFinalResult, onError, language = "en-US" } = config
+    const { onInterimResult, onFinalResult, onWordTiming, onError, language = "en-US" } = config
 
     // Get auth token
     let token: string
@@ -331,6 +332,155 @@ export class AzureSpeechProvider implements ISpeechRecognitionProvider {
             if (process.env.NODE_ENV === "development") {
               console.log("[Azure] FINAL:", rawText, "→", text)
             }
+
+            // Extract word-level timing from detailed JSON output
+            // Azure's detailed output format includes word timing data:
+            // {
+            //   "NBest": [{
+            //     "Words": [{
+            //       "Word": "hello",
+            //       "Offset": 1000000,   // ticks (100-nanosecond units)
+            //       "Duration": 4500000  // ticks
+            //     }, ...]
+            //   }]
+            // }
+            if (onWordTiming) {
+              try {
+                const jsonResult = event.result.properties.getProperty(
+                  SpeechSDK.PropertyId.SpeechServiceResponse_JsonResult
+                )
+                if (jsonResult) {
+                  const parsed = JSON.parse(jsonResult)
+
+                  // DEBUG: Log the full Azure response to understand its structure
+                  if (process.env.NODE_ENV === "development") {
+                    console.log("[Azure] RAW JSON Response:", JSON.stringify(parsed, null, 2))
+                  }
+
+                  const nBest = parsed?.NBest?.[0]
+                  const words = nBest?.Words
+
+                  // =================================================================
+                  // ANTI-CHEAT: Use Lexical field to detect spelling vs saying
+                  // =================================================================
+                  // Azure's Lexical field shows the raw phonetic interpretation:
+                  // - Spelling "D-O-G" → Lexical: "D O G" (spaced letters)
+                  // - Saying "dog" → Lexical: "dog" (continuous word)
+                  //
+                  // This is THE MOST RELIABLE anti-cheat signal because it's how
+                  // Azure actually heard the audio, not how it chose to format it.
+                  const lexical = nBest?.Lexical as string | undefined
+                  const displayText = nBest?.Display as string | undefined
+
+                  // Detect if user spelled out letters vs said a word
+                  // Pattern: "D O G" or "E X C E L L E N T" (single chars separated by spaces)
+                  const isSpacedLetters = lexical
+                    ? /^([A-Za-z] )+[A-Za-z]$/.test(lexical.trim())
+                    : false
+
+                  // Check if it's ALL CAPS with no spaces - this is ambiguous
+                  // Azure often returns "DOG" for both spelled "D-O-G" and said "dog"
+                  // We can't reliably distinguish, so we should be lenient
+                  const isAllCapsNoSpaces = lexical
+                    ? /^[A-Z]+$/.test(lexical.trim()) && lexical.length <= 6
+                    : false
+
+                  // Only mark as "continuous word" if it's lowercase (definitely said as word)
+                  // ALL CAPS without spaces is ambiguous and should pass
+                  const isContinuousWord = lexical
+                    ? !lexical.includes(" ") && lexical.length >= 2 && !isAllCapsNoSpaces
+                    : false
+
+                  // Determine final verdict:
+                  // - Spaced letters (e.g., "D O G") = definitely spelled ✅
+                  // - ALL CAPS no spaces (e.g., "DOG") = ambiguous, give benefit of doubt ✅
+                  // - Lowercase continuous (e.g., "dog") = definitely said ❌
+                  const isDefinitelySpelled = isSpacedLetters
+                  const isAmbiguous = isAllCapsNoSpaces && !isSpacedLetters
+                  const isDefinitelySaid = isContinuousWord
+
+                  // Pass if definitely spelled OR ambiguous (benefit of doubt)
+                  const shouldPass = isDefinitelySpelled || isAmbiguous
+
+                  if (process.env.NODE_ENV === "development" && lexical) {
+                    const verdict = isDefinitelySpelled
+                      ? "✅ SPELLED (spaced letters)"
+                      : isAmbiguous
+                        ? "✅ AMBIGUOUS (ALL CAPS, benefit of doubt)"
+                        : isDefinitelySaid
+                          ? "❌ SAID (lowercase continuous)"
+                          : "⚠️ UNCLEAR"
+                    console.log(
+                      `[Azure] Anti-cheat: Lexical="${lexical}", verdict=${verdict}`
+                    )
+                  }
+
+                  // Build word timing data - prefer Words array if available for detailed timing
+                  // but always attach the Lexical-based anti-cheat metadata
+                  const TICKS_PER_SECOND = 10_000_000
+                  let wordTimings: WordTimingData[] = []
+
+                  if (words && Array.isArray(words) && words.length > 0) {
+                    // Use detailed word-level timing from Azure's Words array
+                    wordTimings = words.map((w: {
+                      Word: string
+                      Offset: number
+                      Duration: number
+                      Confidence?: number
+                    }) => ({
+                      word: w.Word,
+                      start: w.Offset / TICKS_PER_SECOND,
+                      end: (w.Offset + w.Duration) / TICKS_PER_SECOND,
+                      confidence: w.Confidence ?? nBest?.Confidence ?? 0.9,
+                    }))
+
+                    if (process.env.NODE_ENV === "development") {
+                      const timingStr = wordTimings
+                        .map((w) => `"${w.word}"@${w.start.toFixed(2)}-${w.end.toFixed(2)}s`)
+                        .join(" ")
+                      console.log(`[Azure] Word timing (${wordTimings.length} words): ${timingStr}`)
+                    }
+                  } else if (displayText) {
+                    // No Words array - create synthetic timing from overall duration
+                    const duration = (parsed?.Duration || 0) / TICKS_PER_SECOND
+                    const offset = (parsed?.Offset || 0) / TICKS_PER_SECOND
+
+                    wordTimings = [{
+                      word: displayText,
+                      start: offset,
+                      end: offset + duration,
+                      confidence: nBest?.Confidence ?? 0.9,
+                    }]
+
+                    if (process.env.NODE_ENV === "development") {
+                      console.log(`[Azure] Synthetic word timing: "${displayText}"@${offset.toFixed(2)}-${(offset + duration).toFixed(2)}s`)
+                    }
+                  }
+
+                  // CRITICAL: Attach anti-cheat metadata to the word timing data
+                  // The hook will read these properties to determine if user spelled vs said
+                  if (wordTimings.length > 0) {
+                    // Attach metadata to the first word timing entry
+                    // Using type assertion to add our custom properties
+                    const timingWithMetadata = wordTimings as (WordTimingData & {
+                      _lexical?: string
+                      _isSpelledOut?: boolean
+                    })[]
+
+                    timingWithMetadata[0]._lexical = lexical || ""
+                    timingWithMetadata[0]._isSpelledOut = shouldPass
+
+                    onWordTiming(wordTimings)
+                  }
+                }
+              } catch (err) {
+                // JSON parsing failed - word timing not available
+                if (process.env.NODE_ENV === "development") {
+                  console.warn("[Azure] Failed to parse word timing:", err)
+                }
+              }
+            }
+
             onFinalResult?.(text)
           }
         } else if (event.result.reason === SpeechSDK.ResultReason.NoMatch) {

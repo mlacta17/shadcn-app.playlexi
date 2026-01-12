@@ -132,8 +132,16 @@ export default function EndlessGamePage() {
     // Stop recording and get anti-cheat metrics
     const metrics = stopRecording()
 
-    // Submit answer with letter timing for anti-cheat validation
+    // Submit answer with timing data for anti-cheat validation
+    // Priority: audio timing (from Azure/Deepgram) > letter timing (fallback)
     gameActions.submitAnswer(transcript, {
+      // PRIMARY: Audio-level timing from speech provider (more reliable)
+      audioTiming: {
+        wordCount: metrics.audioWordCount,
+        avgGapSec: metrics.avgAudioGapSec,
+        looksLikeSpelling: metrics.looksLikeSpellingFromAudio,
+      },
+      // FALLBACK: Transcript-based timing (less reliable due to provider buffering)
       letterTiming: {
         averageLetterGapMs: metrics.averageLetterGapMs,
         looksLikeSpelling: metrics.looksLikeSpelling,
