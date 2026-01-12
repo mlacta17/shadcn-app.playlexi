@@ -41,7 +41,7 @@ export interface UseSpeechRecognitionReturn {
   startRecording: () => Promise<void>
   /**
    * Stop recording and get final transcript.
-   * @returns The recording duration in milliseconds
+   * @returns The speech duration in milliseconds (time from first to last speech detected)
    */
   stopRecording: () => number
   /** Current transcript (updated in real-time) */
@@ -57,17 +57,21 @@ export interface UseSpeechRecognitionReturn {
   /** Any error that occurred */
   error: Error | null
   /**
-   * Duration of the last recording in milliseconds.
-   * Used for anti-cheat validation: spelling letters takes longer than saying a word.
-   * Reset to 0 when starting a new recording.
+   * Duration of actual speech in the last recording (milliseconds).
+   * Measured from FIRST interim result to LAST interim result.
+   * This is more accurate for anti-cheat than total recording duration,
+   * as it excludes silence before/after speech.
+   *
+   * Example:
+   * - Saying "smile": ~400-600ms of speech
+   * - Spelling "S-M-I-L-E": ~2000-3000ms of speech
    */
-  recordingDurationMs: number
+  speechDurationMs: number
   /**
-   * Get the current recording duration without stopping.
-   * Useful for checking elapsed time during recording.
-   * @returns Duration in milliseconds, or 0 if not recording
+   * Get the current speech duration without stopping.
+   * @returns Duration in milliseconds, or 0 if no speech detected yet
    */
-  getCurrentDuration: () => number
+  getCurrentSpeechDuration: () => number
 }
 
 // =============================================================================
@@ -136,14 +140,19 @@ export function useSpeechRecognition(
   const [analyserNode, setAnalyserNode] = React.useState<AnalyserNode | null>(null)
   const [error, setError] = React.useState<Error | null>(null)
   const [provider, setProvider] = React.useState<SpeechProvider | null>(null)
-  const [recordingDurationMs, setRecordingDurationMs] = React.useState(0)
+  const [speechDurationMs, setSpeechDurationMs] = React.useState(0)
 
   // Refs for stable callback references (avoid stale closures)
   const sessionRef = React.useRef<SpeechRecognitionSession | null>(null)
   const lastInterimUpdateRef = React.useRef<number>(0)
-  const recordingStartTimeRef = React.useRef<number>(0)
   const onTranscriptRef = React.useRef(onTranscript)
   const onErrorRef = React.useRef(onError)
+
+  // Speech timing refs for anti-cheat
+  // We track when FIRST speech was detected and when LAST speech was detected
+  // This gives us actual speaking time, not recording time (which includes silence)
+  const firstSpeechTimeRef = React.useRef<number>(0)
+  const lastSpeechTimeRef = React.useRef<number>(0)
 
   // Keep refs in sync with latest callbacks (avoids re-creating session on callback change)
   React.useEffect(() => {
@@ -168,26 +177,38 @@ export function useSpeechRecognition(
   }, [])
 
   /**
-   * Get the current recording duration without stopping.
+   * Get the current speech duration without stopping.
+   * Returns time from first detected speech to now (or last speech).
    */
-  const getCurrentDuration = React.useCallback((): number => {
-    if (recordingStartTimeRef.current <= 0) return 0
-    return Date.now() - recordingStartTimeRef.current
+  const getCurrentSpeechDuration = React.useCallback((): number => {
+    if (firstSpeechTimeRef.current <= 0) return 0
+    const endTime = lastSpeechTimeRef.current > 0 ? lastSpeechTimeRef.current : Date.now()
+    return endTime - firstSpeechTimeRef.current
   }, [])
 
   /**
    * Cleanup function - stops recording and releases resources.
-   * @returns The recording duration in milliseconds
+   * @returns The speech duration in milliseconds (first speech to last speech)
    */
   const cleanup = React.useCallback((): number => {
-    // Calculate recording duration before stopping
-    let duration = 0
-    if (recordingStartTimeRef.current > 0) {
-      duration = Date.now() - recordingStartTimeRef.current
-      setRecordingDurationMs(duration)
+    // Calculate SPEECH duration (not recording duration)
+    // This is the time from first detected speech to last detected speech
+    // Much more accurate for anti-cheat as it excludes silence
+    let speechDuration = 0
+    if (firstSpeechTimeRef.current > 0 && lastSpeechTimeRef.current > 0) {
+      speechDuration = lastSpeechTimeRef.current - firstSpeechTimeRef.current
+      setSpeechDurationMs(speechDuration)
 
       if (process.env.NODE_ENV === "development") {
-        console.log(`[Speech] Recording duration: ${duration}ms`)
+        console.log(`[Speech] Speech duration: ${speechDuration}ms (first to last speech)`)
+      }
+    } else if (firstSpeechTimeRef.current > 0) {
+      // Only first speech detected, use time until now
+      speechDuration = Date.now() - firstSpeechTimeRef.current
+      setSpeechDurationMs(speechDuration)
+
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[Speech] Speech duration: ${speechDuration}ms (first speech to now)`)
       }
     }
 
@@ -196,11 +217,13 @@ export function useSpeechRecognition(
       sessionRef.current = null
     }
 
-    recordingStartTimeRef.current = 0
+    // Reset all timing refs
+    firstSpeechTimeRef.current = 0
+    lastSpeechTimeRef.current = 0
     setAnalyserNode(null)
     setIsRecording(false)
 
-    return duration
+    return speechDuration
   }, [])
 
   // Start recording
@@ -208,9 +231,11 @@ export function useSpeechRecognition(
     try {
       setError(null)
       setTranscript("")
-      setRecordingDurationMs(0) // Reset duration for new recording
+      setSpeechDurationMs(0) // Reset duration for new recording
       lastInterimUpdateRef.current = 0
-      recordingStartTimeRef.current = Date.now() // Track start time
+      // Reset speech timing refs
+      firstSpeechTimeRef.current = 0
+      lastSpeechTimeRef.current = 0
 
       // Get provider using async version to properly check Azure availability
       // Azure requires an async check because it needs to verify the token endpoint
@@ -225,9 +250,23 @@ export function useSpeechRecognition(
       // Note: Callbacks use refs to avoid stale closures and unnecessary re-renders
       const session = await speechProvider.start({
         onInterimResult: (text) => {
+          const now = Date.now()
+
+          // Track speech timing for anti-cheat
+          // First speech = when we first detect any text
+          // Last speech = every time we get new text (updates continuously)
+          if (text && text.length > 0) {
+            if (firstSpeechTimeRef.current === 0) {
+              firstSpeechTimeRef.current = now
+              if (process.env.NODE_ENV === "development") {
+                console.log(`[Speech] First speech detected at ${now}`)
+              }
+            }
+            lastSpeechTimeRef.current = now
+          }
+
           // Apply throttling if configured (reduces React re-renders)
           if (interimThrottleMs > 0) {
-            const now = Date.now()
             if (now - lastInterimUpdateRef.current < interimThrottleMs) {
               return // Skip this update
             }
@@ -240,6 +279,11 @@ export function useSpeechRecognition(
           setTranscript(text)
         },
         onFinalResult: (text) => {
+          // Update last speech time on final result too
+          if (text && text.length > 0) {
+            lastSpeechTimeRef.current = Date.now()
+          }
+
           if (process.env.NODE_ENV === "development") {
             console.log(`[Speech:${speechProvider.name}] FINAL:`, text)
           }
@@ -299,7 +343,7 @@ export function useSpeechRecognition(
     isSupported,
     provider,
     error,
-    recordingDurationMs,
-    getCurrentDuration,
+    speechDurationMs,
+    getCurrentSpeechDuration,
   }
 }
