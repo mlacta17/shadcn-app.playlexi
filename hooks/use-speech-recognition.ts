@@ -3,7 +3,6 @@
 import * as React from "react"
 import {
   getSpeechProvider,
-  type ISpeechRecognitionProvider,
   type SpeechRecognitionSession,
   type SpeechProvider,
   SPELLING_KEYWORDS,
@@ -26,6 +25,12 @@ export interface UseSpeechRecognitionOptions {
    * (default: true)
    */
   spellingMode?: boolean
+  /**
+   * Minimum interval between interim transcript updates in milliseconds.
+   * Lower = more responsive, higher = less React re-renders.
+   * Default: 0 (no throttling - instant updates)
+   */
+  interimThrottleMs?: number
 }
 
 export interface UseSpeechRecognitionReturn {
@@ -57,14 +62,16 @@ export interface UseSpeechRecognitionReturn {
  * Speech recognition hook with provider abstraction.
  *
  * Automatically selects the best available provider:
- * 1. Deepgram (if API key configured) — ~95% accuracy for spelling
- * 2. Web Speech API (fallback) — ~70-80% accuracy
+ * 1. OpenAI Realtime (if API key configured) — ~98% accuracy for letters
+ * 2. Deepgram (if API key configured) — ~95% accuracy for words
+ * 3. Web Speech API (fallback) — ~70-80% accuracy
  *
  * ## Features
- * - Real-time transcript updates
- * - Audio visualization via analyserNode
+ * - Real-time transcript updates with optional throttling
+ * - Audio visualization via analyserNode (shared with provider)
  * - Automatic keyword boosting for spelling
  * - Graceful fallback between providers
+ * - Zero duplicate media streams (reuses provider's audio pipeline)
  *
  * ## Usage
  * ```tsx
@@ -78,6 +85,7 @@ export interface UseSpeechRecognitionReturn {
  *     provider,
  *   } = useSpeechRecognition({
  *     onTranscript: (text) => submitAnswer(text),
+ *     interimThrottleMs: 50, // Optional: throttle updates for performance
  *   })
  *
  *   return (
@@ -101,6 +109,7 @@ export function useSpeechRecognition(
     onError,
     language = "en-US",
     spellingMode = true,
+    interimThrottleMs = 0,
   } = options
 
   // State
@@ -110,11 +119,17 @@ export function useSpeechRecognition(
   const [error, setError] = React.useState<Error | null>(null)
   const [provider, setProvider] = React.useState<SpeechProvider | null>(null)
 
-  // Refs
+  // Refs for stable callback references (avoid stale closures)
   const sessionRef = React.useRef<SpeechRecognitionSession | null>(null)
-  const providerRef = React.useRef<ISpeechRecognitionProvider | null>(null)
-  const audioContextRef = React.useRef<AudioContext | null>(null)
-  const mediaStreamRef = React.useRef<MediaStream | null>(null)
+  const lastInterimUpdateRef = React.useRef<number>(0)
+  const onTranscriptRef = React.useRef(onTranscript)
+  const onErrorRef = React.useRef(onError)
+
+  // Keep refs in sync with latest callbacks (avoids re-creating session on callback change)
+  React.useEffect(() => {
+    onTranscriptRef.current = onTranscript
+    onErrorRef.current = onError
+  }, [onTranscript, onError])
 
   // Check if supported
   const isSupported = React.useMemo(() => {
@@ -126,24 +141,12 @@ export function useSpeechRecognition(
     }
   }, [])
 
-  // Cleanup function
+  // Cleanup function - no longer needs to manage media stream or audio context
+  // since the provider handles its own resources
   const cleanup = React.useCallback(() => {
-    // Stop session
     if (sessionRef.current) {
       sessionRef.current.stop()
       sessionRef.current = null
-    }
-
-    // Stop media stream
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((track) => track.stop())
-      mediaStreamRef.current = null
-    }
-
-    // Close audio context
-    if (audioContextRef.current) {
-      audioContextRef.current.close()
-      audioContextRef.current = null
     }
 
     setAnalyserNode(null)
@@ -155,53 +158,46 @@ export function useSpeechRecognition(
     try {
       setError(null)
       setTranscript("")
+      lastInterimUpdateRef.current = 0
 
-      // Get provider
+      // Get provider (singleton, so this is fast)
       const speechProvider = getSpeechProvider()
-      providerRef.current = speechProvider
       setProvider(speechProvider.name)
 
-      // Debug: Log which provider is being used
       if (process.env.NODE_ENV === "development") {
         console.log(`[Speech] Using provider: ${speechProvider.name}`)
       }
 
-      // Set up audio context for visualization
-      // (We need our own media stream for the analyser)
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      mediaStreamRef.current = stream
-
-      const audioContext = new AudioContext()
-      audioContextRef.current = audioContext
-
-      const analyser = audioContext.createAnalyser()
-      analyser.fftSize = 256
-      analyser.smoothingTimeConstant = 0.7
-
-      const source = audioContext.createMediaStreamSource(stream)
-      source.connect(analyser)
-      setAnalyserNode(analyser)
-
       // Start recognition session
+      // Note: Callbacks use refs to avoid stale closures and unnecessary re-renders
       const session = await speechProvider.start({
         onInterimResult: (text) => {
-          // Debug: Log raw interim transcripts from speech provider
+          // Apply throttling if configured (reduces React re-renders)
+          if (interimThrottleMs > 0) {
+            const now = Date.now()
+            if (now - lastInterimUpdateRef.current < interimThrottleMs) {
+              return // Skip this update
+            }
+            lastInterimUpdateRef.current = now
+          }
+
           if (process.env.NODE_ENV === "development") {
             console.log(`[Speech:${speechProvider.name}] interim:`, text)
           }
           setTranscript(text)
         },
         onFinalResult: (text) => {
-          // Debug: Log raw final transcripts from speech provider
           if (process.env.NODE_ENV === "development") {
             console.log(`[Speech:${speechProvider.name}] FINAL:`, text)
           }
           setTranscript(text)
-          onTranscript?.(text)
+          // Use ref for stable callback reference
+          onTranscriptRef.current?.(text)
         },
         onError: (err) => {
           setError(err)
-          onError?.(err)
+          // Use ref for stable callback reference
+          onErrorRef.current?.(err)
         },
         language,
         keywords: spellingMode ? SPELLING_KEYWORDS : undefined,
@@ -209,13 +205,19 @@ export function useSpeechRecognition(
 
       sessionRef.current = session
       setIsRecording(true)
+
+      // Use the provider's shared analyserNode if available
+      // This eliminates the need for a duplicate media stream
+      if (session.analyserNode) {
+        setAnalyserNode(session.analyserNode)
+      }
     } catch (err) {
       const error = err instanceof Error ? err : new Error("Failed to start recording")
       setError(error)
-      onError?.(error)
+      onErrorRef.current?.(error)
       cleanup()
     }
-  }, [language, spellingMode, onTranscript, onError, cleanup])
+  }, [language, spellingMode, interimThrottleMs, cleanup])
 
   // Stop recording
   const stopRecording = React.useCallback(() => {

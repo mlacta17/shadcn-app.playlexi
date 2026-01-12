@@ -77,9 +77,6 @@ export default function EndlessGamePage() {
   // ---------------------------------------------------------------------------
   // Uses provider abstraction: Deepgram (~95% accuracy) or Web Speech API (fallback)
   // Deepgram is used automatically if NEXT_PUBLIC_DEEPGRAM_API_KEY is set
-  //
-  // Auto-submit: When Deepgram sends a FINAL transcript, we automatically
-  // submit the answer. This makes the game faster - no need to press "Stop".
   const {
     isRecording,
     startRecording,
@@ -87,16 +84,85 @@ export default function EndlessGamePage() {
     analyserNode,
     transcript,
     provider,
-  } = useSpeechRecognition({
-    spellingMode: true,
-    onTranscript: (finalTranscript) => {
-      // Auto-submit when we get a final transcript
-      if (finalTranscript && gameState.phase === "playing") {
-        stopRecording()
-        gameActions.submitAnswer(finalTranscript)
+  } = useSpeechRecognition({ spellingMode: true })
+
+  // ---------------------------------------------------------------------------
+  // Answer Submission Logic
+  // ---------------------------------------------------------------------------
+  // Two ways to submit:
+  // 1. Auto-submit: After 1.2s of silence (debounced)
+  // 2. Manual submit: Press "Stop" button anytime
+  //
+  // The auto-submit timer resets whenever new speech is detected.
+  // Manual submit cancels any pending auto-submit.
+
+  /** How long to wait after last speech before auto-submitting */
+  const AUTO_SUBMIT_DELAY_MS = 1200
+
+  /** Ref to track the auto-submit timeout */
+  const autoSubmitTimeoutRef = React.useRef<NodeJS.Timeout | null>(null)
+
+  /** Ref to track if we've already submitted (prevents double-submit) */
+  const hasSubmittedRef = React.useRef(false)
+
+  /**
+   * Submit the current answer.
+   * Called by both auto-submit and manual Stop button.
+   * Idempotent - safe to call multiple times.
+   */
+  const submitCurrentAnswer = React.useCallback(() => {
+    // Prevent double-submission
+    if (hasSubmittedRef.current) return
+    if (!transcript) return
+    if (gameState.phase !== "playing") return
+
+    hasSubmittedRef.current = true
+
+    // Clear any pending auto-submit
+    if (autoSubmitTimeoutRef.current) {
+      clearTimeout(autoSubmitTimeoutRef.current)
+      autoSubmitTimeoutRef.current = null
+    }
+
+    // Stop recording and submit
+    stopRecording()
+    gameActions.submitAnswer(transcript)
+  }, [transcript, gameState.phase, stopRecording, gameActions])
+
+  /**
+   * Reset submission state when starting a new recording.
+   */
+  React.useEffect(() => {
+    if (isRecording) {
+      hasSubmittedRef.current = false
+    }
+  }, [isRecording])
+
+  /**
+   * Auto-submit effect: Start timer when transcript changes.
+   * Timer resets on each new transcript (debounce pattern).
+   */
+  React.useEffect(() => {
+    // Clear existing timer
+    if (autoSubmitTimeoutRef.current) {
+      clearTimeout(autoSubmitTimeoutRef.current)
+      autoSubmitTimeoutRef.current = null
+    }
+
+    // Only start timer if actively recording with a transcript
+    if (isRecording && transcript && gameState.phase === "playing") {
+      autoSubmitTimeoutRef.current = setTimeout(() => {
+        submitCurrentAnswer()
+      }, AUTO_SUBMIT_DELAY_MS)
+    }
+
+    // Cleanup on unmount or dependency change
+    return () => {
+      if (autoSubmitTimeoutRef.current) {
+        clearTimeout(autoSubmitTimeoutRef.current)
       }
-    },
-  })
+    }
+  }, [transcript, isRecording, gameState.phase, submitCurrentAnswer])
 
   // ---------------------------------------------------------------------------
   // Local UI State
@@ -210,11 +276,8 @@ export default function EndlessGamePage() {
   }
 
   const handleRecordStop = () => {
-    stopRecording()
-    // Submit the transcript as the answer
-    if (transcript) {
-      gameActions.submitAnswer(transcript)
-    }
+    // Use the shared submission function (handles cleanup + prevents double-submit)
+    submitCurrentAnswer()
   }
 
   /**

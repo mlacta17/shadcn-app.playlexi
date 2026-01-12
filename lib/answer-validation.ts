@@ -345,6 +345,31 @@ const SPOKEN_LETTER_NAMES: Record<string, string> = {
   "see a tea es": "cats", // "C A T S"
 }
 
+// =============================================================================
+// PRE-COMPUTED OPTIMIZATIONS (computed once at module load)
+// =============================================================================
+
+/**
+ * Pre-computed phrase keys sorted by length (longest first).
+ * This avoids re-sorting on every call to extractLettersFromVoice.
+ *
+ * Performance: O(n log n) once at load, vs O(n log n) on every call before.
+ */
+const PHRASE_KEYS_SORTED = Object.keys(SPOKEN_LETTER_NAMES)
+  .filter((k) => k.includes(" "))
+  .sort((a, b) => b.length - a.length)
+
+/**
+ * Pre-compiled regex patterns for phrase replacement.
+ * Using a Map for O(1) lookup instead of creating new RegExp each time.
+ *
+ * Performance: Regex compilation is expensive (~10-50μs per regex).
+ * Pre-compiling saves this cost on every extractLettersFromVoice call.
+ */
+const PHRASE_REGEX_MAP = new Map<string, RegExp>(
+  PHRASE_KEYS_SORTED.map((phrase) => [phrase, new RegExp(phrase, "g")])
+)
+
 /**
  * Check if voice input appears to be spelled out letter-by-letter.
  *
@@ -386,56 +411,84 @@ export function isSpelledOut(input: string, correctWord: string): boolean {
     return false
   }
 
-  // Strategy 0: Check for known multi-word phrase mappings
-  // If the entire input matches a phrase mapping, it's spelled out
-  const phraseKeys = Object.keys(SPOKEN_LETTER_NAMES).filter((k) => k.includes(" "))
-  for (const phrase of phraseKeys) {
+  // Split by common separators (spaces, commas, dashes, periods)
+  const parts = trimmed.split(/[\s,\.\-]+/).filter((p) => p.length > 0)
+
+  // ==========================================================================
+  // ANTI-CHEAT: Strict check for whole word (highest priority)
+  // ==========================================================================
+  // If the input is a single "word" that matches the correct word, reject it.
+  // This catches cases where someone just says "cat" instead of "C A T".
+
+  if (parts.length === 1) {
+    const singlePart = parts[0]
+
+    // Direct match = cheating (said the word)
+    if (singlePart === wordLower) {
+      return false
+    }
+
+    // Check if single part normalizes to the word
+    const normalized = normalizeAnswer(singlePart)
+    if (normalized === wordLower) {
+      return false
+    }
+
+    // Single part that's NOT a known letter name = probably said the word
+    const isKnownLetter = singlePart.length === 1 ||
+                          NATO_PHONETIC[singlePart] ||
+                          SPOKEN_LETTER_NAMES[singlePart]
+    if (!isKnownLetter && singlePart.length > 1) {
+      // It's a multi-character word that's not a letter name
+      // This is likely someone saying a word, not spelling
+      return false
+    }
+  }
+
+  // ==========================================================================
+  // Check for known multi-word phrase mappings
+  // ==========================================================================
+  // Use pre-computed PHRASE_KEYS_SORTED for efficiency
+  for (const phrase of PHRASE_KEYS_SORTED) {
     if (trimmed === phrase || trimmed.includes(phrase)) {
       return true
     }
   }
 
-  // Strategy 1: Check for spaced single letters (e.g., "d o g")
-  // Split by common separators
-  const parts = trimmed.split(/[\s,\-]+/).filter((p) => p.length > 0)
-
-  // If we have multiple parts and most are single letters, it's spelled out
+  // ==========================================================================
+  // Check if parts are valid letter representations
+  // ==========================================================================
   if (parts.length > 1) {
-    const singleLetterCount = parts.filter((p) => p.length === 1).length
-    const phoneticCount = parts.filter((p) => NATO_PHONETIC[p]).length
-    const spokenLetterCount = parts.filter((p) => SPOKEN_LETTER_NAMES[p]).length
+    // Count how many parts are recognized letter forms
+    let recognizedCount = 0
+    for (const part of parts) {
+      if (part.length === 1 && /^[a-z]$/.test(part)) {
+        recognizedCount++
+      } else if (NATO_PHONETIC[part]) {
+        recognizedCount++
+      } else if (SPOKEN_LETTER_NAMES[part]) {
+        recognizedCount++
+      }
+    }
 
-    // If majority of parts are letters/phonetic, it's spelled out
-    const spelledOutParts = singleLetterCount + phoneticCount + spokenLetterCount
-    if (spelledOutParts >= parts.length * 0.5) {
+    // Require at least 50% of parts to be recognized letters
+    // This catches "C A T" but rejects "cat is"
+    if (recognizedCount >= parts.length * 0.5) {
+      return true
+    }
+
+    // If ALL parts are letter forms, definitely spelled out
+    if (recognizedCount === parts.length) {
       return true
     }
   }
 
-  // Strategy 2: Check if input exactly matches the word (cheating)
-  // If someone says "dog" for the word "dog", that's not spelling
-  const normalizedInput = normalizeAnswer(trimmed)
-  if (normalizedInput === wordLower && parts.length === 1) {
-    // Single word that matches exactly = not spelled out
-    return false
-  }
-
-  // Strategy 3: Check for NATO phonetic or spoken letter sequences
-  // e.g., "delta oscar golf" or "dee oh gee"
-  const allPartsAreLetterForms = parts.every(
-    (p) => p.length === 1 || NATO_PHONETIC[p] || SPOKEN_LETTER_NAMES[p]
-  )
-  if (parts.length > 1 && allPartsAreLetterForms) {
-    return true
-  }
-
-  // Strategy 4: If input is longer than the word and contains the word
-  // embedded in other content, it might be an attempt to sneak the word in
-  // For now, we'll be lenient and allow it (edge case for future refinement)
-
-  // Default: If we can't determine it's spelled out, assume it's not
-  // This is the strict/conservative approach
-  return parts.length > 1
+  // ==========================================================================
+  // Default: Strict mode - if we can't confirm it's spelled, reject it
+  // ==========================================================================
+  // This is safer for anti-cheat. Better to ask player to re-spell than
+  // to accept a cheated answer.
+  return false
 }
 
 /**
@@ -462,16 +515,13 @@ export function extractLettersFromVoice(input: string): string {
   let processed = input.toLowerCase().trim()
 
   // First, check for multi-word phrase mappings (longer phrases first)
-  // Sort by length descending to match longer phrases first
-  const phraseKeys = Object.keys(SPOKEN_LETTER_NAMES)
-    .filter((k) => k.includes(" "))
-    .sort((a, b) => b.length - a.length)
-
-  for (const phrase of phraseKeys) {
+  // Uses pre-computed PHRASE_KEYS_SORTED and PHRASE_REGEX_MAP for performance
+  for (const phrase of PHRASE_KEYS_SORTED) {
     if (processed.includes(phrase)) {
       // Replace the phrase with a placeholder that won't be split
       const replacement = `__PHRASE_${SPOKEN_LETTER_NAMES[phrase]}__`
-      processed = processed.replace(new RegExp(phrase, "g"), replacement)
+      const regex = PHRASE_REGEX_MAP.get(phrase)!
+      processed = processed.replace(regex, replacement)
     }
   }
 
@@ -732,24 +782,30 @@ export function analyzeAnswer(
  * ```
  */
 export function formatTranscriptForDisplay(transcript: string): string {
-  if (!transcript || transcript.trim().length === 0) {
+  // Fast path: empty input
+  if (!transcript || transcript.length === 0) {
     return ""
   }
 
-  // Extract letters using our existing function
+  // Extract letters using optimized function
   const letters = extractLettersFromVoice(transcript)
 
-  // Debug: Log the transformation
-  if (process.env.NODE_ENV === "development") {
-    console.log(`[Display] "${transcript}" → "${letters}" → "${letters.toUpperCase().split("").join("-")}"`)
-  }
-
+  // Fast path: no letters extracted
   if (letters.length === 0) {
+    // If we couldn't extract letters, show the raw transcript briefly
+    // This provides immediate feedback that something was heard
+    // The transcript will be replaced once proper letters are recognized
+    const trimmed = transcript.trim()
+    if (trimmed.length > 0 && trimmed.length <= 20) {
+      // Show raw input in lowercase for partial feedback
+      return `(${trimmed})`
+    }
     return ""
   }
 
   // Format as uppercase letters separated by hyphens
-  return letters.toUpperCase().split("").join("-")
+  // Using Array.from for proper unicode handling and join for efficiency
+  return Array.from(letters.toUpperCase()).join("-")
 }
 
 // =============================================================================

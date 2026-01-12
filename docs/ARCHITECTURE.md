@@ -1267,6 +1267,34 @@ This separation allows `VoiceWaveform` to be reused in other contexts (e.g., aud
 | Whisper API failure | Retry with exponential backoff, then show error |
 | Network timeout | 10-second timeout, then show error |
 
+### 8.10 Recommended Input Strategy: Hybrid Approach
+
+> **See ADR-008** for full details on the hybrid input system.
+
+**Current Status (January 2026):**
+- Deepgram integration is complete and functional
+- Letter-by-letter spelling accuracy is limited by fundamental speech recognition constraints
+- Keyboard input (`SpeechInput mode="keyboard"`) is already implemented
+
+**Recommended Path Forward:**
+
+| Input Mode | Use Case | Matching |
+|------------|----------|----------|
+| **Keyboard** (default) | Competitive play, leaderboards | Strict (exact match) |
+| **Voice** (optional) | Casual play, accessibility | Generous (spelled OR spoken word) |
+
+**Why Hybrid:**
+1. Letter-by-letter voice spelling ("C-A-T") has ~70-80% practical accuracy
+2. Keyboard provides 100% accuracy for competitive integrity
+3. Voice remains available for accessibility and fun factor
+4. Player choice respects different preferences and contexts
+
+**Implementation Priority:**
+1. Keep current Deepgram integration for continued testing
+2. Implement input mode selector before game start
+3. Add generous voice matching (accept spelled letters OR whole word)
+4. Segment leaderboards by input mode if needed
+
 ---
 
 ## 9. Authentication
@@ -2412,6 +2440,134 @@ useSpeechRecognition (owns audio pipeline + provider selection)
 - Adding new words requires seeding process
 - Audio files must be cached in R2
 - Database grows with word count
+
+---
+
+### ADR-008: Hybrid Input System (Keyboard-First, Voice-Optional)
+
+| Field | Value |
+|-------|-------|
+| **Date** | January 11, 2026 |
+| **Status** | Proposed |
+| **Deciders** | Project team |
+
+**Context:** Letter-by-letter voice spelling ("C-A-T") has fundamental accuracy limitations:
+
+1. **Speech Recognition Limitations:**
+   - Single letters sound like common words ("R" → "are", "U" → "you")
+   - Fast spellers outpace speech recognition's ability to segment letters
+   - Background noise significantly impacts single-letter detection
+   - Even premium providers (Deepgram ~95% accuracy) struggle with letter sequences
+
+2. **Technical Constraints:**
+   - Building custom speech-to-letter recognition would require:
+     - ML model training ($1M+ compute, millions of hours of labeled audio)
+     - Specialized inference infrastructure (GPU clusters)
+     - Years of R&D (comparable to Siri/Alexa development)
+   - These constraints are fundamental to ML, not solvable with code optimization
+
+3. **User Experience Goals:**
+   - Voice-first vision for accessibility and fun factor
+   - Snappy, responsive gameplay
+   - Accurate scoring (no frustrating false negatives)
+   - Scalable to competitive/leaderboard contexts
+
+**Decision:** Implement a hybrid input system:
+
+1. **Keyboard as Default** — Fast, accurate, competitive-ready
+2. **Voice as Optional Enhancement** — Fun, accessible, with generous matching
+3. **Player Choice** — Select input mode before starting a game session
+
+**Implementation Plan:**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Game Start Screen                            │
+│                                                                  │
+│   Choose your input method:                                      │
+│                                                                  │
+│   ┌──────────────────┐    ┌──────────────────┐                  │
+│   │    ⌨️ Keyboard    │    │    🎤 Voice       │                  │
+│   │    (Recommended)  │    │    (Experimental) │                  │
+│   │                   │    │                   │                  │
+│   │  • Fast & accurate│    │  • Say letters OR │                  │
+│   │  • Best for       │    │    the whole word │                  │
+│   │    competitive    │    │  • More forgiving │                  │
+│   └──────────────────┘    └──────────────────┘                  │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Voice Mode Behavior (Generous Matching):**
+
+```typescript
+// Accept EITHER spelled letters OR the spoken word
+function validateVoiceAnswer(transcript: string, targetWord: string): boolean {
+  // 1. Try letter extraction: "see ay tea" → "cat"
+  const extractedLetters = extractLettersFromVoice(transcript)
+  if (extractedLetters.toLowerCase() === targetWord.toLowerCase()) {
+    return true
+  }
+
+  // 2. Try direct word match: "cat" → "cat"
+  const normalizedTranscript = transcript.toLowerCase().trim()
+  if (normalizedTranscript === targetWord.toLowerCase()) {
+    return true
+  }
+
+  // 3. Fuzzy match for close pronunciations
+  if (levenshteinDistance(normalizedTranscript, targetWord) <= 1) {
+    return true
+  }
+
+  return false
+}
+```
+
+**Keyboard Mode Behavior (Strict):**
+- Standard text input
+- Must type exact letters
+- No fuzzy matching (strict equality)
+- Suitable for leaderboards and competitive play
+
+**UI Components:**
+
+| Component | Keyboard Mode | Voice Mode |
+|-----------|---------------|------------|
+| Input | `<KeyboardInput />` | `<SpeechInput />` |
+| Display | Typed letters | Real-time transcript |
+| Submit | Enter key or button | Auto-submit after pause OR manual |
+| Feedback | Immediate | Slight delay for processing |
+
+**Files to Create/Modify:**
+
+1. **`lib/input-mode.ts`** — Input mode types and context
+   ```typescript
+   export type InputMode = "keyboard" | "voice"
+   export const InputModeContext = createContext<InputMode>("keyboard")
+   ```
+
+2. **`components/game/input-mode-selector.tsx`** — Pre-game mode selection
+3. **`app/game/[mode]/page.tsx`** — Update to support mode parameter
+4. **`lib/answer-validation.ts`** — Add `validateVoiceAnswer()` with generous matching
+
+**Rationale:**
+- Keyboard-first respects the accuracy limitations of current speech technology
+- Voice-optional preserves the accessible, fun experience vision
+- Generous voice matching (accept spelled OR spoken word) reduces frustration
+- Clear mode separation allows fair competitive play (keyboard leaderboards)
+- Scalable — can improve voice accuracy over time without breaking core game
+
+**Consequences:**
+- Two input paths to maintain and test
+- Voice mode may feel "easier" (accepting whole words)
+- Must clearly communicate mode differences to players
+- Leaderboards may need to be segmented by input mode
+
+**Future Enhancements:**
+- Voice-only leaderboards for players who master letter spelling
+- Difficulty settings for voice mode (strict vs generous)
+- Voice training mode to practice letter pronunciation
 
 ---
 
