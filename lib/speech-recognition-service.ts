@@ -486,7 +486,21 @@ class OpenAIRealtimeProvider implements ISpeechRecognitionProvider {
             input_audio_format: "pcm16",
             input_audio_transcription: {
               model: "gpt-4o-transcribe",
-              prompt: "The user is spelling words letter by letter for a spelling bee game. Transcribe each letter they say accurately. Examples: 'C A T' or 'D O G'.",
+              // Aggressive prompt to force letter-by-letter output
+              // Key instructions:
+              // 1. NEVER combine letters into words
+              // 2. Output raw phonemes/letters with spaces
+              // 3. Explicit examples of what we want
+              prompt: `CRITICAL: Output ONLY individual letters separated by spaces. NEVER combine letters into words.
+
+Rules:
+- If you hear "see ay tea" → output "C A T" (not "cat")
+- If you hear "dee oh gee" → output "D O G" (not "dog")
+- If you hear the letters C, A, T spoken → output "C A T"
+- Each letter MUST be separated by a space
+- NEVER output a complete word without spaces
+
+This is a spelling bee. The user is spelling letter-by-letter. Transcribe each letter individually.`,
               language: "en",
             },
             // VAD settings tuned for low-latency letter spelling
