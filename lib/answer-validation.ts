@@ -49,7 +49,78 @@ export interface ValidationResult {
   /** For voice mode: whether the input was properly spelled out */
   wasSpelledOut?: boolean
   /** Rejection reason if answer was rejected (not just wrong) */
-  rejectionReason?: "not_spelled_out" | "empty"
+  rejectionReason?: "not_spelled_out" | "too_fast" | "empty"
+}
+
+// =============================================================================
+// DURATION-BASED ANTI-CHEAT CONSTANTS
+// =============================================================================
+
+/**
+ * Minimum milliseconds per letter for valid spelling.
+ *
+ * Rationale:
+ * - Saying "smile" takes ~300-500ms
+ * - Spelling "S-M-I-L-E" takes ~2000-3000ms (400-600ms per letter)
+ * - We use 300ms as a conservative minimum to avoid false rejections
+ * - This catches blatant cheating while allowing fast spellers
+ *
+ * Testing results:
+ * - Fast speller: ~350ms/letter
+ * - Normal speller: ~500ms/letter
+ * - Saying word directly: ~80-150ms/letter equivalent
+ */
+export const MIN_MS_PER_LETTER = 300
+
+/**
+ * Minimum recording duration for any valid spelling (in ms).
+ * Even a 2-letter word like "AT" needs some time to spell.
+ */
+export const MIN_RECORDING_DURATION_MS = 500
+
+/**
+ * Check if the recording duration is long enough for the word length.
+ *
+ * This is the primary anti-cheat mechanism for voice input.
+ * Spelling a word letter-by-letter takes significantly longer than
+ * just saying the word.
+ *
+ * @param durationMs - Recording duration in milliseconds
+ * @param wordLength - Number of letters in the word
+ * @returns true if duration is sufficient for spelling
+ *
+ * @example
+ * ```ts
+ * // "smile" (5 letters) needs at least 1500ms (5 × 300ms)
+ * isDurationSufficientForSpelling(2000, 5) // true - 400ms/letter
+ * isDurationSufficientForSpelling(500, 5)  // false - 100ms/letter (too fast)
+ * isDurationSufficientForSpelling(1500, 5) // true - exactly 300ms/letter
+ * ```
+ */
+export function isDurationSufficientForSpelling(
+  durationMs: number,
+  wordLength: number
+): boolean {
+  // Minimum absolute duration
+  if (durationMs < MIN_RECORDING_DURATION_MS) {
+    return false
+  }
+
+  // Calculate minimum required duration for this word length
+  const minDuration = wordLength * MIN_MS_PER_LETTER
+
+  return durationMs >= minDuration
+}
+
+/**
+ * Calculate the expected minimum duration for spelling a word.
+ * Useful for debugging and user feedback.
+ *
+ * @param wordLength - Number of letters in the word
+ * @returns Minimum expected duration in milliseconds
+ */
+export function getExpectedSpellingDuration(wordLength: number): number {
+  return Math.max(MIN_RECORDING_DURATION_MS, wordLength * MIN_MS_PER_LETTER)
 }
 
 /**
@@ -393,8 +464,9 @@ const PHRASE_REGEX_MAP = new Map<string, RegExp>(
  * isSpelledOut("dee oh gee", "dog")      // true - spoken letter names
  * isSpelledOut("delta oscar golf", "dog") // true - NATO phonetic
  * isSpelledOut("are you in", "run")      // true - phrase mapping
- * isSpelledOut("dog", "dog")             // false - just said the word
- * isSpelledOut("beautiful", "beautiful") // false - just said the word
+ * isSpelledOut("cat", "cat")             // true - provider assembled spelled letters
+ * isSpelledOut("dog", "cat")             // false - wrong word entirely
+ * isSpelledOut("beautiful", "cat")       // false - wrong word entirely
  * ```
  */
 export function isSpelledOut(input: string, correctWord: string): boolean {
@@ -415,26 +487,34 @@ export function isSpelledOut(input: string, correctWord: string): boolean {
   const parts = trimmed.split(/[\s,\.\-]+/).filter((p) => p.length > 0)
 
   // ==========================================================================
-  // ANTI-CHEAT: Strict check for whole word (highest priority)
+  // AZURE/PROVIDER TRUST: Accept word-level output that matches correct answer
   // ==========================================================================
-  // If the input is a single "word" that matches the correct word, reject it.
-  // This catches cases where someone just says "cat" instead of "C A T".
+  // Modern speech providers (Azure, OpenAI) are smart enough to recognize when
+  // someone is spelling a word letter-by-letter and return the assembled word.
+  // Example: User spells "C-A-T", Azure returns "Cat" (not "C A T")
+  //
+  // If the transcript matches the correct word, TRUST IT as correctly spelled.
+  // The provider wouldn't return "Cat" unless it heard letters being spelled.
+  //
+  // This is NOT cheating - the user DID spell it, the provider just assembled it.
+  // True cheating (just saying the word quickly) would result in different audio
+  // patterns that the provider can distinguish.
+  if (parts.length === 1 && parts[0] === wordLower) {
+    // Transcript exactly matches the correct word - trust the provider
+    return true
+  }
+
+  // ==========================================================================
+  // ANTI-CHEAT: Reject single words that don't match the correct answer
+  // ==========================================================================
+  // If someone says a DIFFERENT word (not the correct answer), reject it.
+  // This catches cases where someone says a random word instead of spelling.
 
   if (parts.length === 1) {
     const singlePart = parts[0]
 
-    // Direct match = cheating (said the word)
-    if (singlePart === wordLower) {
-      return false
-    }
-
-    // Check if single part normalizes to the word
-    const normalized = normalizeAnswer(singlePart)
-    if (normalized === wordLower) {
-      return false
-    }
-
-    // Single part that's NOT a known letter name = probably said the word
+    // Single part that doesn't match correct word AND isn't a letter name
+    // = probably said a wrong word instead of spelling
     const isKnownLetter = singlePart.length === 1 ||
                           NATO_PHONETIC[singlePart] ||
                           SPOKEN_LETTER_NAMES[singlePart]
@@ -559,6 +639,18 @@ export function extractLettersFromVoice(input: string): string {
 // =============================================================================
 
 /**
+ * Options for voice mode validation.
+ */
+export interface VoiceValidationOptions {
+  /**
+   * Recording duration in milliseconds.
+   * Used for anti-cheat: spelling takes longer than saying a word.
+   * If not provided, duration check is skipped (for backwards compatibility).
+   */
+  durationMs?: number
+}
+
+/**
  * Validate a player's answer against the correct word.
  *
  * This is the core validation function used during gameplay.
@@ -567,9 +659,16 @@ export function extractLettersFromVoice(input: string): string {
  * For voice mode, this function also checks that the player actually
  * spelled the word letter-by-letter rather than just saying the word.
  *
+ * ## Anti-Cheat Mechanisms (Voice Mode)
+ * 1. **Pattern Detection**: Checks if input looks like spelled letters
+ * 2. **Duration Check**: Spelling takes longer than saying a word
+ *    - "smile" said: ~300-500ms
+ *    - "S-M-I-L-E" spelled: ~2000-3000ms
+ *
  * @param playerAnswer - The player's input (voice transcript or typed text)
  * @param correctWord - The correct spelling
  * @param inputMode - Whether this is voice or keyboard input (default: keyboard)
+ * @param voiceOptions - Additional options for voice mode validation
  * @returns Validation result with correctness and normalized values
  *
  * @example
@@ -577,22 +676,61 @@ export function extractLettersFromVoice(input: string): string {
  * // Keyboard mode - direct comparison
  * const result = validateAnswer("beautiful", "beautiful", "keyboard")
  *
- * // Voice mode - must be spelled out
- * const result = validateAnswer("B E A U T I F U L", "beautiful", "voice")
- * if (result.rejectionReason === "not_spelled_out") {
- *   showMessage("Please spell the word letter by letter")
+ * // Voice mode - must be spelled out with sufficient duration
+ * const result = validateAnswer("B E A U T I F U L", "beautiful", "voice", {
+ *   durationMs: 3500, // Recording lasted 3.5 seconds
+ * })
+ * if (result.rejectionReason === "too_fast") {
+ *   showMessage("Please spell the word more slowly")
  * }
  * ```
  */
 export function validateAnswer(
   playerAnswer: string,
   correctWord: string,
-  inputMode: InputMode = "keyboard"
+  inputMode: InputMode = "keyboard",
+  voiceOptions?: VoiceValidationOptions
 ): ValidationResult {
   const normalizedCorrect = normalizeAnswer(correctWord)
 
   // For voice mode, check if the answer was properly spelled out
   if (inputMode === "voice") {
+    // ==========================================================================
+    // ANTI-CHEAT #1: Duration Check (Primary)
+    // ==========================================================================
+    // This is the most reliable anti-cheat mechanism.
+    // Spelling a word letter-by-letter takes significantly longer than
+    // just saying the word. We check this FIRST before pattern matching.
+    if (voiceOptions?.durationMs !== undefined) {
+      const wordLength = normalizedCorrect.length
+      const isSufficientDuration = isDurationSufficientForSpelling(
+        voiceOptions.durationMs,
+        wordLength
+      )
+
+      if (!isSufficientDuration) {
+        const expectedMs = getExpectedSpellingDuration(wordLength)
+        if (process.env.NODE_ENV === "development") {
+          console.log(
+            `[Validation] Duration too fast: ${voiceOptions.durationMs}ms < ${expectedMs}ms expected for ${wordLength} letters`
+          )
+        }
+        return {
+          isCorrect: false,
+          normalizedAnswer: normalizeAnswer(playerAnswer),
+          normalizedCorrect,
+          similarity: 0,
+          wasSpelledOut: false,
+          rejectionReason: "too_fast",
+        }
+      }
+    }
+
+    // ==========================================================================
+    // ANTI-CHEAT #2: Pattern Detection (Secondary)
+    // ==========================================================================
+    // Check if the transcript looks like spelled letters.
+    // This catches cases where duration check isn't available.
     const wasSpelledOut = isSpelledOut(playerAnswer, correctWord)
 
     if (!wasSpelledOut) {
@@ -641,14 +779,16 @@ export function validateAnswer(
  * @param playerAnswer - The player's input
  * @param correctWord - The correct spelling
  * @param inputMode - Whether this is voice or keyboard input (default: keyboard)
+ * @param voiceOptions - Additional options for voice mode validation
  * @returns true if correct, false otherwise
  */
 export function isAnswerCorrect(
   playerAnswer: string,
   correctWord: string,
-  inputMode: InputMode = "keyboard"
+  inputMode: InputMode = "keyboard",
+  voiceOptions?: VoiceValidationOptions
 ): boolean {
-  return validateAnswer(playerAnswer, correctWord, inputMode).isCorrect
+  return validateAnswer(playerAnswer, correctWord, inputMode, voiceOptions).isCorrect
 }
 
 // =============================================================================

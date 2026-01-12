@@ -14,6 +14,7 @@ import {
   validateAnswer,
   isEmptyAnswer,
   type InputMode,
+  type VoiceValidationOptions,
 } from "@/lib/answer-validation"
 
 // =============================================================================
@@ -109,13 +110,28 @@ export interface GameState {
 }
 
 /**
+ * Options for answer submission.
+ */
+export interface SubmitAnswerOptions {
+  /**
+   * Recording duration in milliseconds (voice mode only).
+   * Used for anti-cheat: spelling takes longer than saying a word.
+   */
+  durationMs?: number
+}
+
+/**
  * Actions returned by the hook for controlling the game.
  */
 export interface GameActions {
   /** Start a new game */
   startGame: () => void
-  /** Submit an answer (voice transcript or typed text) */
-  submitAnswer: (answer: string) => void
+  /**
+   * Submit an answer (voice transcript or typed text).
+   * @param answer - The player's answer
+   * @param options - Optional settings (e.g., recording duration for voice anti-cheat)
+   */
+  submitAnswer: (answer: string, options?: SubmitAnswerOptions) => void
   /** Move to the next word (after feedback) */
   nextWord: () => void
   /** Handle timer expiration */
@@ -333,24 +349,72 @@ export function useGameSession(
    *
    * For voice mode, validates that the player spelled the word letter-by-letter
    * rather than just saying the whole word (anti-cheat).
+   *
+   * ## Anti-Cheat (Voice Mode)
+   * Two mechanisms prevent cheating:
+   * 1. **Duration check**: Spelling takes longer than saying a word
+   * 2. **Pattern detection**: Transcript must look like spelled letters
+   *
+   * @param answer - The player's answer (transcript or typed text)
+   * @param options - Optional settings including recording duration
    */
-  const submitAnswer = React.useCallback((answer: string) => {
-    setState((prev) => {
-      // Guard: Only accept answers during playing phase
-      if (prev.phase !== "playing" || !prev.currentWord) {
-        return prev
-      }
+  const submitAnswer = React.useCallback(
+    (answer: string, options?: SubmitAnswerOptions) => {
+      setState((prev) => {
+        // Guard: Only accept answers during playing phase
+        if (prev.phase !== "playing" || !prev.currentWord) {
+          return prev
+        }
 
-      // Calculate time taken
-      const timeTaken = Math.round((Date.now() - wordStartTimeRef.current) / 1000)
+        // Calculate time taken
+        const timeTaken = Math.round((Date.now() - wordStartTimeRef.current) / 1000)
 
-      // Check for empty answer
-      if (isEmptyAnswer(answer)) {
-        // Treat as wrong answer
+        // Check for empty answer
+        if (isEmptyAnswer(answer)) {
+          // Treat as wrong answer
+          const record: AnswerRecord = {
+            word: prev.currentWord,
+            playerAnswer: "",
+            isCorrect: false,
+            timeTaken,
+            round: prev.currentRound,
+          }
+
+          return {
+            ...prev,
+            phase: "checking",
+            answers: [...prev.answers, record],
+            lastAnswerCorrect: false,
+          }
+        }
+
+        // Build voice validation options for anti-cheat
+        const voiceOptions: VoiceValidationOptions | undefined =
+          prev.inputMethod === "voice" && options?.durationMs !== undefined
+            ? { durationMs: options.durationMs }
+            : undefined
+
+        // Validate the answer with input mode for voice anti-cheat
+        const inputMode: InputMode = prev.inputMethod
+        const result = validateAnswer(
+          answer,
+          prev.currentWord.word,
+          inputMode,
+          voiceOptions
+        )
+
+        // If voice mode and player didn't spell it out, treat as wrong
+        // The rejectionReason helps with user feedback
+        const isCorrect = result.isCorrect && !result.rejectionReason
+
+        if (process.env.NODE_ENV === "development" && result.rejectionReason) {
+          console.log(`[GameSession] Answer rejected: ${result.rejectionReason}`)
+        }
+
         const record: AnswerRecord = {
           word: prev.currentWord,
-          playerAnswer: "",
-          isCorrect: false,
+          playerAnswer: answer,
+          isCorrect,
           timeTaken,
           round: prev.currentRound,
         }
@@ -359,34 +423,12 @@ export function useGameSession(
           ...prev,
           phase: "checking",
           answers: [...prev.answers, record],
-          lastAnswerCorrect: false,
+          lastAnswerCorrect: isCorrect,
         }
-      }
-
-      // Validate the answer with input mode for voice anti-cheat
-      const inputMode: InputMode = prev.inputMethod
-      const result = validateAnswer(answer, prev.currentWord.word, inputMode)
-
-      // If voice mode and player didn't spell it out, treat as wrong
-      // The rejectionReason helps with user feedback
-      const isCorrect = result.isCorrect && !result.rejectionReason
-
-      const record: AnswerRecord = {
-        word: prev.currentWord,
-        playerAnswer: answer,
-        isCorrect,
-        timeTaken,
-        round: prev.currentRound,
-      }
-
-      return {
-        ...prev,
-        phase: "checking",
-        answers: [...prev.answers, record],
-        lastAnswerCorrect: isCorrect,
-      }
-    })
-  }, [])
+      })
+    },
+    []
+  )
 
   /**
    * Process the answer result and show feedback.

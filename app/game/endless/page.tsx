@@ -75,12 +75,12 @@ export default function EndlessGamePage() {
   // ---------------------------------------------------------------------------
   // Voice Recording
   // ---------------------------------------------------------------------------
-  // Uses provider abstraction: Deepgram (~95% accuracy) or Web Speech API (fallback)
-  // Deepgram is used automatically if NEXT_PUBLIC_DEEPGRAM_API_KEY is set
+  // Uses provider abstraction: Azure (~95-98%) > OpenAI > Deepgram > Web Speech (fallback)
+  // Provider is selected automatically based on configured API keys
   const {
     isRecording,
     startRecording,
-    stopRecording,
+    stopRecording, // Returns duration in ms for anti-cheat
     analyserNode,
     transcript,
     provider,
@@ -109,6 +109,11 @@ export default function EndlessGamePage() {
    * Submit the current answer.
    * Called by both auto-submit and manual Stop button.
    * Idempotent - safe to call multiple times.
+   *
+   * Passes recording duration for anti-cheat validation:
+   * - Spelling "S-M-I-L-E" takes ~2000-3000ms
+   * - Saying "smile" takes ~300-500ms
+   * - If duration is too short, answer is rejected
    */
   const submitCurrentAnswer = React.useCallback(() => {
     // Prevent double-submission
@@ -124,9 +129,12 @@ export default function EndlessGamePage() {
       autoSubmitTimeoutRef.current = null
     }
 
-    // Stop recording and submit
-    stopRecording()
-    gameActions.submitAnswer(transcript)
+    // Stop recording and capture the duration immediately
+    // stopRecording() returns the duration synchronously before state update
+    const durationMs = stopRecording()
+
+    // Submit with duration for anti-cheat validation
+    gameActions.submitAnswer(transcript, { durationMs })
   }, [transcript, gameState.phase, stopRecording, gameActions])
 
   /**

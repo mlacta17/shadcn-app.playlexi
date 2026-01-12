@@ -39,8 +39,11 @@ export interface UseSpeechRecognitionReturn {
   isRecording: boolean
   /** Start recording */
   startRecording: () => Promise<void>
-  /** Stop recording and get final transcript */
-  stopRecording: () => void
+  /**
+   * Stop recording and get final transcript.
+   * @returns The recording duration in milliseconds
+   */
+  stopRecording: () => number
   /** Current transcript (updated in real-time) */
   transcript: string
   /** Clear the transcript */
@@ -53,6 +56,18 @@ export interface UseSpeechRecognitionReturn {
   provider: SpeechProvider | null
   /** Any error that occurred */
   error: Error | null
+  /**
+   * Duration of the last recording in milliseconds.
+   * Used for anti-cheat validation: spelling letters takes longer than saying a word.
+   * Reset to 0 when starting a new recording.
+   */
+  recordingDurationMs: number
+  /**
+   * Get the current recording duration without stopping.
+   * Useful for checking elapsed time during recording.
+   * @returns Duration in milliseconds, or 0 if not recording
+   */
+  getCurrentDuration: () => number
 }
 
 // =============================================================================
@@ -121,10 +136,12 @@ export function useSpeechRecognition(
   const [analyserNode, setAnalyserNode] = React.useState<AnalyserNode | null>(null)
   const [error, setError] = React.useState<Error | null>(null)
   const [provider, setProvider] = React.useState<SpeechProvider | null>(null)
+  const [recordingDurationMs, setRecordingDurationMs] = React.useState(0)
 
   // Refs for stable callback references (avoid stale closures)
   const sessionRef = React.useRef<SpeechRecognitionSession | null>(null)
   const lastInterimUpdateRef = React.useRef<number>(0)
+  const recordingStartTimeRef = React.useRef<number>(0)
   const onTranscriptRef = React.useRef(onTranscript)
   const onErrorRef = React.useRef(onError)
 
@@ -150,16 +167,40 @@ export function useSpeechRecognition(
     }
   }, [])
 
-  // Cleanup function - no longer needs to manage media stream or audio context
-  // since the provider handles its own resources
-  const cleanup = React.useCallback(() => {
+  /**
+   * Get the current recording duration without stopping.
+   */
+  const getCurrentDuration = React.useCallback((): number => {
+    if (recordingStartTimeRef.current <= 0) return 0
+    return Date.now() - recordingStartTimeRef.current
+  }, [])
+
+  /**
+   * Cleanup function - stops recording and releases resources.
+   * @returns The recording duration in milliseconds
+   */
+  const cleanup = React.useCallback((): number => {
+    // Calculate recording duration before stopping
+    let duration = 0
+    if (recordingStartTimeRef.current > 0) {
+      duration = Date.now() - recordingStartTimeRef.current
+      setRecordingDurationMs(duration)
+
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[Speech] Recording duration: ${duration}ms`)
+      }
+    }
+
     if (sessionRef.current) {
       sessionRef.current.stop()
       sessionRef.current = null
     }
 
+    recordingStartTimeRef.current = 0
     setAnalyserNode(null)
     setIsRecording(false)
+
+    return duration
   }, [])
 
   // Start recording
@@ -167,7 +208,9 @@ export function useSpeechRecognition(
     try {
       setError(null)
       setTranscript("")
+      setRecordingDurationMs(0) // Reset duration for new recording
       lastInterimUpdateRef.current = 0
+      recordingStartTimeRef.current = Date.now() // Track start time
 
       // Get provider using async version to properly check Azure availability
       // Azure requires an async check because it needs to verify the token endpoint
@@ -229,9 +272,9 @@ export function useSpeechRecognition(
     }
   }, [language, spellingMode, interimThrottleMs, cleanup])
 
-  // Stop recording
-  const stopRecording = React.useCallback(() => {
-    cleanup()
+  // Stop recording - returns duration for anti-cheat validation
+  const stopRecording = React.useCallback((): number => {
+    return cleanup()
   }, [cleanup])
 
   // Clear transcript
@@ -256,5 +299,7 @@ export function useSpeechRecognition(
     isSupported,
     provider,
     error,
+    recordingDurationMs,
+    getCurrentDuration,
   }
 }

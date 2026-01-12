@@ -2,11 +2,11 @@
  * Azure Speech Services Provider
  *
  * High-accuracy speech-to-text using Microsoft Azure Cognitive Services.
- * Uses the Speech SDK via WebSocket for real-time streaming transcription.
+ * Uses the official Microsoft Speech SDK for reliable, production-ready integration.
  *
  * ## Why Azure?
  * - **Phrase Lists**: Can boost recognition of specific words (letter names!)
- * - **Custom Speech**: Trainable models for domain-specific vocabulary
+ * - **Official SDK**: Battle-tested, handles reconnection and edge cases
  * - **Consistent Accuracy**: ~95-98% for letter spelling with proper tuning
  * - **No Semantic Interpretation**: Unlike GPT models, doesn't "correct" input
  *
@@ -19,13 +19,13 @@
  * │    │                                                      │             │
  * │    ▼                                                      ▼             │
  * │  AzureSpeechProvider                              /api/azure-speech     │
- * │  (WebSocket to Azure)                             /token (Next.js)      │
+ * │  (Speech SDK)                                     /token (Next.js)      │
  * │         │                                                │              │
  * │         │ ◄─────────── Auth Token ───────────────────────┘              │
  * │         │                                                               │
  * │         ▼                                                               │
  * │  Azure Speech Services                                                  │
- * │  (wss://{region}.stt.speech.microsoft.com)                             │
+ * │  (SDK manages WebSocket internally)                                     │
  * └─────────────────────────────────────────────────────────────────────────┘
  * ```
  *
@@ -42,9 +42,10 @@
  * - For spelling bee: ~10s/round × 1000 players × 20 rounds = ~55 min/day = ~$0.92/day
  *
  * @see https://learn.microsoft.com/en-us/azure/ai-services/speech-service/
- * @see https://learn.microsoft.com/en-us/azure/ai-services/speech-service/how-to-recognize-speech
+ * @see https://www.npmjs.com/package/microsoft-cognitiveservices-speech-sdk
  */
 
+import * as SpeechSDK from "microsoft-cognitiveservices-speech-sdk"
 import type {
   ISpeechRecognitionProvider,
   SpeechRecognitionConfig,
@@ -65,26 +66,6 @@ interface AzureTokenResponse {
   expiresIn: number
 }
 
-/**
- * Azure Speech SDK message types (subset we care about).
- * Full spec: https://learn.microsoft.com/en-us/azure/ai-services/speech-service/
- */
-interface AzureSpeechMessage {
-  /** Message path (speech.hypothesis, speech.phrase, etc.) */
-  path: string
-  /** Request ID for correlation */
-  requestId?: string
-  /** Recognized text for hypothesis/phrase events */
-  Text?: string
-  /** Recognition status for phrase events */
-  RecognitionStatus?: "Success" | "NoMatch" | "InitialSilenceTimeout" | "Error"
-  /** N-best results for phrase events */
-  NBest?: Array<{
-    Display: string
-    Confidence: number
-  }>
-}
-
 // =============================================================================
 // CONSTANTS
 // =============================================================================
@@ -94,28 +75,45 @@ interface AzureSpeechMessage {
  * These exact strings will have increased recognition priority.
  */
 const LETTER_PHRASE_LIST = [
-  // Standard letter names
+  // Individual letter names (high priority for spelling)
   "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
   "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
-  // Phonetic variants (how people say letters)
-  "ay", "bee", "see", "dee", "ee", "eff", "gee", "aitch",
+  // Space-separated letter sequences (common patterns)
+  "A B", "B C", "C D", "D E", "E F", "F G", "G H", "H I", "I J",
+  "R U N", "S U N", "C A T", "D O G", "R E D", "B L U E",
+  "S P E L L", "W O R D", "T E S T",
+  // Phonetic variants (how letters sound)
+  "ay", "bee", "cee", "dee", "ee", "eff", "gee", "aitch",
   "eye", "jay", "kay", "ell", "em", "en", "oh", "pee",
   "cue", "are", "ess", "tee", "you", "vee",
-  "double you", "ex", "why", "zee", "zed",
+  "double you", "double-u", "ex", "why", "zee", "zed",
 ]
+
+/**
+ * Clean transcript text for spelling comparison.
+ * - Removes punctuation (periods, commas, question marks, etc.)
+ * - Trims whitespace
+ * - Preserves case (comparison should handle case-insensitivity)
+ */
+function cleanTranscript(text: string): string {
+  return text
+    .replace(/[.,!?;:'"]/g, "") // Remove punctuation
+    .trim()
+}
 
 // =============================================================================
 // AZURE SPEECH PROVIDER
 // =============================================================================
 
 /**
- * Azure Speech Services provider for real-time speech recognition.
+ * Azure Speech Services provider using the official Microsoft Speech SDK.
  *
  * Key features:
  * - Server-side token authentication (secure)
  * - Phrase list boosting for letter names
- * - Real-time interim results via WebSocket
- * - Automatic reconnection on disconnect
+ * - Real-time interim results
+ * - Automatic reconnection handled by SDK
+ * - AudioContext integration for visualization
  *
  * @implements ISpeechRecognitionProvider
  */
@@ -130,12 +128,16 @@ export class AzureSpeechProvider implements ISpeechRecognitionProvider {
 
   /**
    * Check if Azure Speech is available.
-   * We check by attempting to fetch a token from our API route.
+   * We check by verifying the SDK loaded and browser supports required APIs.
    */
   isSupported(): boolean {
-    // Always supported if running in browser with fetch
-    // Actual availability is determined when start() is called
-    return typeof window !== "undefined" && typeof fetch !== "undefined"
+    return (
+      typeof window !== "undefined" &&
+      typeof navigator !== "undefined" &&
+      typeof navigator.mediaDevices !== "undefined" &&
+      typeof navigator.mediaDevices.getUserMedia !== "undefined" &&
+      typeof AudioContext !== "undefined"
+    )
   }
 
   /**
@@ -174,8 +176,9 @@ export class AzureSpeechProvider implements ISpeechRecognitionProvider {
   /**
    * Start a speech recognition session.
    *
-   * Uses Azure's WebSocket protocol directly for maximum control and
-   * minimal dependencies (no SDK bundle needed).
+   * Uses the official Microsoft Speech SDK for reliable transcription.
+   * Sets up phrase lists for letter boosting and provides an analyser node
+   * for audio visualization.
    */
   async start(config: SpeechRecognitionConfig): Promise<SpeechRecognitionSession> {
     const { onInterimResult, onFinalResult, onError, language = "en-US" } = config
@@ -197,319 +200,204 @@ export class AzureSpeechProvider implements ISpeechRecognitionProvider {
     // State management
     let isActive = true
     let isClosed = false
+    let recognizer: SpeechSDK.SpeechRecognizer | null = null
+    let audioConfig: SpeechSDK.AudioConfig | null = null
     let mediaStream: MediaStream | null = null
     let audioContext: AudioContext | null = null
-    let scriptProcessor: ScriptProcessorNode | null = null
     let analyserNode: AnalyserNode | null = null
-    let socket: WebSocket | null = null
 
     /**
      * Cleanup all resources safely.
      */
-    const cleanup = () => {
+    const cleanup = async () => {
       if (isClosed) return
       isClosed = true
       isActive = false
 
-      try { scriptProcessor?.disconnect() } catch { /* ignore */ }
-      try { analyserNode?.disconnect() } catch { /* ignore */ }
+      // Stop recognizer
+      if (recognizer) {
+        try {
+          recognizer.stopContinuousRecognitionAsync(
+            () => {
+              recognizer?.close()
+              recognizer = null
+            },
+            (err) => {
+              console.warn("[Azure] Error stopping recognizer:", err)
+              recognizer?.close()
+              recognizer = null
+            }
+          )
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+
+      // Stop audio resources
+      try {
+        analyserNode?.disconnect()
+      } catch { /* ignore */ }
       try {
         if (audioContext?.state !== "closed") {
-          audioContext?.close()
+          await audioContext?.close()
         }
       } catch { /* ignore */ }
       try {
         mediaStream?.getTracks().forEach((track) => track.stop())
       } catch { /* ignore */ }
-      try {
-        if (socket?.readyState === WebSocket.OPEN) {
-          socket.close()
-        }
-      } catch { /* ignore */ }
+
+      audioConfig = null
     }
 
-    // Generate unique connection ID for this session
-    const connectionId = crypto.randomUUID().replace(/-/g, "")
+    try {
+      // Create speech config from token
+      const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(token, region)
+      speechConfig.speechRecognitionLanguage = language
 
-    // Build WebSocket URL
-    // Format: wss://{region}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1
-    const wsUrl = new URL(
-      `wss://${region}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1`
-    )
-    wsUrl.searchParams.set("language", language)
-    wsUrl.searchParams.set("format", "detailed") // Get confidence scores
-    wsUrl.searchParams.set("profanity", "raw") // Don't censor
+      // Request detailed output with confidence scores
+      speechConfig.outputFormat = SpeechSDK.OutputFormat.Detailed
 
-    if (process.env.NODE_ENV === "development") {
-      console.log("[Azure] Connecting to:", wsUrl.toString())
-    }
-
-    // Create WebSocket connection with auth
-    socket = new WebSocket(wsUrl.toString())
-
-    // Connection timeout
-    const connectionTimeout = setTimeout(() => {
-      if (socket?.readyState !== WebSocket.OPEN) {
-        console.error("[Azure] Connection timeout after 10s")
-        onError?.(new Error("Azure connection timeout"))
-        cleanup()
-      }
-    }, 10000)
-
-    /**
-     * Send a message to Azure in the required format.
-     * Azure uses a specific binary format with headers.
-     */
-    const sendMessage = (path: string, contentType: string, body: string | ArrayBuffer) => {
-      if (!socket || socket.readyState !== WebSocket.OPEN) return
-
-      // Build headers
-      const headers = [
-        `Path: ${path}`,
-        `X-RequestId: ${connectionId}`,
-        `X-Timestamp: ${new Date().toISOString()}`,
-        `Content-Type: ${contentType}`,
-      ].join("\r\n")
-
-      if (typeof body === "string") {
-        // Text message: headers + blank line + body
-        socket.send(`${headers}\r\n\r\n${body}`)
-      } else {
-        // Binary message (audio): headers as UTF-16LE + 2-byte length + body
-        const headerBytes = new TextEncoder().encode(headers + "\r\n")
-        const headerLength = headerBytes.length
-
-        // Create combined buffer
-        const message = new ArrayBuffer(2 + headerLength + body.byteLength)
-        const view = new DataView(message)
-
-        // Header length as 2-byte big-endian
-        view.setUint16(0, headerLength, false)
-
-        // Headers
-        new Uint8Array(message, 2, headerLength).set(headerBytes)
-
-        // Audio data
-        new Uint8Array(message, 2 + headerLength).set(new Uint8Array(body))
-
-        socket.send(message)
-      }
-    }
-
-    /**
-     * Parse incoming message from Azure.
-     */
-    const parseMessage = (data: string | ArrayBuffer): AzureSpeechMessage | null => {
-      try {
-        let text: string
-
-        if (typeof data === "string") {
-          text = data
-        } else {
-          // Binary message: parse header length, then extract text
-          const view = new DataView(data)
-          const headerLength = view.getUint16(0, false)
-          const decoder = new TextDecoder()
-          text = decoder.decode(new Uint8Array(data, 2))
-        }
-
-        // Extract path from headers
-        const pathMatch = text.match(/Path:\s*(\S+)/i)
-        const path = pathMatch?.[1] || ""
-
-        // Extract JSON body (after blank line)
-        const bodyStart = text.indexOf("\r\n\r\n")
-        if (bodyStart === -1) {
-          return { path }
-        }
-
-        const jsonBody = text.slice(bodyStart + 4)
-        if (!jsonBody.trim()) {
-          return { path }
-        }
-
-        const parsed = JSON.parse(jsonBody)
-        return { path, ...parsed }
-      } catch {
-        return null
-      }
-    }
-
-    // WebSocket event handlers
-    socket.onopen = async () => {
-      clearTimeout(connectionTimeout)
+      // Disable automatic punctuation - we want raw letter output
+      // This prevents "SUN." from having a period
+      speechConfig.setServiceProperty(
+        "punctuation",
+        "explicit",
+        SpeechSDK.ServicePropertyChannel.UriQueryParameter
+      )
 
       if (process.env.NODE_ENV === "development") {
-        console.log("[Azure] WebSocket connected")
+        console.log("[Azure] Creating speech config for region:", region)
       }
 
-      try {
-        // Send speech.config message
-        const speechConfig = {
-          context: {
-            system: {
-              name: "PlayLexi",
-              version: "1.0.0",
-              build: "browser",
-            },
-            os: {
-              platform: "Browser",
-              name: navigator.userAgent,
-            },
-            audio: {
-              source: {
-                bitspersample: 16,
-                channelcount: 1,
-                connectivity: "Wired",
-                manufacturer: "Browser",
-                model: "WebAudio",
-                samplerate: 16000,
-                type: "Microphones",
-              },
-            },
-          },
-        }
+      // Get microphone stream
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          sampleRate: 16000,
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      })
 
-        sendMessage("speech.config", "application/json", JSON.stringify(speechConfig))
+      // Create audio context for visualization
+      audioContext = new AudioContext({ sampleRate: 16000 })
+      const source = audioContext.createMediaStreamSource(mediaStream)
 
-        // Send phrase list for letter boosting
-        const phraseList = {
-          referenceGrammars: [],
-          phraseList: LETTER_PHRASE_LIST.map((phrase) => ({ Text: phrase })),
-        }
+      // Create analyser for visualization
+      analyserNode = audioContext.createAnalyser()
+      analyserNode.fftSize = 256
+      analyserNode.smoothingTimeConstant = 0.6
+      source.connect(analyserNode)
 
-        sendMessage("speech.context", "application/json", JSON.stringify({
-          phraseDetection: phraseList,
-        }))
+      // Create audio config from microphone
+      // The SDK will create its own audio stream internally
+      audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput()
 
-        // Start audio capture
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            channelCount: 1,
-            sampleRate: 16000,
-            echoCancellation: true,
-            noiseSuppression: true,
-          },
-        })
+      // Create recognizer
+      recognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig)
 
-        // Create AudioContext at 16kHz (Azure's preferred rate)
-        audioContext = new AudioContext({ sampleRate: 16000 })
-        const source = audioContext.createMediaStreamSource(mediaStream)
-
-        // Create analyser for visualization
-        analyserNode = audioContext.createAnalyser()
-        analyserNode.fftSize = 256
-        analyserNode.smoothingTimeConstant = 0.6
-
-        // Create processor for sending audio
-        scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1)
-
-        scriptProcessor.onaudioprocess = (event) => {
-          if (!isActive || !socket || socket.readyState !== WebSocket.OPEN) return
-
-          const inputData = event.inputBuffer.getChannelData(0)
-
-          // Convert to 16-bit PCM
-          const pcmData = new Int16Array(inputData.length)
-          for (let i = 0; i < inputData.length; i++) {
-            const s = Math.max(-1, Math.min(1, inputData[i]))
-            pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7fff
-          }
-
-          // Send audio chunk
-          sendMessage("audio", "audio/x-wav", pcmData.buffer)
-        }
-
-        // Connect audio graph
-        source.connect(analyserNode)
-        analyserNode.connect(scriptProcessor)
-        scriptProcessor.connect(audioContext.destination)
-
-        if (process.env.NODE_ENV === "development") {
-          console.log("[Azure] Audio capture started")
-        }
-      } catch (err) {
-        console.error("[Azure] Setup error:", err)
-        onError?.(err instanceof Error ? err : new Error("Failed to setup audio"))
-        cleanup()
-      }
-    }
-
-    socket.onmessage = (event) => {
-      const message = parseMessage(event.data)
-      if (!message) return
-
-      if (process.env.NODE_ENV === "development" && !message.path.includes("audio")) {
-        console.log("[Azure] Message:", message.path, message.Text || "")
+      // Add phrase list for letter boosting
+      const phraseList = SpeechSDK.PhraseListGrammar.fromRecognizer(recognizer)
+      for (const phrase of LETTER_PHRASE_LIST) {
+        phraseList.addPhrase(phrase)
       }
 
-      switch (message.path) {
-        case "speech.hypothesis":
-          // Interim result
-          if (message.Text) {
-            onInterimResult?.(message.Text)
-          }
-          break
-
-        case "speech.phrase":
-          // Final result
-          if (message.RecognitionStatus === "Success") {
-            // Use best result if available
-            const text = message.NBest?.[0]?.Display || message.Text
-            if (text) {
-              onFinalResult?.(text)
-            }
-          }
-          break
-
-        case "speech.endDetected":
-          // Speech ended - could restart for continuous mode
-          if (process.env.NODE_ENV === "development") {
-            console.log("[Azure] Speech end detected")
-          }
-          break
-
-        case "turn.end":
-          // Turn completed
-          break
-      }
-    }
-
-    socket.onerror = () => {
-      console.error("[Azure] WebSocket error")
-      onError?.(new Error("Azure WebSocket error"))
-    }
-
-    socket.onclose = (event) => {
-      clearTimeout(connectionTimeout)
       if (process.env.NODE_ENV === "development") {
-        console.log(`[Azure] WebSocket closed: ${event.code}`)
+        console.log("[Azure] Added", LETTER_PHRASE_LIST.length, "phrases to boost list")
       }
-      cleanup()
-    }
 
-    // Return session controller
-    return {
-      stop: () => {
+      // Handle interim results (recognizing event)
+      recognizer.recognizing = (_sender, event) => {
         if (!isActive) return
-        isActive = false
 
-        // Send audio end signal
-        if (socket?.readyState === WebSocket.OPEN) {
-          sendMessage("audio", "audio/x-wav", new ArrayBuffer(0))
+        const rawText = event.result.text
+        if (rawText) {
+          const text = cleanTranscript(rawText)
+          if (process.env.NODE_ENV === "development") {
+            console.log("[Azure] interim:", rawText, "→", text)
+          }
+          onInterimResult?.(text)
         }
+      }
 
-        // Brief delay for final transcription
-        setTimeout(() => {
+      // Handle final results (recognized event)
+      recognizer.recognized = (_sender, event) => {
+        if (!isActive) return
+
+        if (event.result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
+          const rawText = event.result.text
+          if (rawText) {
+            const text = cleanTranscript(rawText)
+            if (process.env.NODE_ENV === "development") {
+              console.log("[Azure] FINAL:", rawText, "→", text)
+            }
+            onFinalResult?.(text)
+          }
+        } else if (event.result.reason === SpeechSDK.ResultReason.NoMatch) {
+          if (process.env.NODE_ENV === "development") {
+            console.log("[Azure] No speech recognized")
+          }
+        }
+      }
+
+      // Handle errors
+      recognizer.canceled = (_sender, event) => {
+        if (!isActive) return
+
+        if (event.reason === SpeechSDK.CancellationReason.Error) {
+          console.error("[Azure] Error:", event.errorCode, event.errorDetails)
+          onError?.(new Error(`Azure error: ${event.errorDetails}`))
+        }
+      }
+
+      // Handle session events
+      recognizer.sessionStarted = () => {
+        if (process.env.NODE_ENV === "development") {
+          console.log("[Azure] Session started")
+        }
+      }
+
+      recognizer.sessionStopped = () => {
+        if (process.env.NODE_ENV === "development") {
+          console.log("[Azure] Session stopped")
+        }
+      }
+
+      // Start continuous recognition
+      await new Promise<void>((resolve, reject) => {
+        recognizer!.startContinuousRecognitionAsync(
+          () => {
+            if (process.env.NODE_ENV === "development") {
+              console.log("[Azure] Recognition started")
+            }
+            resolve()
+          },
+          (err) => {
+            console.error("[Azure] Failed to start:", err)
+            reject(new Error(`Failed to start Azure recognition: ${err}`))
+          }
+        )
+      })
+
+      // Return session controller
+      return {
+        stop: () => {
+          if (!isActive) return
+          isActive = false
           cleanup()
-        }, 200)
-      },
-      get isActive() {
-        return isActive && !isClosed
-      },
-      get analyserNode() {
-        return analyserNode
-      },
+        },
+        get isActive() {
+          return isActive && !isClosed
+        },
+        get analyserNode() {
+          return analyserNode
+        },
+      }
+    } catch (err) {
+      cleanup()
+      const error = err instanceof Error ? err : new Error("Failed to start Azure recognition")
+      onError?.(error)
+      throw error
     }
   }
 }
