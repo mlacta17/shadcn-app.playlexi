@@ -3,6 +3,7 @@
 import * as React from "react"
 import {
   getSpeechProvider,
+  getSpeechProviderAsync,
   type SpeechRecognitionSession,
   type SpeechProvider,
   SPELLING_KEYWORDS,
@@ -62,16 +63,18 @@ export interface UseSpeechRecognitionReturn {
  * Speech recognition hook with provider abstraction.
  *
  * Automatically selects the best available provider:
- * 1. OpenAI Realtime (if API key configured) — ~98% accuracy for letters
- * 2. Deepgram (if API key configured) — ~95% accuracy for words
- * 3. Web Speech API (fallback) — ~70-80% accuracy
+ * 1. Azure Speech Services (if configured) — ~95-98% accuracy with phrase list boosting
+ * 2. OpenAI Realtime (if API key configured) — good WER but semantic interpretation
+ * 3. Deepgram (if API key configured) — ~95% accuracy for words
+ * 4. Web Speech API (fallback) — ~70-80% accuracy
  *
  * ## Features
  * - Real-time transcript updates with optional throttling
  * - Audio visualization via analyserNode (shared with provider)
- * - Automatic keyword boosting for spelling
+ * - Automatic keyword boosting for spelling (Azure phrase lists, Deepgram keywords)
  * - Graceful fallback between providers
  * - Zero duplicate media streams (reuses provider's audio pipeline)
+ * - Async provider detection (Azure requires token endpoint check)
  *
  * ## Usage
  * ```tsx
@@ -131,13 +134,19 @@ export function useSpeechRecognition(
     onErrorRef.current = onError
   }, [onTranscript, onError])
 
-  // Check if supported
+  // Check if supported - at minimum, sync providers are always checked
+  // Azure support is determined at startRecording time via getSpeechProviderAsync
   const isSupported = React.useMemo(() => {
     try {
+      // This checks sync providers (OpenAI, Deepgram, WebSpeech)
+      // Azure is always "supported" in browsers - actual availability
+      // is determined when we fetch the token endpoint
       const speechProvider = getSpeechProvider()
       return speechProvider.isSupported()
     } catch {
-      return false
+      // Even if sync providers fail, Azure might still be available
+      // Return true to allow the async check in startRecording
+      return true
     }
   }, [])
 
@@ -160,8 +169,9 @@ export function useSpeechRecognition(
       setTranscript("")
       lastInterimUpdateRef.current = 0
 
-      // Get provider (singleton, so this is fast)
-      const speechProvider = getSpeechProvider()
+      // Get provider using async version to properly check Azure availability
+      // Azure requires an async check because it needs to verify the token endpoint
+      const speechProvider = await getSpeechProviderAsync()
       setProvider(speechProvider.name)
 
       if (process.env.NODE_ENV === "development") {
