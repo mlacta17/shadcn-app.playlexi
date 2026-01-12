@@ -6,30 +6,38 @@
  *
  * ## Architecture
  * ```
- * ┌─────────────────────────────────────────────────────────────────┐
- * │                   useSpeechRecognition Hook                      │
- * │                            │                                     │
- * │                            ▼                                     │
- * │              SpeechRecognitionService (this file)                │
- * │                            │                                     │
- * │    ┌───────────────┬───────┴───────┬─────────────────┐          │
- * │    ▼               ▼               ▼                 ▼          │
- * │  OpenAIRealtime  Deepgram    WebSpeechAPI      (Whisper)        │
- * │  (best letters)  (fallback)    (free)         (not impl)       │
- * └─────────────────────────────────────────────────────────────────┘
+ * ┌─────────────────────────────────────────────────────────────────────┐
+ * │                    useSpeechRecognition Hook                        │
+ * │                             │                                       │
+ * │                             ▼                                       │
+ * │               SpeechRecognitionService (this file)                  │
+ * │                             │                                       │
+ * │    ┌────────────┬───────────┼───────────┬─────────────┐            │
+ * │    ▼            ▼           ▼           ▼             ▼            │
+ * │  Azure   OpenAIRealtime  Deepgram  WebSpeechAPI   (Whisper)        │
+ * │  (best)   (semantic)    (fallback)   (free)      (not impl)        │
+ * └─────────────────────────────────────────────────────────────────────┘
  * ```
  *
  * ## Provider Comparison (for letter-by-letter spelling)
  * | Provider | Cost | Real-Time | Letter Accuracy | Notes |
  * |----------|------|-----------|-----------------|-------|
- * | OpenAI Realtime | $0.006/min | Yes | **Best** (~2.46% WER) | **Recommended** — only provider that correctly transcribes spelled letters |
+ * | Azure | $1/hr | Yes | **Best** (~95-98%) | **Recommended** — phrase list boosting for letters |
+ * | OpenAI Realtime | $0.006/min | Yes | Medium | Best WER but applies semantic interpretation |
  * | Deepgram | $0.0043/min | Yes | Medium | Struggles with individual letters, good for words |
  * | Web Speech API | Free | Yes | Poor (~70-80%) | Client-side only, no keyword boost |
  * | Whisper | $0.006/min | No | Good (~90%) | Batch processing, adds latency |
  *
  * ## Setup Requirements
  *
- * ### OpenAI Realtime API (Recommended)
+ * ### Azure Speech Services (Recommended for Spelling)
+ * 1. Create Azure Speech resource in Azure Portal
+ * 2. Copy subscription key and region
+ * 3. Set environment variables:
+ *    - AZURE_SPEECH_KEY (server-side only!)
+ *    - AZURE_SPEECH_REGION (e.g., "eastus")
+ *
+ * ### OpenAI Realtime API
  * 1. Create account at https://platform.openai.com
  * 2. Ensure gpt-4o-transcribe is enabled in your project's model access
  * 3. Generate API key with "All" permissions
@@ -80,8 +88,14 @@
 
 /**
  * Available speech recognition providers.
+ *
+ * - "azure": Azure Speech Services (server-side auth, phrase list boosting)
+ * - "openai-realtime": OpenAI gpt-4o-transcribe (best WER, but semantic)
+ * - "deepgram": Deepgram Nova-2 (good for words, keyword boost)
+ * - "web-speech": Browser built-in (free, lower accuracy)
+ * - "whisper": OpenAI Whisper (batch, not real-time - not implemented)
  */
-export type SpeechProvider = "web-speech" | "deepgram" | "whisper" | "openai-realtime"
+export type SpeechProvider = "web-speech" | "deepgram" | "whisper" | "openai-realtime" | "azure"
 
 /**
  * Configuration for starting a speech recognition session.
@@ -924,24 +938,58 @@ declare global {
 // PROVIDER FACTORY
 // =============================================================================
 
+// Lazy import Azure provider to avoid circular dependencies
+// and keep the main bundle smaller when Azure isn't used
+let azureProviderModule: typeof import("./providers/azure-speech-provider") | null = null
+
+async function getAzureProvider() {
+  if (!azureProviderModule) {
+    azureProviderModule = await import("./providers/azure-speech-provider")
+  }
+  return azureProviderModule.getAzureSpeechProvider()
+}
+
 // Singleton instances
 let openaiRealtimeProvider: OpenAIRealtimeProvider | null = null
 let deepgramProvider: DeepgramProvider | null = null
 let webSpeechProvider: WebSpeechProvider | null = null
 
 /**
+ * Check if Azure Speech is configured (has server-side route).
+ * We do a quick check by attempting to fetch the token endpoint.
+ */
+let azureConfigured: boolean | null = null
+
+async function isAzureConfigured(): Promise<boolean> {
+  if (azureConfigured !== null) return azureConfigured
+
+  try {
+    const response = await fetch("/api/azure-speech/token", { method: "GET" })
+    // 503 means not configured, 200 means configured
+    azureConfigured = response.ok
+    return azureConfigured
+  } catch {
+    azureConfigured = false
+    return false
+  }
+}
+
+/**
  * Get the best available speech recognition provider.
  *
  * Priority:
- * 1. OpenAI Realtime (if API key configured) — best accuracy for letters
- * 2. Deepgram (if API key configured) — good for words, reliable fallback
- * 3. Web Speech API (fallback) — free but lower accuracy
+ * 1. Azure (if configured) — best for letter spelling with phrase lists
+ * 2. OpenAI Realtime (if API key configured) — good WER but semantic
+ * 3. Deepgram (if API key configured) — good for words, reliable fallback
+ * 4. Web Speech API (fallback) — free but lower accuracy
  *
  * @returns The best available provider
  * @throws Error if no provider is available
  */
 export function getSpeechProvider(): ISpeechRecognitionProvider {
-  // Try OpenAI Realtime first (best accuracy for letter-by-letter spelling)
+  // Try OpenAI Realtime first (available synchronously)
+  // Note: Azure is async, so we can't check it here
+  // Use getSpeechProviderAsync for Azure priority
   if (!openaiRealtimeProvider) {
     openaiRealtimeProvider = new OpenAIRealtimeProvider()
   }
@@ -956,7 +1004,7 @@ export function getSpeechProvider(): ISpeechRecognitionProvider {
   if (deepgramProvider.isSupported()) {
     console.warn(
       "[SpeechRecognition] Using Deepgram. " +
-      "For best letter accuracy, configure NEXT_PUBLIC_OPENAI_API_KEY."
+      "For best letter accuracy, configure Azure or OpenAI."
     )
     return deepgramProvider
   }
@@ -968,7 +1016,7 @@ export function getSpeechProvider(): ISpeechRecognitionProvider {
   if (webSpeechProvider.isSupported()) {
     console.warn(
       "[SpeechRecognition] Using Web Speech API fallback. " +
-      "For better accuracy, configure NEXT_PUBLIC_OPENAI_API_KEY or NEXT_PUBLIC_DEEPGRAM_API_KEY."
+      "For better accuracy, configure Azure, OpenAI, or Deepgram."
     )
     return webSpeechProvider
   }
@@ -977,16 +1025,57 @@ export function getSpeechProvider(): ISpeechRecognitionProvider {
 }
 
 /**
+ * Get the best available speech recognition provider (async version).
+ *
+ * This version checks Azure first, which requires an async API call.
+ * Use this when you can await the result.
+ *
+ * Priority:
+ * 1. Azure (if configured) — best for letter spelling with phrase lists
+ * 2. OpenAI Realtime (if API key configured) — good WER but semantic
+ * 3. Deepgram (if API key configured) — good for words, reliable fallback
+ * 4. Web Speech API (fallback) — free but lower accuracy
+ *
+ * @returns The best available provider
+ * @throws Error if no provider is available
+ */
+export async function getSpeechProviderAsync(): Promise<ISpeechRecognitionProvider> {
+  // Try Azure first (best for letter spelling)
+  if (await isAzureConfigured()) {
+    const azureProvider = await getAzureProvider()
+    if (azureProvider.isSupported()) {
+      if (process.env.NODE_ENV === "development") {
+        console.log("[SpeechRecognition] Using Azure Speech Services (phrase list boosting)")
+      }
+      return azureProvider
+    }
+  }
+
+  // Fall back to sync provider selection
+  return getSpeechProvider()
+}
+
+/**
  * Get a specific speech recognition provider.
  *
  * @param provider - The provider to get
- * @returns The requested provider
+ * @returns The requested provider (or Promise for async providers like Azure)
  * @throws Error if the provider is not available
  */
 export function getSpecificProvider(
   provider: SpeechProvider
-): ISpeechRecognitionProvider {
+): ISpeechRecognitionProvider | Promise<ISpeechRecognitionProvider> {
   switch (provider) {
+    case "azure":
+      // Azure requires async loading
+      return (async () => {
+        const azureProvider = await getAzureProvider()
+        if (!azureProvider.isSupported()) {
+          throw new Error("Azure not configured. Set AZURE_SPEECH_KEY and AZURE_SPEECH_REGION.")
+        }
+        return azureProvider
+      })()
+
     case "openai-realtime":
       if (!openaiRealtimeProvider) {
         openaiRealtimeProvider = new OpenAIRealtimeProvider()
@@ -1025,6 +1114,9 @@ export function getSpecificProvider(
 /**
  * Check which providers are available.
  *
+ * Note: Azure availability is async and defaults to false in sync check.
+ * Use getAvailableProvidersAsync for accurate Azure status.
+ *
  * @returns Object with availability status for each provider
  */
 export function getAvailableProviders(): Record<SpeechProvider, boolean> {
@@ -1033,6 +1125,30 @@ export function getAvailableProviders(): Record<SpeechProvider, boolean> {
   if (!webSpeechProvider) webSpeechProvider = new WebSpeechProvider()
 
   return {
+    azure: azureConfigured ?? false, // Requires async check for accurate result
+    "openai-realtime": openaiRealtimeProvider.isSupported(),
+    deepgram: deepgramProvider.isSupported(),
+    "web-speech": webSpeechProvider.isSupported(),
+    whisper: false, // Not implemented
+  }
+}
+
+/**
+ * Check which providers are available (async version).
+ *
+ * This version accurately checks Azure availability.
+ *
+ * @returns Object with availability status for each provider
+ */
+export async function getAvailableProvidersAsync(): Promise<Record<SpeechProvider, boolean>> {
+  if (!openaiRealtimeProvider) openaiRealtimeProvider = new OpenAIRealtimeProvider()
+  if (!deepgramProvider) deepgramProvider = new DeepgramProvider()
+  if (!webSpeechProvider) webSpeechProvider = new WebSpeechProvider()
+
+  const azureAvailable = await isAzureConfigured()
+
+  return {
+    azure: azureAvailable,
     "openai-realtime": openaiRealtimeProvider.isSupported(),
     deepgram: deepgramProvider.isSupported(),
     "web-speech": webSpeechProvider.isSupported(),
