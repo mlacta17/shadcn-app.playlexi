@@ -110,10 +110,10 @@ export default function EndlessGamePage() {
    * Called by both auto-submit and manual Stop button.
    * Idempotent - safe to call multiple times.
    *
-   * Passes recording duration for anti-cheat validation:
-   * - Spelling "S-M-I-L-E" takes ~2000-3000ms
-   * - Saying "smile" takes ~300-500ms
-   * - If duration is too short, answer is rejected
+   * Uses letter timing for anti-cheat:
+   * - Spelling "C-A-T": Letters appear gradually (200-400ms gaps)
+   * - Saying "cat": All letters appear at once (<100ms total)
+   * - If letters arrived too fast, answer is rejected
    */
   const submitCurrentAnswer = React.useCallback(() => {
     // Prevent double-submission
@@ -129,12 +129,17 @@ export default function EndlessGamePage() {
       autoSubmitTimeoutRef.current = null
     }
 
-    // Stop recording and capture the duration immediately
-    // stopRecording() returns the duration synchronously before state update
-    const durationMs = stopRecording()
+    // Stop recording and get anti-cheat metrics
+    const metrics = stopRecording()
 
-    // Submit with duration for anti-cheat validation
-    gameActions.submitAnswer(transcript, { durationMs })
+    // Submit answer with letter timing for anti-cheat validation
+    gameActions.submitAnswer(transcript, {
+      letterTiming: {
+        averageLetterGapMs: metrics.averageLetterGapMs,
+        looksLikeSpelling: metrics.looksLikeSpelling,
+        letterCount: metrics.letterTimings.length,
+      },
+    })
   }, [transcript, gameState.phase, stopRecording, gameActions])
 
   /**

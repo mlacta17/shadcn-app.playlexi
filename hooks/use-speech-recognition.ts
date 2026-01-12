@@ -8,6 +8,7 @@ import {
   type SpeechProvider,
   SPELLING_KEYWORDS,
 } from "@/lib/speech-recognition-service"
+import { extractLettersFromVoice } from "@/lib/answer-validation"
 
 // =============================================================================
 // TYPES
@@ -34,16 +35,65 @@ export interface UseSpeechRecognitionOptions {
   interimThrottleMs?: number
 }
 
+/**
+ * Timing data for a single letter's appearance in the transcript.
+ * Used to detect the rate at which letters accumulate.
+ */
+export interface LetterTiming {
+  /** The letter that appeared */
+  letter: string
+  /** Timestamp when this letter first appeared */
+  timestamp: number
+  /** Time since the previous letter (ms), or 0 for first letter */
+  gapFromPrevious: number
+}
+
+/**
+ * Anti-cheat metrics returned when stopping recording.
+ *
+ * The key insight for detecting saying vs spelling:
+ * - **Spelling "C-A-T"**: Letters appear gradually with gaps (200-400ms each)
+ * - **Saying "cat"**: All letters appear at once (<100ms total)
+ *
+ * We track:
+ * 1. When each NEW letter appears in the transcript
+ * 2. The gaps between letter appearances
+ * 3. Average gap - spelling has higher average gaps than saying
+ */
+export interface StopRecordingMetrics {
+  /** Speech duration in milliseconds (first to last speech) */
+  durationMs: number
+  /** Number of interim results received (spelling = more results) */
+  interimCount: number
+  /**
+   * Timing data for each letter as it appeared.
+   * Spelling produces gradual accumulation, saying produces instant dump.
+   */
+  letterTimings: LetterTiming[]
+  /**
+   * Average gap between letter appearances (ms).
+   * - Spelling: ~200-400ms average
+   * - Saying: ~0-50ms average (letters arrive together)
+   */
+  averageLetterGapMs: number
+  /**
+   * Whether the pattern looks like spelling based on letter timing.
+   * true = letters arrived gradually (spelling)
+   * false = letters arrived all at once (saying)
+   */
+  looksLikeSpelling: boolean
+}
+
 export interface UseSpeechRecognitionReturn {
   /** Whether currently recording */
   isRecording: boolean
   /** Start recording */
   startRecording: () => Promise<void>
   /**
-   * Stop recording and get final transcript.
-   * @returns The speech duration in milliseconds (time from first to last speech detected)
+   * Stop recording and get anti-cheat metrics.
+   * @returns Metrics object with duration and interim result count
    */
-  stopRecording: () => number
+  stopRecording: () => StopRecordingMetrics
   /** Current transcript (updated in real-time) */
   transcript: string
   /** Clear the transcript */
@@ -72,6 +122,15 @@ export interface UseSpeechRecognitionReturn {
    * @returns Duration in milliseconds, or 0 if no speech detected yet
    */
   getCurrentSpeechDuration: () => number
+  /**
+   * Number of interim results received during recording.
+   * Used for anti-cheat: spelling produces more interim results than saying a word.
+   *
+   * Hypothesis:
+   * - Spelling "C-A-T" → many interim results (letters recognized incrementally)
+   * - Saying "cat" → fewer interim results (word recognized at once)
+   */
+  interimResultCount: number
 }
 
 // =============================================================================
@@ -141,6 +200,7 @@ export function useSpeechRecognition(
   const [error, setError] = React.useState<Error | null>(null)
   const [provider, setProvider] = React.useState<SpeechProvider | null>(null)
   const [speechDurationMs, setSpeechDurationMs] = React.useState(0)
+  const [interimResultCount, setInterimResultCount] = React.useState(0)
 
   // Refs for stable callback references (avoid stale closures)
   const sessionRef = React.useRef<SpeechRecognitionSession | null>(null)
@@ -153,6 +213,16 @@ export function useSpeechRecognition(
   // This gives us actual speaking time, not recording time (which includes silence)
   const firstSpeechTimeRef = React.useRef<number>(0)
   const lastSpeechTimeRef = React.useRef<number>(0)
+
+  // Interim result count ref for anti-cheat
+  // Spelling produces more interim results than saying a word
+  const interimCountRef = React.useRef<number>(0)
+
+  // Letter timing tracking for anti-cheat
+  // We track when each NEW letter appears in the transcript
+  // Spelling = letters appear gradually, Saying = letters appear all at once
+  const letterTimingsRef = React.useRef<LetterTiming[]>([])
+  const lastLetterCountRef = React.useRef<number>(0)
 
   // Keep refs in sync with latest callbacks (avoids re-creating session on callback change)
   React.useEffect(() => {
@@ -188,9 +258,9 @@ export function useSpeechRecognition(
 
   /**
    * Cleanup function - stops recording and releases resources.
-   * @returns The speech duration in milliseconds (first speech to last speech)
+   * @returns Anti-cheat metrics including letter timing data
    */
-  const cleanup = React.useCallback((): number => {
+  const cleanup = React.useCallback((): StopRecordingMetrics => {
     // Calculate SPEECH duration (not recording duration)
     // This is the time from first detected speech to last detected speech
     // Much more accurate for anti-cheat as it excludes silence
@@ -198,17 +268,51 @@ export function useSpeechRecognition(
     if (firstSpeechTimeRef.current > 0 && lastSpeechTimeRef.current > 0) {
       speechDuration = lastSpeechTimeRef.current - firstSpeechTimeRef.current
       setSpeechDurationMs(speechDuration)
-
-      if (process.env.NODE_ENV === "development") {
-        console.log(`[Speech] Speech duration: ${speechDuration}ms (first to last speech)`)
-      }
     } else if (firstSpeechTimeRef.current > 0) {
       // Only first speech detected, use time until now
       speechDuration = Date.now() - firstSpeechTimeRef.current
       setSpeechDurationMs(speechDuration)
+    }
 
-      if (process.env.NODE_ENV === "development") {
-        console.log(`[Speech] Speech duration: ${speechDuration}ms (first speech to now)`)
+    // Capture interim count before resetting
+    const finalInterimCount = interimCountRef.current
+    setInterimResultCount(finalInterimCount)
+
+    // Capture letter timings
+    const letterTimings = [...letterTimingsRef.current]
+
+    // Calculate average gap between letters
+    // Skip first letter (gap is 0), only count gaps between subsequent letters
+    const gaps = letterTimings.slice(1).map((lt) => lt.gapFromPrevious)
+    const averageLetterGapMs =
+      gaps.length > 0 ? gaps.reduce((sum, g) => sum + g, 0) / gaps.length : 0
+
+    // Determine if this looks like spelling based on letter timing
+    // Thresholds based on testing:
+    // - Spelling "C-A-T": gaps of 200-400ms, average ~250ms
+    // - Saying "cat": gaps of 0-50ms (letters arrive together)
+    //
+    // We use 100ms as the threshold:
+    // - Fast spellers still have ~150-200ms between letters
+    // - Saying a word dumps all letters in <50ms
+    const MIN_GAP_FOR_SPELLING = 100 // ms - minimum average gap to count as spelling
+    const MIN_LETTERS_FOR_CHECK = 2 // Need at least 2 letters to check timing
+
+    const looksLikeSpelling =
+      letterTimings.length < MIN_LETTERS_FOR_CHECK || // Single letter = trust it
+      averageLetterGapMs >= MIN_GAP_FOR_SPELLING // Multiple letters with gaps = spelling
+
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        `[Speech] Stopped: duration=${speechDuration}ms, interimResults=${finalInterimCount}, ` +
+          `letters=${letterTimings.length}, avgGap=${averageLetterGapMs.toFixed(0)}ms, ` +
+          `looksLikeSpelling=${looksLikeSpelling}`
+      )
+      if (letterTimings.length > 0) {
+        console.log(
+          `[Speech] Letter timings:`,
+          letterTimings.map((lt) => `${lt.letter}(+${lt.gapFromPrevious}ms)`).join(" ")
+        )
       }
     }
 
@@ -217,13 +321,22 @@ export function useSpeechRecognition(
       sessionRef.current = null
     }
 
-    // Reset all timing refs
+    // Reset all refs
     firstSpeechTimeRef.current = 0
     lastSpeechTimeRef.current = 0
+    interimCountRef.current = 0
+    letterTimingsRef.current = []
+    lastLetterCountRef.current = 0
     setAnalyserNode(null)
     setIsRecording(false)
 
-    return speechDuration
+    return {
+      durationMs: speechDuration,
+      interimCount: finalInterimCount,
+      letterTimings,
+      averageLetterGapMs,
+      looksLikeSpelling,
+    }
   }, [])
 
   // Start recording
@@ -232,10 +345,15 @@ export function useSpeechRecognition(
       setError(null)
       setTranscript("")
       setSpeechDurationMs(0) // Reset duration for new recording
+      setInterimResultCount(0) // Reset interim count for new recording
       lastInterimUpdateRef.current = 0
       // Reset speech timing refs
       firstSpeechTimeRef.current = 0
       lastSpeechTimeRef.current = 0
+      interimCountRef.current = 0
+      // Reset letter timing tracking
+      letterTimingsRef.current = []
+      lastLetterCountRef.current = 0
 
       // Get provider using async version to properly check Azure availability
       // Azure requires an async check because it needs to verify the token endpoint
@@ -263,6 +381,45 @@ export function useSpeechRecognition(
               }
             }
             lastSpeechTimeRef.current = now
+
+            // Count interim results for anti-cheat
+            // Spelling produces more interim results than saying a word
+            // because letters are recognized incrementally: "C" → "CA" → "CAT"
+            interimCountRef.current++
+
+            // ===============================================================
+            // Letter Timing Tracking for Anti-Cheat
+            // ===============================================================
+            // Track when each NEW letter appears in the transcript.
+            // Key insight:
+            // - Spelling "C-A-T": letters appear one at a time with gaps
+            // - Saying "cat": all letters appear at once
+            //
+            // Extract letters from the current transcript and check for new ones
+            const currentLetters = extractLettersFromVoice(text)
+            const previousLetterCount = lastLetterCountRef.current
+
+            if (currentLetters.length > previousLetterCount) {
+              // New letters appeared - track each one
+              const previousTimestamp =
+                letterTimingsRef.current.length > 0
+                  ? letterTimingsRef.current[letterTimingsRef.current.length - 1].timestamp
+                  : now
+
+              // Add timing entries for each new letter
+              for (let i = previousLetterCount; i < currentLetters.length; i++) {
+                const letter = currentLetters[i]
+                const gapFromPrevious = i === 0 ? 0 : now - previousTimestamp
+
+                letterTimingsRef.current.push({
+                  letter,
+                  timestamp: now,
+                  gapFromPrevious,
+                })
+              }
+
+              lastLetterCountRef.current = currentLetters.length
+            }
           }
 
           // Apply throttling if configured (reduces React re-renders)
@@ -274,7 +431,7 @@ export function useSpeechRecognition(
           }
 
           if (process.env.NODE_ENV === "development") {
-            console.log(`[Speech:${speechProvider.name}] interim:`, text)
+            console.log(`[Speech:${speechProvider.name}] interim #${interimCountRef.current}:`, text)
           }
           setTranscript(text)
         },
@@ -316,8 +473,8 @@ export function useSpeechRecognition(
     }
   }, [language, spellingMode, interimThrottleMs, cleanup])
 
-  // Stop recording - returns duration for anti-cheat validation
-  const stopRecording = React.useCallback((): number => {
+  // Stop recording - returns anti-cheat metrics for validation
+  const stopRecording = React.useCallback((): StopRecordingMetrics => {
     return cleanup()
   }, [cleanup])
 
@@ -345,5 +502,6 @@ export function useSpeechRecognition(
     error,
     speechDurationMs,
     getCurrentSpeechDuration,
+    interimResultCount,
   }
 }

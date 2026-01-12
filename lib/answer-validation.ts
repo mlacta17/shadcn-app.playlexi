@@ -48,80 +48,27 @@ export interface ValidationResult {
   similarity: number
   /** For voice mode: whether the input was properly spelled out */
   wasSpelledOut?: boolean
-  /** Rejection reason if answer was rejected (not just wrong) */
-  rejectionReason?: "not_spelled_out" | "too_fast" | "empty"
+  /**
+   * Rejection reason if answer was rejected (not just wrong).
+   * - "not_spelled_out": Transcript doesn't look like spelled letters
+   * - "too_fast": Duration too short for spelling
+   * - "too_few_interim": Not enough interim results (word said, not spelled)
+   * - "anti_cheat_failed": Composite anti-cheat score too low
+   * - "empty": No answer provided
+   */
+  rejectionReason?: "not_spelled_out" | "too_fast" | "too_few_interim" | "anti_cheat_failed" | "empty"
 }
 
 // =============================================================================
-// DURATION-BASED ANTI-CHEAT CONSTANTS
+// ANTI-CHEAT (DISABLED)
 // =============================================================================
-
-/**
- * Minimum milliseconds per letter for valid spelling.
- *
- * Rationale:
- * - Saying "smile" takes ~300-500ms
- * - Spelling "S-M-I-L-E" takes ~2000-3000ms (400-600ms per letter)
- * - We use 300ms as a conservative minimum to avoid false rejections
- * - This catches blatant cheating while allowing fast spellers
- *
- * Testing results:
- * - Fast speller: ~350ms/letter
- * - Normal speller: ~500ms/letter
- * - Saying word directly: ~80-150ms/letter equivalent
- */
-export const MIN_MS_PER_LETTER = 300
-
-/**
- * Minimum recording duration for any valid spelling (in ms).
- * Even a 2-letter word like "AT" needs some time to spell.
- */
-export const MIN_RECORDING_DURATION_MS = 500
-
-/**
- * Check if the recording duration is long enough for the word length.
- *
- * This is the primary anti-cheat mechanism for voice input.
- * Spelling a word letter-by-letter takes significantly longer than
- * just saying the word.
- *
- * @param durationMs - Recording duration in milliseconds
- * @param wordLength - Number of letters in the word
- * @returns true if duration is sufficient for spelling
- *
- * @example
- * ```ts
- * // "smile" (5 letters) needs at least 1500ms (5 × 300ms)
- * isDurationSufficientForSpelling(2000, 5) // true - 400ms/letter
- * isDurationSufficientForSpelling(500, 5)  // false - 100ms/letter (too fast)
- * isDurationSufficientForSpelling(1500, 5) // true - exactly 300ms/letter
- * ```
- */
-export function isDurationSufficientForSpelling(
-  durationMs: number,
-  wordLength: number
-): boolean {
-  // Minimum absolute duration
-  if (durationMs < MIN_RECORDING_DURATION_MS) {
-    return false
-  }
-
-  // Calculate minimum required duration for this word length
-  const minDuration = wordLength * MIN_MS_PER_LETTER
-
-  return durationMs >= minDuration
-}
-
-/**
- * Calculate the expected minimum duration for spelling a word.
- * Useful for debugging and user feedback.
- *
- * @param wordLength - Number of letters in the word
- * @returns Minimum expected duration in milliseconds
- */
-export function getExpectedSpellingDuration(wordLength: number): number {
-  return Math.max(MIN_RECORDING_DURATION_MS, wordLength * MIN_MS_PER_LETTER)
-}
+// Anti-cheat mechanisms were removed because:
+// 1. Azure returns identical transcripts for saying vs spelling
+// 2. Duration/interim checks punish fast spellers unfairly
+// 3. The game is self-correcting (cheaters don't learn)
+//
+// The code below is kept for reference but is no longer used.
+// =============================================================================
 
 /**
  * Detailed analysis of an incorrect answer.
@@ -639,15 +586,27 @@ export function extractLettersFromVoice(input: string): string {
 // =============================================================================
 
 /**
+ * Letter timing data passed from speech recognition hook.
+ */
+export interface LetterTimingData {
+  /** Average gap between letter appearances (ms) */
+  averageLetterGapMs: number
+  /** Whether the timing pattern looks like spelling */
+  looksLikeSpelling: boolean
+  /** Number of letters tracked */
+  letterCount: number
+}
+
+/**
  * Options for voice mode validation.
+ * Now includes letter timing data for anti-cheat detection.
  */
 export interface VoiceValidationOptions {
   /**
-   * Recording duration in milliseconds.
-   * Used for anti-cheat: spelling takes longer than saying a word.
-   * If not provided, duration check is skipped (for backwards compatibility).
+   * Letter timing data from the speech recognition hook.
+   * Used to detect if letters were spelled out (gradual) vs word was said (instant).
    */
-  durationMs?: number
+  letterTiming?: LetterTimingData
 }
 
 /**
@@ -656,19 +615,23 @@ export interface VoiceValidationOptions {
  * This is the core validation function used during gameplay.
  * Returns a detailed result for flexibility in handling outcomes.
  *
- * For voice mode, this function also checks that the player actually
- * spelled the word letter-by-letter rather than just saying the word.
+ * For voice mode, extracts letters from the transcript (handling phonetic
+ * alphabet, spoken letter names, etc.) and compares against the correct word.
  *
- * ## Anti-Cheat Mechanisms (Voice Mode)
- * 1. **Pattern Detection**: Checks if input looks like spelled letters
- * 2. **Duration Check**: Spelling takes longer than saying a word
- *    - "smile" said: ~300-500ms
- *    - "S-M-I-L-E" spelled: ~2000-3000ms
+ * ## Anti-Cheat: Letter Timing Detection
+ * We use letter accumulation timing to detect cheating:
+ * - **Spelling "C-A-T"**: Letters appear gradually (200-400ms gaps)
+ * - **Saying "cat"**: All letters appear at once (<100ms total)
+ *
+ * This approach:
+ * 1. Doesn't punish fast spellers (they still have 150-200ms gaps)
+ * 2. Catches cheaters who just say the word (letters dump all at once)
+ * 3. Is invisible to users (detection happens silently at submission)
  *
  * @param playerAnswer - The player's input (voice transcript or typed text)
  * @param correctWord - The correct spelling
  * @param inputMode - Whether this is voice or keyboard input (default: keyboard)
- * @param voiceOptions - Additional options for voice mode validation
+ * @param voiceOptions - Options including letter timing data for anti-cheat
  * @returns Validation result with correctness and normalized values
  *
  * @example
@@ -676,13 +639,10 @@ export interface VoiceValidationOptions {
  * // Keyboard mode - direct comparison
  * const result = validateAnswer("beautiful", "beautiful", "keyboard")
  *
- * // Voice mode - must be spelled out with sufficient duration
- * const result = validateAnswer("B E A U T I F U L", "beautiful", "voice", {
- *   durationMs: 3500, // Recording lasted 3.5 seconds
+ * // Voice mode with anti-cheat
+ * const result = validateAnswer("beautiful", "beautiful", "voice", {
+ *   letterTiming: { averageLetterGapMs: 250, looksLikeSpelling: true, letterCount: 9 }
  * })
- * if (result.rejectionReason === "too_fast") {
- *   showMessage("Please spell the word more slowly")
- * }
  * ```
  */
 export function validateAnswer(
@@ -693,69 +653,67 @@ export function validateAnswer(
 ): ValidationResult {
   const normalizedCorrect = normalizeAnswer(correctWord)
 
-  // For voice mode, check if the answer was properly spelled out
+  // For voice mode, extract letters and compare
   if (inputMode === "voice") {
-    // ==========================================================================
-    // ANTI-CHEAT #1: Duration Check (Primary)
-    // ==========================================================================
-    // This is the most reliable anti-cheat mechanism.
-    // Spelling a word letter-by-letter takes significantly longer than
-    // just saying the word. We check this FIRST before pattern matching.
-    if (voiceOptions?.durationMs !== undefined) {
-      const wordLength = normalizedCorrect.length
-      const isSufficientDuration = isDurationSufficientForSpelling(
-        voiceOptions.durationMs,
-        wordLength
-      )
-
-      if (!isSufficientDuration) {
-        const expectedMs = getExpectedSpellingDuration(wordLength)
-        if (process.env.NODE_ENV === "development") {
-          console.log(
-            `[Validation] Duration too fast: ${voiceOptions.durationMs}ms < ${expectedMs}ms expected for ${wordLength} letters`
-          )
-        }
-        return {
-          isCorrect: false,
-          normalizedAnswer: normalizeAnswer(playerAnswer),
-          normalizedCorrect,
-          similarity: 0,
-          wasSpelledOut: false,
-          rejectionReason: "too_fast",
-        }
-      }
-    }
-
-    // ==========================================================================
-    // ANTI-CHEAT #2: Pattern Detection (Secondary)
-    // ==========================================================================
-    // Check if the transcript looks like spelled letters.
-    // This catches cases where duration check isn't available.
-    const wasSpelledOut = isSpelledOut(playerAnswer, correctWord)
-
-    if (!wasSpelledOut) {
-      // Player said the word instead of spelling it - reject
-      return {
-        isCorrect: false,
-        normalizedAnswer: normalizeAnswer(playerAnswer),
-        normalizedCorrect,
-        similarity: 0,
-        wasSpelledOut: false,
-        rejectionReason: "not_spelled_out",
-      }
-    }
-
     // Extract letters from voice input (handles phonetic alphabet, etc.)
     const extractedLetters = extractLettersFromVoice(playerAnswer)
-    const isCorrect = extractedLetters === normalizedCorrect
+    const lettersMatch = extractedLetters === normalizedCorrect
     const similarity = calculateSimilarity(extractedLetters, normalizedCorrect)
+
+    // =========================================================================
+    // Anti-Cheat: Letter Timing Detection
+    // =========================================================================
+    // If letters match, check if they were spelled out (gradual) or said (instant).
+    //
+    // The key insight:
+    // - When you SPELL, letters appear one at a time with 200-400ms gaps
+    // - When you SAY, all letters appear at once in <100ms
+    //
+    // We check looksLikeSpelling from the speech recognition hook.
+    // If it's false, the player said the word instead of spelling it.
+    //
+    // Edge cases we allow:
+    // - Single-letter words (no timing check needed)
+    // - No timing data (fallback to trusting the transcript)
+    // - Short words (2-3 letters) with close timing (harder to distinguish)
+
+    const letterTiming = voiceOptions?.letterTiming
+    let wasSpelledOut = true // Default to true (trust transcript)
+    let rejectionReason: ValidationResult["rejectionReason"] = undefined
+
+    if (letterTiming && lettersMatch) {
+      // Only apply anti-cheat if:
+      // 1. We have letter timing data
+      // 2. The letters actually match (no point rejecting a wrong answer)
+      // 3. Word has 2+ letters (single letters can't be cheated)
+
+      if (letterTiming.letterCount >= 2) {
+        wasSpelledOut = letterTiming.looksLikeSpelling
+
+        if (!wasSpelledOut) {
+          // Caught cheating! Letters arrived too fast (said, not spelled)
+          rejectionReason = "not_spelled_out"
+
+          if (process.env.NODE_ENV === "development") {
+            console.log(
+              `[AntiCheat] REJECTED: avgGap=${letterTiming.averageLetterGapMs.toFixed(0)}ms, ` +
+                `letters=${letterTiming.letterCount}. Word was SAID, not SPELLED.`
+            )
+          }
+        }
+      }
+    }
+
+    // If answer was rejected due to cheating, treat as incorrect
+    const isCorrect = lettersMatch && wasSpelledOut
 
     return {
       isCorrect,
       normalizedAnswer: extractedLetters,
       normalizedCorrect,
       similarity,
-      wasSpelledOut: true,
+      wasSpelledOut,
+      rejectionReason,
     }
   }
 

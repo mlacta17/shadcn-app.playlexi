@@ -14,7 +14,6 @@ import {
   validateAnswer,
   isEmptyAnswer,
   type InputMode,
-  type VoiceValidationOptions,
 } from "@/lib/answer-validation"
 
 // =============================================================================
@@ -111,13 +110,19 @@ export interface GameState {
 
 /**
  * Options for answer submission.
+ * Includes letter timing data for voice anti-cheat.
  */
 export interface SubmitAnswerOptions {
   /**
-   * Recording duration in milliseconds (voice mode only).
-   * Used for anti-cheat: spelling takes longer than saying a word.
+   * Letter timing data for voice mode anti-cheat.
+   * Used to detect if player spelled the word (gradual letter accumulation)
+   * vs just said the word (all letters at once).
    */
-  durationMs?: number
+  letterTiming?: {
+    averageLetterGapMs: number
+    looksLikeSpelling: boolean
+    letterCount: number
+  }
 }
 
 /**
@@ -351,12 +356,14 @@ export function useGameSession(
    * rather than just saying the whole word (anti-cheat).
    *
    * ## Anti-Cheat (Voice Mode)
-   * Two mechanisms prevent cheating:
-   * 1. **Duration check**: Spelling takes longer than saying a word
-   * 2. **Pattern detection**: Transcript must look like spelled letters
+   * Uses letter timing detection to prevent cheating:
+   * - Spelling "C-A-T": Letters appear gradually (200-400ms gaps)
+   * - Saying "cat": All letters appear at once (<100ms total)
+   *
+   * This approach doesn't punish fast spellers while catching cheaters.
    *
    * @param answer - The player's answer (transcript or typed text)
-   * @param options - Optional settings including recording duration
+   * @param options - Optional settings including letter timing for anti-cheat
    */
   const submitAnswer = React.useCallback(
     (answer: string, options?: SubmitAnswerOptions) => {
@@ -388,28 +395,12 @@ export function useGameSession(
           }
         }
 
-        // Build voice validation options for anti-cheat
-        const voiceOptions: VoiceValidationOptions | undefined =
-          prev.inputMethod === "voice" && options?.durationMs !== undefined
-            ? { durationMs: options.durationMs }
-            : undefined
-
-        // Validate the answer with input mode for voice anti-cheat
+        // Validate the answer with letter timing for anti-cheat
         const inputMode: InputMode = prev.inputMethod
-        const result = validateAnswer(
-          answer,
-          prev.currentWord.word,
-          inputMode,
-          voiceOptions
-        )
-
-        // If voice mode and player didn't spell it out, treat as wrong
-        // The rejectionReason helps with user feedback
-        const isCorrect = result.isCorrect && !result.rejectionReason
-
-        if (process.env.NODE_ENV === "development" && result.rejectionReason) {
-          console.log(`[GameSession] Answer rejected: ${result.rejectionReason}`)
-        }
+        const result = validateAnswer(answer, prev.currentWord.word, inputMode, {
+          letterTiming: options?.letterTiming,
+        })
+        const isCorrect = result.isCorrect
 
         const record: AnswerRecord = {
           word: prev.currentWord,
