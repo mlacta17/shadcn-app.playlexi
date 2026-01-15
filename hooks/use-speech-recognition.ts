@@ -7,7 +7,6 @@ import {
   type SpeechRecognitionSession,
   type SpeechProvider,
   type WordTimingData,
-  SPELLING_KEYWORDS,
 } from "@/lib/speech-recognition-service"
 import { extractLettersFromVoice } from "@/lib/answer-validation"
 
@@ -669,7 +668,6 @@ export function useSpeechRecognition(
           onErrorRef.current?.(err)
         },
         language,
-        keywords: spellingMode ? SPELLING_KEYWORDS : undefined,
       })
 
       sessionRef.current = session
