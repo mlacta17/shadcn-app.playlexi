@@ -152,14 +152,9 @@ export interface ISpeechRecognitionProvider {
 // SPELLING KEYWORDS (kept for reference - used by Azure phrase lists)
 // =============================================================================
 
-/**
- * Keywords to boost for spelling recognition.
- * These are passed to Azure's phrase list feature to improve letter accuracy.
- */
-export const SPELLING_KEYWORDS: string[] = [
-  "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
-  "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
-]
+// Re-export letter list from centralized phonetic constants
+// This maintains backwards compatibility for any code importing SPELLING_KEYWORDS
+export { LETTERS_AZ as SPELLING_KEYWORDS } from "./phonetic-constants"
 
 // =============================================================================
 // WEB SPEECH API PROVIDER (Fallback)

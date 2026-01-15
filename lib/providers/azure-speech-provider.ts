@@ -71,24 +71,8 @@ interface AzureTokenResponse {
 // CONSTANTS
 // =============================================================================
 
-/**
- * Letter names to boost via phrase list.
- * These exact strings will have increased recognition priority.
- */
-const LETTER_PHRASE_LIST = [
-  // Individual letter names (high priority for spelling)
-  "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
-  "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
-  // Space-separated letter sequences (common patterns)
-  "A B", "B C", "C D", "D E", "E F", "F G", "G H", "H I", "I J",
-  "R U N", "S U N", "C A T", "D O G", "R E D", "B L U E",
-  "S P E L L", "W O R D", "T E S T",
-  // Phonetic variants (how letters sound)
-  "ay", "bee", "cee", "dee", "ee", "eff", "gee", "aitch",
-  "eye", "jay", "kay", "ell", "em", "en", "oh", "pee",
-  "cue", "are", "ess", "tee", "you", "vee",
-  "double you", "double-u", "ex", "why", "zee", "zed",
-]
+// Import centralized phrase list for Azure recognition boosting
+import { AZURE_PHRASE_LIST } from "../phonetic-constants"
 
 /**
  * Clean transcript text for spelling comparison.
@@ -299,12 +283,12 @@ export class AzureSpeechProvider implements ISpeechRecognitionProvider {
 
       // Add phrase list for letter boosting
       const phraseList = SpeechSDK.PhraseListGrammar.fromRecognizer(recognizer)
-      for (const phrase of LETTER_PHRASE_LIST) {
+      for (const phrase of AZURE_PHRASE_LIST) {
         phraseList.addPhrase(phrase)
       }
 
       if (process.env.NODE_ENV === "development") {
-        console.log("[Azure] Added", LETTER_PHRASE_LIST.length, "phrases to boost list")
+        console.log("[Azure] Added", AZURE_PHRASE_LIST.length, "phrases to boost list")
       }
 
       // Handle interim results (recognizing event)

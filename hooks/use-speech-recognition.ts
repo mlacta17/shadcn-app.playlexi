@@ -49,7 +49,7 @@ export interface LetterTiming {
 }
 
 /**
- * Audio-level word timing from Deepgram.
+ * Audio-level word timing from Azure Speech Services.
  * This is the RELIABLE anti-cheat signal because it's based on actual audio,
  * not transcript arrival time (which depends on provider buffering).
  *
@@ -73,19 +73,15 @@ export interface AudioWordTiming {
 /**
  * Anti-cheat metrics returned when stopping recording.
  *
- * ## Two Detection Methods (Transcript-based and Audio-based)
+ * ## Detection Method: Azure Lexical Analysis
  *
- * ### 1. Transcript Timing (Less Reliable)
- * Tracks when letters appear in the transcript. Problem: Azure/OpenAI buffer
- * spelled letters and return complete words, so all letters appear at once.
+ * Azure Speech Services provides the most reliable anti-cheat signal through
+ * its "Lexical" output format:
+ * - Spelling "D-O-G" → Lexical: "D O G" (spaced single letters)
+ * - Saying "dog" → Lexical: "dog" (continuous word)
  *
- * ### 2. Audio Word Timing (More Reliable) - NEW
- * Uses Deepgram's word-level timestamps from the actual audio.
- * - Spelling produces multiple word segments with gaps
- * - Saying produces one continuous word segment
- *
- * The audio-based approach is PROVIDER-INDEPENDENT because it measures
- * the actual sound, not how the provider chooses to assemble the transcript.
+ * The `looksLikeSpellingFromAudio` field is the PRIMARY anti-cheat signal
+ * and is based on Azure's Lexical analysis of the actual spoken audio.
  */
 export interface StopRecordingMetrics {
   /** Speech duration in milliseconds (first to last speech) */
@@ -113,7 +109,7 @@ export interface StopRecordingMetrics {
   // ==========================================================================
 
   /**
-   * Word-level timing from actual audio (Deepgram only).
+   * Word-level timing from actual audio (Azure Speech Services).
    * Each entry represents a recognized word/letter with its audio timestamps.
    * Empty array if provider doesn't support word-level timing.
    */
@@ -199,15 +195,13 @@ export interface UseSpeechRecognitionReturn {
  *
  * Automatically selects the best available provider:
  * 1. Azure Speech Services (if configured) — ~95-98% accuracy with phrase list boosting
- * 2. OpenAI Realtime (if API key configured) — good WER but semantic interpretation
- * 3. Deepgram (if API key configured) — ~95% accuracy for words
- * 4. Web Speech API (fallback) — ~70-80% accuracy
+ * 2. Web Speech API (fallback) — ~70-80% accuracy
  *
  * ## Features
  * - Real-time transcript updates with optional throttling
  * - Audio visualization via analyserNode (shared with provider)
- * - Automatic keyword boosting for spelling (Azure phrase lists, Deepgram keywords)
- * - Graceful fallback between providers
+ * - Automatic phrase list boosting for spelling (Azure)
+ * - Graceful fallback to Web Speech API
  * - Zero duplicate media streams (reuses provider's audio pipeline)
  * - Async provider detection (Azure requires token endpoint check)
  *
@@ -281,7 +275,7 @@ export function useSpeechRecognition(
   const letterTimingsRef = React.useRef<LetterTiming[]>([])
   const lastLetterCountRef = React.useRef<number>(0)
 
-  // Audio word timing tracking (Deepgram only - MORE RELIABLE)
+  // Audio word timing tracking (Azure - MORE RELIABLE)
   // This tracks the actual audio timestamps, not transcript arrival
   const audioWordTimingsRef = React.useRef<AudioWordTiming[]>([])
 
@@ -296,17 +290,15 @@ export function useSpeechRecognition(
     onErrorRef.current = onError
   }, [onTranscript, onError])
 
-  // Check if supported - at minimum, sync providers are always checked
-  // Azure support is determined at startRecording time via getSpeechProviderAsync
+  // Check if supported - WebSpeech is checked sync, Azure is checked async at startRecording
   const isSupported = React.useMemo(() => {
     try {
-      // This checks sync providers (OpenAI, Deepgram, WebSpeech)
-      // Azure is always "supported" in browsers - actual availability
-      // is determined when we fetch the token endpoint
+      // This checks WebSpeech (sync fallback)
+      // Azure availability is determined when we fetch the token endpoint at startRecording
       const speechProvider = getSpeechProvider()
       return speechProvider.isSupported()
     } catch {
-      // Even if sync providers fail, Azure might still be available
+      // Even if WebSpeech fails, Azure might still be available
       // Return true to allow the async check in startRecording
       return true
     }
@@ -369,7 +361,7 @@ export function useSpeechRecognition(
       averageLetterGapMs >= MIN_GAP_FOR_SPELLING // Multiple letters with gaps = spelling
 
     // =========================================================================
-    // Audio Word Timing Analysis (Deepgram - More Reliable)
+    // Audio Word Timing Analysis (Azure - More Reliable)
     // =========================================================================
     // Calculate gaps between words in the actual audio
     const audioWordTimings = [...audioWordTimingsRef.current]
@@ -530,7 +522,7 @@ export function useSpeechRecognition(
         // Word Timing Callback (for anti-cheat)
         // =========================================================================
         // This is the KEY to reliable anti-cheat detection.
-        // Azure/Deepgram return actual audio timestamps for each word.
+        // Azure returns actual audio timestamps for each word via Lexical output.
         // - Spelling "C-A-T": Three separate words with gaps in audio
         // - Saying "cat": One continuous word
         onWordTiming: (words) => {
