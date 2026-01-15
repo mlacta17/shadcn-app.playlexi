@@ -74,11 +74,13 @@
 /**
  * Available speech recognition providers.
  *
- * - "azure": Azure Speech Services (server-side auth, phrase list boosting)
- * - "openai-realtime": OpenAI gpt-4o-transcribe (best WER, but semantic)
- * - "deepgram": Deepgram Nova-2 (good for words, keyword boost)
- * - "web-speech": Browser built-in (free, lower accuracy)
- * - "whisper": OpenAI Whisper (batch, not real-time - not implemented)
+ * - "azure": Azure Speech Services (PRIMARY - server-side auth, phrase list boosting)
+ * - "web-speech": Browser built-in (fallback - free, lower accuracy)
+ *
+ * NOTE: The following providers exist in code but are NOT used:
+ * - "openai-realtime": OpenAI gpt-4o-transcribe (code exists, disabled)
+ * - "deepgram": Deepgram Nova-2 (code exists, disabled)
+ * - "whisper": OpenAI Whisper (not implemented)
  */
 export type SpeechProvider = "web-speech" | "deepgram" | "whisper" | "openai-realtime" | "azure"
 
@@ -1105,7 +1107,7 @@ export async function getSpeechProviderAsync(): Promise<ISpeechRecognitionProvid
 /**
  * Get a specific speech recognition provider.
  *
- * NOTE: Only Azure and Web Speech API are supported.
+ * NOTE: Azure is the PRIMARY provider. Web Speech API is fallback.
  * Deepgram, OpenAI, and Whisper are NOT used in this application.
  *
  * @param provider - The provider to get
@@ -1152,11 +1154,11 @@ export function getSpecificProvider(
 /**
  * Check which providers are available.
  *
- * NOTE: Only Azure and Web Speech API are used in this application.
- * Other providers (Deepgram, OpenAI, Whisper) are always marked as false.
+ * NOTE: Azure is the PRIMARY provider. Web Speech API is fallback.
+ * Other providers (Deepgram, OpenAI, Whisper) are NOT used.
  *
  * Azure availability is async and defaults to false in sync check.
- * Use getAvailableProvidersAsync for accurate Azure status.
+ * Use getAvailableProvidersAsync for accurate status.
  *
  * @returns Object with availability status for each provider
  */
@@ -1177,8 +1179,8 @@ export function getAvailableProviders(): Record<SpeechProvider, boolean> {
  *
  * This version accurately checks Azure availability.
  *
- * NOTE: Only Azure and Web Speech API are used in this application.
- * Other providers (Deepgram, OpenAI, Whisper) are always marked as false.
+ * NOTE: Azure is the PRIMARY provider. Web Speech API is fallback.
+ * Other providers (Deepgram, OpenAI, Whisper) are NOT used.
  *
  * @returns Object with availability status for each provider
  */
