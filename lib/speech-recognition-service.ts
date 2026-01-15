@@ -74,7 +74,8 @@
 /**
  * Available speech recognition providers.
  *
- * - "azure": Azure Speech Services (PRIMARY - server-side auth, phrase list boosting)
+ * - "google": Google Cloud Speech-to-Text (PRIMARY - best letter-by-letter detection)
+ * - "azure": Azure Speech Services (SECONDARY - good accuracy, phrase list boosting)
  * - "web-speech": Browser built-in (fallback - free, lower accuracy)
  *
  * NOTE: The following providers exist in code but are NOT used:
@@ -82,7 +83,7 @@
  * - "deepgram": Deepgram Nova-2 (code exists, disabled)
  * - "whisper": OpenAI Whisper (not implemented)
  */
-export type SpeechProvider = "web-speech" | "deepgram" | "whisper" | "openai-realtime" | "azure"
+export type SpeechProvider = "web-speech" | "deepgram" | "whisper" | "openai-realtime" | "azure" | "google"
 
 /**
  * Word-level timing data from speech recognition.
@@ -161,296 +162,29 @@ export interface ISpeechRecognitionProvider {
 }
 
 // =============================================================================
-// LETTER KEYWORDS FOR DEEPGRAM
+// LETTER KEYWORDS (for providers that support keyword boosting)
 // =============================================================================
 
 /**
  * Keywords to boost for spelling recognition.
- * These are passed to Deepgram's keywords feature to improve letter accuracy.
- *
- * NOTE: Keep this list SHORT to avoid URL length limits.
- * Only include the most commonly confused letter sounds.
+ * Used by providers that support keyword boosting (Azure phrase list, etc.)
  */
 export const SPELLING_KEYWORDS: string[] = [
-  // Single letters only - these are the core keywords
   "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
   "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
 ]
 
 // =============================================================================
-// DEEPGRAM PROVIDER
+// REMOVED PROVIDERS (Dead Code Cleanup)
 // =============================================================================
-
-/**
- * Deepgram speech recognition provider.
- *
- * Uses Deepgram's real-time WebSocket API with keyword boosting
- * for optimal spelling accuracy.
- *
- * ## Setup
- * 1. Create account at https://deepgram.com
- * 2. Get API key from dashboard
- * 3. Set NEXT_PUBLIC_DEEPGRAM_API_KEY in .env.local
- *
- * ## Cost
- * - Pay-as-you-go: $0.0043 per minute
- * - ~10 second spelling round = $0.0007
- * - 1000 players × 20 rounds/day = ~$14/day
- *
- * ## Features Used
- * - `keywords`: Boosts recognition of letter names
- * - `punctuate`: Disabled (we don't need punctuation)
- * - `interim_results`: Enabled for real-time feedback
- */
-class DeepgramProvider implements ISpeechRecognitionProvider {
-  name: SpeechProvider = "deepgram"
-
-  isSupported(): boolean {
-    // Deepgram requires API key and WebSocket support
-    return typeof WebSocket !== "undefined" && !!this.getApiKey()
-  }
-
-  private getApiKey(): string | undefined {
-    // Client-side: use NEXT_PUBLIC_ prefix
-    // Server-side: use DEEPGRAM_API_KEY
-    if (typeof window !== "undefined") {
-      return process.env.NEXT_PUBLIC_DEEPGRAM_API_KEY
-    }
-    return process.env.DEEPGRAM_API_KEY
-  }
-
-  async start(config: SpeechRecognitionConfig): Promise<SpeechRecognitionSession> {
-    const apiKey = this.getApiKey()
-    if (!apiKey) {
-      throw new Error("Deepgram API key not configured. Set NEXT_PUBLIC_DEEPGRAM_API_KEY in .env.local")
-    }
-
-    const { onInterimResult, onFinalResult, onWordTiming, onError, language = "en-US" } = config
-
-    // Build WebSocket URL - keep parameters minimal to avoid API errors
-    const params = new URLSearchParams({
-      model: "nova-2",
-      language: language.split("-")[0], // "en-US" -> "en"
-      punctuate: "false",
-      interim_results: "true",
-    })
-
-    const wsUrl = `wss://api.deepgram.com/v1/listen?${params.toString()}`
-
-    // Debug: Log the connection attempt
-    if (process.env.NODE_ENV === "development") {
-      console.log("[Deepgram] Connecting to:", wsUrl)
-      console.log("[Deepgram] API key present:", !!apiKey, "length:", apiKey?.length)
-    }
-
-    // Create WebSocket connection
-    // Deepgram expects the API key in the Authorization header via subprotocol
-    const socket = new WebSocket(wsUrl, ["token", apiKey])
-
-    let isActive = true
-    let mediaStream: MediaStream | null = null
-    let mediaRecorder: MediaRecorder | null = null
-
-    // Handle WebSocket events
-    socket.onopen = async () => {
-      try {
-        // Get microphone access
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            channelCount: 1,
-            sampleRate: 16000,
-          },
-        })
-
-        // Create MediaRecorder to capture audio
-        mediaRecorder = new MediaRecorder(mediaStream, {
-          mimeType: "audio/webm;codecs=opus",
-        })
-
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0 && socket.readyState === WebSocket.OPEN) {
-            socket.send(event.data)
-          }
-        }
-
-        // Send audio chunks every 250ms for real-time processing
-        mediaRecorder.start(250)
-      } catch (err) {
-        onError?.(err instanceof Error ? err : new Error("Failed to access microphone"))
-        socket.close()
-      }
-    }
-
-    socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-
-        if (data.type === "Results" && data.channel?.alternatives?.[0]) {
-          const alternative = data.channel.alternatives[0]
-          const transcript = alternative.transcript
-
-          // Extract word-level timing data if available
-          // Deepgram returns: { word: "hello", start: 0.12, end: 0.45, confidence: 0.98 }
-          // This is the KEY to reliable anti-cheat:
-          // - Spelling "C-A-T": Three separate word objects with gaps between end/start
-          // - Saying "cat": One word object with continuous audio
-          if (alternative.words && Array.isArray(alternative.words) && onWordTiming) {
-            const wordTimings: WordTimingData[] = alternative.words.map((w: {
-              word: string
-              start: number
-              end: number
-              confidence: number
-            }) => ({
-              word: w.word,
-              start: w.start,
-              end: w.end,
-              confidence: w.confidence,
-            }))
-
-            if (wordTimings.length > 0) {
-              onWordTiming(wordTimings)
-
-              if (process.env.NODE_ENV === "development") {
-                // Log word timing for debugging
-                const timingStr = wordTimings
-                  .map((w) => `"${w.word}"@${w.start.toFixed(2)}-${w.end.toFixed(2)}s`)
-                  .join(" ")
-                console.log(`[Deepgram] Word timing: ${timingStr}`)
-              }
-            }
-          }
-
-          if (transcript) {
-            if (data.is_final) {
-              onFinalResult?.(transcript)
-            } else {
-              onInterimResult?.(transcript)
-            }
-          }
-        }
-      } catch {
-        // Ignore parse errors
-      }
-    }
-
-    socket.onerror = (event) => {
-      console.error("[Deepgram] WebSocket error:", event)
-      onError?.(new Error("Deepgram WebSocket error"))
-    }
-
-    socket.onclose = (event) => {
-      isActive = false
-      // Log close reason for debugging
-      if (process.env.NODE_ENV === "development") {
-        console.log(`[Deepgram] WebSocket closed: code=${event.code}, reason=${event.reason || "none"}`)
-      }
-      // Cleanup media stream
-      if (mediaStream) {
-        mediaStream.getTracks().forEach((track) => track.stop())
-      }
-    }
-
-    // Return session control
-    return {
-      stop: () => {
-        isActive = false
-        mediaRecorder?.stop()
-        if (mediaStream) {
-          mediaStream.getTracks().forEach((track) => track.stop())
-        }
-        socket.close()
-      },
-      get isActive() {
-        return isActive
-      },
-    }
-  }
-}
-
+// The following providers were removed from this file as they were never used:
+// - DeepgramProvider (~190 lines) - Deepgram Nova-2 WebSocket streaming
+// - OpenAIRealtimeProvider (~450 lines) - OpenAI gpt-4o-transcribe
+// - arrayBufferToBase64 helper - Only used by OpenAI provider
+//
+// Google Cloud Speech-to-Text and Azure Speech Services are the only
+// cloud providers used in production. WebSpeechProvider is the free fallback.
 // =============================================================================
-// OPENAI REALTIME API PROVIDER
-// =============================================================================
-
-/**
- * OpenAI Realtime API Provider
- *
- * Uses OpenAI's Realtime Transcription API with gpt-4o-transcribe for
- * best-in-class accuracy on individual letters and spelling sequences.
- *
- * ## Key Implementation Details
- *
- * 1. **Audio Format**: PCM 16-bit mono at 24kHz
- *    - Browser AudioContext uses system sample rate (usually 44.1kHz or 48kHz)
- *    - We must RESAMPLE to 24kHz before sending to OpenAI
- *
- * 2. **Event Types** (for intent=transcription):
- *    - `transcription_session.created` - Session ready
- *    - `transcription_session.updated` - Config applied
- *    - `conversation.item.input_audio_transcription.delta` - Interim text
- *    - `conversation.item.input_audio_transcription.completed` - Final text
- *    - `conversation.item.input_audio_transcription.failed` - Transcription error
- *
- * 3. **Chunk Size**: ~40ms of audio per chunk (960 samples at 24kHz)
- *
- * @see https://platform.openai.com/docs/guides/realtime-transcription
- */
-class OpenAIRealtimeProvider implements ISpeechRecognitionProvider {
-  name: SpeechProvider = "openai-realtime"
-
-  /** Target sample rate required by OpenAI Realtime API */
-  private readonly TARGET_SAMPLE_RATE = 24000
-
-  /**
-   * Audio buffer size for ScriptProcessorNode.
-   * Smaller = lower latency, but more CPU usage.
-   * Must be power of 2: 256, 512, 1024, 2048, 4096
-   *
-   * 256 samples at 48kHz = ~5.3ms latency (too small, causes audio glitches)
-   * 512 samples at 48kHz = ~10.6ms latency (good balance)
-   * 1024 samples at 48kHz = ~21ms latency (safer for older devices)
-   */
-  private readonly BUFFER_SIZE = 512
-
-  isSupported(): boolean {
-    return typeof WebSocket !== "undefined" && !!this.getApiKey()
-  }
-
-  private getApiKey(): string | undefined {
-    if (typeof window !== "undefined") {
-      return process.env.NEXT_PUBLIC_OPENAI_API_KEY
-    }
-    return process.env.OPENAI_API_KEY
-  }
-
-  /**
-   * Resample audio from source sample rate to target sample rate.
-   * Uses linear interpolation for simplicity and low latency.
-   */
-  private resample(
-    inputData: Float32Array,
-    inputSampleRate: number,
-    outputSampleRate: number
-  ): Float32Array {
-    if (inputSampleRate === outputSampleRate) {
-      return inputData
-    }
-
-    const ratio = inputSampleRate / outputSampleRate
-    const outputLength = Math.floor(inputData.length / ratio)
-    const output = new Float32Array(outputLength)
-
-    for (let i = 0; i < outputLength; i++) {
-      const srcIndex = i * ratio
-      const srcIndexFloor = Math.floor(srcIndex)
-      const srcIndexCeil = Math.min(srcIndexFloor + 1, inputData.length - 1)
-      const t = srcIndex - srcIndexFloor
-
-      // Linear interpolation
-      output[i] = inputData[srcIndexFloor] * (1 - t) + inputData[srcIndexCeil] * t
-    }
-
-    return output
-  }
 
   /**
    * Convert Float32 audio samples to Int16 PCM.
@@ -984,15 +718,23 @@ declare global {
 // PROVIDER FACTORY
 // =============================================================================
 
-// Lazy import Azure provider to avoid circular dependencies
-// and keep the main bundle smaller when Azure isn't used
+// Lazy import providers to avoid circular dependencies
+// and keep the main bundle smaller when they aren't used
 let azureProviderModule: typeof import("./providers/azure-speech-provider") | null = null
+let googleProviderModule: typeof import("./providers/google-speech-provider") | null = null
 
 async function getAzureProvider() {
   if (!azureProviderModule) {
     azureProviderModule = await import("./providers/azure-speech-provider")
   }
   return azureProviderModule.getAzureSpeechProvider()
+}
+
+async function getGoogleProvider() {
+  if (!googleProviderModule) {
+    googleProviderModule = await import("./providers/google-speech-provider")
+  }
+  return googleProviderModule.getGoogleSpeechProvider()
 }
 
 // Singleton instances
@@ -1016,6 +758,57 @@ async function isAzureConfigured(): Promise<boolean> {
     return azureConfigured
   } catch {
     azureConfigured = false
+    return false
+  }
+}
+
+/**
+ * Check if Google Speech WebSocket server is available.
+ *
+ * The Google Speech provider uses a dedicated WebSocket server
+ * (speech-server) for real-time gRPC streaming. This function
+ * checks if that server is running and accepting connections.
+ */
+let googleConfigured: boolean | null = null
+
+async function isGoogleConfigured(): Promise<boolean> {
+  if (googleConfigured !== null) return googleConfigured
+
+  // Skip check on server-side
+  if (typeof window === "undefined") {
+    return false
+  }
+
+  try {
+    // Try to connect to the WebSocket server
+    const wsUrl = `ws://${window.location.hostname}:3002`
+    const ws = new WebSocket(wsUrl)
+
+    const result = await new Promise<boolean>((resolve) => {
+      const timeout = setTimeout(() => {
+        ws.close()
+        resolve(false)
+      }, 2000)
+
+      ws.onopen = () => {
+        clearTimeout(timeout)
+        ws.close()
+        resolve(true)
+      }
+
+      ws.onerror = () => {
+        clearTimeout(timeout)
+        resolve(false)
+      }
+    })
+
+    googleConfigured = result
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[SpeechRecognition] Google Speech server ${result ? "available" : "not available"} at ${wsUrl}`)
+    }
+    return result
+  } catch {
+    googleConfigured = false
     return false
   }
 }
@@ -1059,20 +852,31 @@ export function getSpeechProvider(): ISpeechRecognitionProvider {
  * Get the best available speech recognition provider (async version).
  *
  * This is the PRIMARY function for getting a speech provider.
- * It checks Azure first, which is the recommended provider for spelling games.
+ * It checks Google first (best for letter-by-letter detection), then Azure.
  *
  * Priority:
- * 1. Azure (if configured) — REQUIRED for letter spelling with phrase lists
- * 2. Web Speech API (fallback) — free but lower accuracy
+ * 1. Google (if configured) — BEST for letter-by-letter word timing
+ * 2. Azure (if configured) — Good accuracy with phrase list boosting
+ * 3. Web Speech API (fallback) — free but lower accuracy
  *
- * NOTE: Deepgram and OpenAI are NOT used. Azure provides word-level timing
- * which is essential for anti-cheat detection.
+ * NOTE: Deepgram and OpenAI are NOT used.
  *
  * @returns The best available provider
  * @throws Error if no provider is available
  */
 export async function getSpeechProviderAsync(): Promise<ISpeechRecognitionProvider> {
-  // Try Azure first (REQUIRED for letter spelling with anti-cheat)
+  // Try Google first (BEST for letter-by-letter detection)
+  if (await isGoogleConfigured()) {
+    const googleProvider = await getGoogleProvider()
+    if (googleProvider.isSupported()) {
+      if (process.env.NODE_ENV === "development") {
+        console.log("[SpeechRecognition] Using Google Cloud Speech-to-Text (letter-by-letter word timing)")
+      }
+      return googleProvider
+    }
+  }
+
+  // Try Azure second (good accuracy with phrase list boosting)
   if (await isAzureConfigured()) {
     const azureProvider = await getAzureProvider()
     if (azureProvider.isSupported()) {
@@ -1083,11 +887,11 @@ export async function getSpeechProviderAsync(): Promise<ISpeechRecognitionProvid
     }
   }
 
-  // Azure not available - warn and fall back to Web Speech API
+  // Neither Google nor Azure available - warn and fall back to Web Speech API
   console.warn(
-    "[SpeechRecognition] Azure not configured! " +
+    "[SpeechRecognition] Google and Azure not configured! " +
     "Falling back to Web Speech API. Anti-cheat word timing will not be available. " +
-    "Configure AZURE_SPEECH_KEY and AZURE_SPEECH_REGION for best experience."
+    "Configure Google Cloud Speech or Azure Speech Services for best experience."
   )
 
   // Fall back to Web Speech API only (no Deepgram/OpenAI)
@@ -1100,24 +904,34 @@ export async function getSpeechProviderAsync(): Promise<ISpeechRecognitionProvid
 
   throw new Error(
     "No speech recognition provider available. " +
-    "Please configure Azure Speech Services (AZURE_SPEECH_KEY and AZURE_SPEECH_REGION)."
+    "Please configure Google Cloud Speech or Azure Speech Services."
   )
 }
 
 /**
  * Get a specific speech recognition provider.
  *
- * NOTE: Azure is the PRIMARY provider. Web Speech API is fallback.
+ * NOTE: Google is the PRIMARY provider. Azure is secondary. Web Speech API is fallback.
  * Deepgram, OpenAI, and Whisper are NOT used in this application.
  *
  * @param provider - The provider to get
- * @returns The requested provider (or Promise for async providers like Azure)
+ * @returns The requested provider (or Promise for async providers like Google/Azure)
  * @throws Error if the provider is not available or not supported
  */
 export function getSpecificProvider(
   provider: SpeechProvider
 ): ISpeechRecognitionProvider | Promise<ISpeechRecognitionProvider> {
   switch (provider) {
+    case "google":
+      // Google requires async loading
+      return (async () => {
+        const googleProvider = await getGoogleProvider()
+        if (!googleProvider.isSupported()) {
+          throw new Error("Google Cloud Speech not configured. Set GOOGLE_CLOUD_PROJECT_ID, GOOGLE_CLOUD_CLIENT_EMAIL, and GOOGLE_CLOUD_PRIVATE_KEY.")
+        }
+        return googleProvider
+      })()
+
     case "azure":
       // Azure requires async loading
       return (async () => {
@@ -1143,7 +957,7 @@ export function getSpecificProvider(
     case "whisper":
       throw new Error(
         `Provider "${provider}" is not enabled. ` +
-        "This application uses Azure Speech Services exclusively."
+        "This application uses Google Cloud Speech or Azure Speech Services."
       )
 
     default:
@@ -1154,10 +968,10 @@ export function getSpecificProvider(
 /**
  * Check which providers are available.
  *
- * NOTE: Azure is the PRIMARY provider. Web Speech API is fallback.
+ * NOTE: Google is the PRIMARY provider. Azure is secondary. Web Speech API is fallback.
  * Other providers (Deepgram, OpenAI, Whisper) are NOT used.
  *
- * Azure availability is async and defaults to false in sync check.
+ * Google and Azure availability is async and defaults to false in sync check.
  * Use getAvailableProvidersAsync for accurate status.
  *
  * @returns Object with availability status for each provider
@@ -1166,9 +980,10 @@ export function getAvailableProviders(): Record<SpeechProvider, boolean> {
   if (!webSpeechProvider) webSpeechProvider = new WebSpeechProvider()
 
   return {
+    google: googleConfigured ?? false, // Requires async check for accurate result
     azure: azureConfigured ?? false, // Requires async check for accurate result
-    "openai-realtime": false, // Not used - Azure is primary
-    deepgram: false, // Not used - Azure is primary
+    "openai-realtime": false, // Not used
+    deepgram: false, // Not used
     "web-speech": webSpeechProvider.isSupported(),
     whisper: false, // Not implemented
   }
@@ -1177,9 +992,9 @@ export function getAvailableProviders(): Record<SpeechProvider, boolean> {
 /**
  * Check which providers are available (async version).
  *
- * This version accurately checks Azure availability.
+ * This version accurately checks Google and Azure availability.
  *
- * NOTE: Azure is the PRIMARY provider. Web Speech API is fallback.
+ * NOTE: Google is the PRIMARY provider. Azure is secondary. Web Speech API is fallback.
  * Other providers (Deepgram, OpenAI, Whisper) are NOT used.
  *
  * @returns Object with availability status for each provider
@@ -1187,12 +1002,16 @@ export function getAvailableProviders(): Record<SpeechProvider, boolean> {
 export async function getAvailableProvidersAsync(): Promise<Record<SpeechProvider, boolean>> {
   if (!webSpeechProvider) webSpeechProvider = new WebSpeechProvider()
 
-  const azureAvailable = await isAzureConfigured()
+  const [googleAvailable, azureAvailable] = await Promise.all([
+    isGoogleConfigured(),
+    isAzureConfigured(),
+  ])
 
   return {
+    google: googleAvailable,
     azure: azureAvailable,
-    "openai-realtime": false, // Not used - Azure is primary
-    deepgram: false, // Not used - Azure is primary
+    "openai-realtime": false, // Not used
+    deepgram: false, // Not used
     "web-speech": webSpeechProvider.isSupported(),
     whisper: false, // Not implemented
   }

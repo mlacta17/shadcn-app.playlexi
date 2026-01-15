@@ -696,6 +696,15 @@ export function validateAnswer(
     const lettersMatch = extractedLetters === normalizedCorrect
     const similarity = calculateSimilarity(extractedLetters, normalizedCorrect)
 
+    // DEBUG: Log the validation inputs and result
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        `[Validation] playerAnswer="${playerAnswer}", correctWord="${correctWord}", ` +
+        `extracted="${extractedLetters}", normalized="${normalizedCorrect}", ` +
+        `lettersMatch=${lettersMatch}, audioTiming=${JSON.stringify(_voiceOptions?.audioTiming)}`
+      )
+    }
+
     // =========================================================================
     // Anti-Cheat: LENIENT MODE
     // =========================================================================
