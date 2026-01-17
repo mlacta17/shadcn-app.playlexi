@@ -10,7 +10,7 @@
  * - Provides detailed feedback for wrong answers (future enhancement)
  *
  * ## Voice Input Considerations
- * Per PRD Section 12.1, voice input is "strict mode" — what Whisper hears
+ * Per PRD Section 12.1, voice input is "strict mode" — what the speech provider hears
  * is final. However, we still normalize for:
  * - Case differences (voice may produce "CAT" or "Cat")
  * - Extra spaces (recognition may add spaces between letters)
@@ -60,14 +60,16 @@ export interface ValidationResult {
 }
 
 // =============================================================================
-// ANTI-CHEAT (DISABLED)
+// ANTI-CHEAT NOTES
 // =============================================================================
-// Anti-cheat mechanisms were removed because:
-// 1. Azure returns identical transcripts for saying vs spelling
-// 2. Duration/interim checks punish fast spellers unfairly
-// 3. The game is self-correcting (cheaters don't learn)
+// Anti-cheat is now handled at the provider level (Google Cloud Speech-to-Text).
+// The provider uses multi-signal analysis:
+// 1. Word count vs letter count
+// 2. Single-letter word ratio
+// 3. Gaps between words
+// 4. Duration per letter (min 0.15s/letter)
 //
-// The code below is kept for reference but is no longer used.
+// See lib/providers/google-speech-provider.ts for implementation.
 // =============================================================================
 
 /**
@@ -321,7 +323,7 @@ const SPOKEN_LETTER_NAMES: Record<string, string> = {
 
   // === Common phrase fragments ===
   // These handle cases where speech API hears multi-word phrases
-  // when letters are spoken quickly. Based on real Deepgram output testing.
+  // when letters are spoken quickly. Based on real speech recognition output testing.
 
   // Two-letter combinations
   "are you": "ru", // "R U" heard as "are you"
@@ -434,11 +436,11 @@ export function isSpelledOut(input: string, correctWord: string): boolean {
   const parts = trimmed.split(/[\s,\.\-]+/).filter((p) => p.length > 0)
 
   // ==========================================================================
-  // AZURE/PROVIDER TRUST: Accept word-level output that matches correct answer
+  // PROVIDER TRUST: Accept word-level output that matches correct answer
   // ==========================================================================
-  // Modern speech providers (Azure, OpenAI) are smart enough to recognize when
+  // Speech providers like Google Cloud Speech-to-Text are smart enough to recognize when
   // someone is spelling a word letter-by-letter and return the assembled word.
-  // Example: User spells "C-A-T", Azure returns "Cat" (not "C A T")
+  // Example: User spells "C-A-T", Google may return "Cat" (not "C A T")
   //
   // If the transcript matches the correct word, TRUST IT as correctly spelled.
   // The provider wouldn't return "Cat" unless it heard letters being spelled.
@@ -599,9 +601,9 @@ export interface LetterTimingData {
 }
 
 /**
- * Audio-level timing data from speech recognition (Azure).
+ * Audio-level timing data from speech recognition (Google Cloud Speech-to-Text).
  *
- * Azure recognizes each spelled letter as a separate "word":
+ * Google recognizes each spelled letter as a separate "word":
  * - Spelling "C-A-T" → wordCount: 3, words: ["C", "A", "T"]
  * - Saying "cat" → wordCount: 1, words: ["cat"]
  *
@@ -610,7 +612,7 @@ export interface LetterTimingData {
  */
 export interface AudioTimingData {
   /**
-   * Number of separate words Azure detected.
+   * Number of separate words detected by speech provider.
    * - Spelling "C-A-T" → 3 (each letter is a "word")
    * - Saying "cat" → 1 (whole word as one)
    */
@@ -713,8 +715,8 @@ export function validateAnswer(
     // the audio pattern looks like spelling vs saying.
     //
     // We only reject if:
-    // - Azure detected a single word with 3+ letters
-    // - AND the word was spoken very quickly (< 1.0 second)
+    // - Provider detected a single word with 3+ letters
+    // - AND the word was spoken very quickly (< 0.15s per letter)
     //
     // This catches obvious cheating (quickly saying "cat") while
     // allowing legitimate fast spellers (who still take >1s to spell).

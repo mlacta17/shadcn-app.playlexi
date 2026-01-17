@@ -1,7 +1,7 @@
 # PlayLexi — Technical Architecture
 
-> **Version:** 1.7
-> **Last Updated:** December 21, 2025
+> **Version:** 1.8
+> **Last Updated:** January 17, 2026
 > **Status:** Final Draft
 
 ---
@@ -45,7 +45,7 @@
 | **ORM** | Drizzle ORM | Type-safe, lightweight, D1-compatible |
 | **Auth** | Auth.js (NextAuth v5) | OAuth providers, session management |
 | **Real-time** | Cloudflare Durable Objects | Native WebSocket support, stateful game sessions |
-| **Voice** | OpenAI Whisper (self-hosted on Cloudflare Workers AI) | High accuracy, edge deployment |
+| **Voice** | Google Cloud Speech-to-Text (via WebSocket server) | Best letter recognition, word-level timing for anti-cheat |
 | **Hosting** | Cloudflare Pages + Workers | Edge deployment, cost-effective, integrated stack |
 | **Storage** | Cloudflare R2 | S3-compatible, zero egress fees |
 | **Analytics** | PostHog | Privacy-focused, self-hostable |
@@ -72,6 +72,76 @@
 - One platform for compute, storage, database, and real-time
 - Simpler deployment and monitoring
 - `@cloudflare/next-on-pages` for Next.js compatibility
+
+### 1.3 Hybrid Cloud Architecture
+
+PlayLexi uses a **hybrid cloud architecture** with Cloudflare as the primary platform and Google Cloud for speech recognition.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         PRODUCTION ARCHITECTURE                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                        CLOUDFLARE EDGE                                │    │
+│  │                                                                       │    │
+│  │   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐              │    │
+│  │   │ Cloudflare  │    │  Workers    │    │     R2      │              │    │
+│  │   │   Pages     │    │  (Auth +    │    │  (Assets +  │              │    │
+│  │   │ (Next.js)   │    │  API Logic) │    │   Audio)    │              │    │
+│  │   └─────────────┘    └─────────────┘    └─────────────┘              │    │
+│  │         │                   │                  │                      │    │
+│  │         └───────────────────┼──────────────────┘                      │    │
+│  │                             │                                         │    │
+│  │   ┌─────────────┐    ┌─────────────┐                                  │    │
+│  │   │     D1      │    │   Durable   │                                  │    │
+│  │   │ (User Data) │    │   Objects   │                                  │    │
+│  │   │             │    │(Multiplayer)│                                  │    │
+│  │   └─────────────┘    └─────────────┘                                  │    │
+│  │                                                                       │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                             │                                                 │
+│                             │ WebSocket (WSS)                                 │
+│                             ▼                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                      GOOGLE CLOUD (us-central1)                       │    │
+│  │                                                                       │    │
+│  │   ┌─────────────────────────────────────────────────────────────┐    │    │
+│  │   │                    Cloud Run                                  │    │    │
+│  │   │                                                               │    │    │
+│  │   │   ┌─────────────┐         ┌─────────────┐                    │    │    │
+│  │   │   │  WebSocket  │  gRPC   │   Google    │                    │    │    │
+│  │   │   │   Server    │ ──────► │  Speech     │                    │    │    │
+│  │   │   │  (Node.js)  │         │  API        │                    │    │    │
+│  │   │   └─────────────┘         └─────────────┘                    │    │    │
+│  │   │                                                               │    │    │
+│  │   └─────────────────────────────────────────────────────────────┘    │    │
+│  │                                                                       │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Why Hybrid?**
+
+| Component | Platform | Rationale |
+|-----------|----------|-----------|
+| Frontend (Next.js) | Cloudflare Pages | Edge deployment, global CDN |
+| Database | Cloudflare D1 | Serverless SQL, integrated |
+| Multiplayer | Cloudflare Durable Objects | Native WebSocket support |
+| Static Assets | Cloudflare R2 | Zero egress fees |
+| **Speech Recognition** | **Google Cloud Run** | gRPC required (Cloudflare Workers cannot make outbound gRPC calls) |
+
+**Technical Limitation:**
+Cloudflare Workers cannot make outbound gRPC calls, which Google Speech-to-Text requires for real-time streaming. This necessitates a separate WebSocket server deployed on Google Cloud Run.
+
+**Cost Projections (Hybrid):**
+
+| Users | Cloud Run | Google Speech | Cloudflare | Total/month |
+|-------|-----------|---------------|------------|-------------|
+| 1K | ~$5 | ~$40 | Free tier | ~$45 |
+| 10K | ~$50 | ~$400 | ~$50 | ~$500 |
+| 100K | ~$500 | ~$4,000 | ~$500 | ~$5,000 |
 
 ### 1.3 Why These Choices
 
@@ -283,7 +353,7 @@ playlexi/
 │
 ├── hooks/                        # Custom React hooks
 │   ├── use-game-state.ts         # Game state management
-│   ├── use-voice-recognition.ts  # Whisper integration
+│   ├── use-speech-recognition.ts # Google Speech integration
 │   ├── use-timer.ts              # Countdown timer
 │   ├── use-socket.ts             # Real-time connection
 │   ├── use-audio.ts              # Audio playback
@@ -759,6 +829,83 @@ const [newGame] = await db
 | `game_players[game_id]` | Get all players in a game |
 | `notifications[user_id, read_at]` | Unread notifications count |
 
+### 4.6 Data Retention Strategy
+
+Based on research of competitive games (Valorant, Chess.com, Duolingo), PlayLexi uses a **hybrid retention model** combining permanent career stats with rolling game history.
+
+**Retention Tiers:**
+
+| Data Type | Retention | Storage | Rationale |
+|-----------|-----------|---------|-----------|
+| **User profiles** | Permanent | D1 | Core identity, never expires |
+| **Career stats** (total XP, games played, best scores) | Permanent | D1 | Like Chess.com - players expect lifetime stats |
+| **Streaks** | Permanent | D1 | Key engagement metric (Duolingo model) |
+| **Game summaries** (score, WPM, placement) | 2 years | D1 | Like Valorant match history |
+| **Raw game data** (word-by-word details) | 90 days | D1 | Enough for disputes, anti-cheat review |
+| **Live leaderboard** | Real-time | KV/Redis | Updated per game |
+| **Weekly leaderboard** | 1 week active | D1 | Duolingo-style weekly leagues |
+| **Monthly season leaderboard** | Archive after season | D1 | Competitive seasons |
+| **Archived games (90+ days)** | 2+ years | R2 (cold) | Compliance, rare access |
+
+**Storage Architecture:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         DATA RETENTION TIERS                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  HOT (0-72 hours)                                                            │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │  Cloudflare KV / Workers KV                                          │    │
+│  │  • Live leaderboard rankings (Redis Sorted Set equivalent)           │    │
+│  │  • Active session data                                               │    │
+│  │  • Real-time game state                                              │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                    │                                         │
+│  WARM (3-90 days)                  │                                         │
+│  ┌─────────────────────────────────▼───────────────────────────────────┐    │
+│  │  Cloudflare D1 (SQLite)                                              │    │
+│  │  • Recent game records with full details                             │    │
+│  │  • User profiles and career stats                                    │    │
+│  │  • Weekly/monthly leaderboard snapshots                              │    │
+│  │  • Friend relationships and notifications                            │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                    │                                         │
+│  COLD (90+ days)                   │                                         │
+│  ┌─────────────────────────────────▼───────────────────────────────────┐    │
+│  │  Cloudflare R2 (Object Storage)                                      │    │
+│  │  • Archived game data (JSON exports)                                 │    │
+│  │  • Historical leaderboard snapshots                                  │    │
+│  │  • Compliance/audit data                                             │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Seasonal Model (Inspired by Valorant/Duolingo):**
+
+| Period | Reset | What Persists |
+|--------|-------|---------------|
+| **Weekly** | Every Sunday | Leaderboard position resets, XP persists |
+| **Monthly Season** | 1st of month | Season rank archived, career stats persist |
+| **Annual** | Never | Career stats never reset |
+
+**Why This Model:**
+
+1. **Engagement through resets**: Weekly leaderboard resets (like Duolingo) give new players a chance to compete
+2. **Long-term investment**: Permanent career stats (like Chess.com) reward dedication
+3. **Storage efficiency**: 90-day raw data retention reduces D1 costs
+4. **GDPR compliance**: Clear retention periods, data export available
+
+**Migration/Archival Process:**
+
+```sql
+-- Nightly job: Archive games older than 90 days
+-- 1. Export to R2 as JSON
+-- 2. Delete raw game_rounds data
+-- 3. Keep game summary in games table
+```
+
 ---
 
 ## 5. API Routes
@@ -1077,72 +1224,106 @@ async alarm() {
 
 ### 8.1 Architecture Overview
 
-The voice input system follows a **single-hook, provider-abstraction** pattern:
+The voice input system follows a **single-hook, provider-abstraction** pattern with Google Cloud Speech-to-Text as the primary provider.
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                   useSpeechRecognition                       │
-│                          (hook)                              │
-│                                                              │
-│  Responsibilities:                                           │
-│  • Request microphone permission                             │
-│  • Create MediaStream                                        │
-│  • Create AnalyserNode (for visualization)                   │
-│  • Select speech recognition provider (Deepgram/Web Speech)  │
-│  • Return real-time transcript                               │
-│                                                              │
-│  Returns:                                                    │
-│  {                                                           │
-│    analyserNode,      // For VoiceWaveform                   │
-│    isRecording,       // UI state                            │
-│    transcript,        // Real-time result                    │
-│    provider,          // Current provider info               │
-│    startRecording,    // Action                              │
-│    stopRecording,     // Action                              │
-│  }                                                           │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│               SpeechRecognitionService                       │
-│                    (lib/speech-recognition-service.ts)       │
-│                                                              │
-│  Provider Selection:                                         │
-│  • Deepgram (~95% accuracy, $0.0043/min) — if API key set   │
-│  • Web Speech API (~70-80%, free) — fallback                │
-└─────────────────────────────────────────────────────────────┘
-                              │
-              ┌───────────────┴───────────────┐
-              │                               │
-              ▼                               ▼
-┌──────────────────────┐        ┌──────────────────────────┐
-│    VoiceWaveform     │        │      SpeechInput         │
-│   (presentational)   │        │    (presentational)      │
-│                      │        │                          │
-│  • Takes analyserNode│        │  • Takes props from hook │
-│  • Draws bars        │        │  • Shows record button   │
-│  • No other logic    │        │  • Shows transcript      │
-│                      │        │  • Includes waveform     │
-└──────────────────────┘        └──────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          BROWSER                                             │
+│                                                                              │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                     useSpeechRecognition (Hook)                         │ │
+│  │                                                                         │ │
+│  │  Responsibilities:                                                      │ │
+│  │  • Request microphone permission                                        │ │
+│  │  • Create MediaStream + AudioContext                                    │ │
+│  │  • Create AnalyserNode (for visualization)                              │ │
+│  │  • Convert Float32 audio to LINEAR16                                    │ │
+│  │  • Manage WebSocket connection to speech server                         │ │
+│  │  • Track word timing for anti-cheat                                     │ │
+│  │  • Return real-time transcript + anti-cheat metrics                     │ │
+│  │                                                                         │ │
+│  │  Returns: { analyserNode, isRecording, transcript, provider,            │ │
+│  │            startRecording, stopRecording (async), speechDurationMs }    │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                         │
+│                                    ▼                                         │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │              SpeechRecognitionService (Provider Factory)                │ │
+│  │                    lib/speech-recognition-service.ts                    │ │
+│  │                                                                         │ │
+│  │  Provider Priority:                                                     │ │
+│  │  1. Google Cloud Speech-to-Text (if speech server running)              │ │
+│  │  2. Web Speech API (browser fallback, no anti-cheat)                    │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                         │
+│                 ┌──────────────────┴──────────────────┐                      │
+│                 ▼                                     ▼                      │
+│  ┌──────────────────────────┐         ┌──────────────────────────┐          │
+│  │   GoogleSpeechProvider   │         │   WebSpeechProvider      │          │
+│  │   (lib/providers/        │         │   (fallback, inline)     │          │
+│  │    google-speech-        │         │   - Free                 │          │
+│  │    provider.ts)          │         │   - ~70-80% accuracy     │          │
+│  │   - WebSocket client     │         │   - NO word timing       │          │
+│  │   - LINEAR16 encoding    │         │   - NO anti-cheat        │          │
+│  │   - Word timing parsing  │         └──────────────────────────┘          │
+│  │   - Anti-cheat analysis  │                                               │
+│  └──────────────────────────┘                                               │
+│                 │                                                            │
+│                 │ WebSocket (ws://localhost:3002)                            │
+│                 │ - Audio: Binary frames (LINEAR16, 16kHz)                   │
+│                 │ - Control: JSON messages (start/stop)                      │
+│                 │ - Results: JSON (interim/final with word timing)           │
+│                 ▼                                                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       SPEECH SERVER (Node.js)                                │
+│                          speech-server/                                      │
+│                                                                              │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                    index.ts (WebSocket Server)                          │ │
+│  │                                                                         │ │
+│  │  • Accepts WebSocket connections on port 3002                           │ │
+│  │  • Creates gRPC streaming session per connection                        │ │
+│  │  • Forwards audio to Google Speech API                                  │ │
+│  │  • Streams results back to client                                       │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                         │
+│                                    ▼                                         │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │               google-streaming.ts (gRPC Client)                         │ │
+│  │                                                                         │ │
+│  │  • Creates @google-cloud/speech client                                  │ │
+│  │  • Bidirectional gRPC streaming                                         │ │
+│  │  • Speech context: Letter names + phonetic pronunciations               │ │
+│  │  • Word-level timestamps (enableWordTimeOffsets: true)                  │ │
+│  │  • Model: "latest_short" with enhanced=true                             │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                         │
+│                                    │ gRPC (bidirectional streaming)          │
+│                                    ▼                                         │
+│              ┌──────────────────────────────────────┐                        │
+│              │   Google Cloud Speech-to-Text API    │                        │
+│              └──────────────────────────────────────┘                        │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Why this pattern:**
+**Why this architecture:**
 
 | Principle | Implementation |
 |-----------|----------------|
-| Single Source of Truth | Hook owns entire audio pipeline |
-| Provider Abstraction | Easy to switch between Deepgram/Web Speech API |
-| Separation of Concerns | Visualization separate from transcription |
-| Testability | Each piece testable in isolation |
-| Scalability | Deepgram for production, Web Speech for dev/fallback |
+| Single Source of Truth | Hook owns entire audio pipeline, refs track anti-cheat state |
+| Provider Abstraction | Easy to switch between Google/Web Speech, add new providers |
+| Separation of Concerns | Visualization (waveform) separate from transcription |
+| Anti-Cheat Integrity | Server-side word timing analysis, cannot be bypassed |
+| Real-Time Feedback | ~100-250ms latency via gRPC streaming |
 
-### 8.2 Provider Abstraction (lib/speech-recognition-service.ts)
-
-The speech recognition service provides a unified interface for multiple providers:
+### 8.2 Provider Selection (lib/speech-recognition-service.ts)
 
 ```typescript
-// Provider types
-export type SpeechProvider = "web-speech" | "deepgram" | "whisper"
+// Provider types - simplified after removing Azure/Deepgram
+export type SpeechProvider = "web-speech" | "google"
 
 // Provider interface
 export interface ISpeechRecognitionProvider {
@@ -1151,149 +1332,231 @@ export interface ISpeechRecognitionProvider {
   start: (config: SpeechRecognitionConfig) => Promise<SpeechRecognitionSession>
 }
 
-// Get best available provider (Deepgram if API key set, else Web Speech API)
-export function getSpeechProvider(): ISpeechRecognitionProvider
+// Async provider selection (checks Google server availability)
+export async function getSpeechProviderAsync(): Promise<ISpeechRecognitionProvider>
+// Returns Google if speech server is running, else Web Speech API
 ```
 
-### 8.3 Deepgram Provider (Recommended)
+**Provider Priority:**
+1. **Google Cloud Speech-to-Text** (if `npm run dev:speech` is running)
+2. **Web Speech API** (free fallback, no anti-cheat)
 
-Deepgram provides ~95% accuracy with keyword boosting for letter recognition:
+### 8.3 Google Speech Provider (Primary)
 
-- **Cost**: $0.0043 per minute (~$0.0007 per 10-second spelling round)
-- **Features**: Real-time WebSocket streaming, keyword boosting for letters
-- **Setup**: Set `NEXT_PUBLIC_DEEPGRAM_API_KEY` in `.env.local`
+Located at `lib/providers/google-speech-provider.ts`:
 
+**Features:**
+- Real-time streaming via WebSocket → gRPC
+- Word-level timestamps (critical for anti-cheat)
+- Speech context boosting for letter names
+- ~100-250ms latency
+- Multi-signal anti-cheat analysis
+
+**Audio Configuration:**
 ```typescript
-// Keywords boosted for letter recognition
-export const SPELLING_KEYWORDS: string[] = [
-  // Single letters
-  "a", "b", "c", /* ... */
-  // Spoken letter names
-  "ay", "bee", "see", /* ... */
-  // NATO phonetic alphabet
-  "alpha", "bravo", "charlie", /* ... */
-]
+const AUDIO_CONFIG = {
+  sampleRate: 16000,    // 16kHz as required by Google
+  channelCount: 1,       // Mono
+  chunkIntervalMs: 100,  // Send audio every 100ms for low latency
+}
+```
+
+**Speech Context (in speech-server/google-streaming.ts):**
+```typescript
+const SPEECH_CONTEXT = {
+  phrases: [
+    // Individual letters
+    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+    "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+    // Phonetic names
+    "ay", "bee", "cee", "dee", "ee", "eff", "gee", "aitch",
+    "eye", "jay", "kay", "ell", "em", "en", "oh", "pee",
+    "cue", "are", "ess", "tee", "you", "vee",
+    "double you", "double-u", "ex", "why", "zee", "zed",
+  ],
+  boost: 20,
+}
 ```
 
 ### 8.4 Web Speech API Provider (Fallback)
 
-Free browser-based fallback when Deepgram is not configured:
+Built into `lib/speech-recognition-service.ts` as `WebSpeechProvider`:
 
 - **Cost**: Free
 - **Accuracy**: ~70-80% (lower for letter-by-letter spelling)
-- **Features**: Real-time, continuous recognition
-- **Limitation**: No keyword boosting
+- **Word Timing**: ❌ NOT supported
+- **Anti-Cheat**: ❌ NOT available (no word timing data)
+- **Use Case**: Development without Google credentials, offline fallback
 
-### 8.5 useSpeechRecognition Hook
+**Warning logged when falling back:**
+```
+[SpeechRecognition] Google Speech server not available!
+Falling back to Web Speech API. Anti-cheat word timing will NOT be available.
+Run 'npm run dev:speech' to start the Google Speech server.
+```
+
+### 8.5 Anti-Cheat: Spelling vs Saying Detection
+
+The anti-cheat system uses **multiple signals** from Google's word-level timestamps to detect if a player spelled the word or just said it.
+
+**Signals Analyzed:**
+
+| Signal | Spelling Pattern | Saying Pattern |
+|--------|------------------|----------------|
+| **Word count** | Multiple (one per letter) | Single word |
+| **Single-letter word ratio** | High (>50%) | Low |
+| **Gaps between words** | 80-500ms pauses | No gaps |
+| **Duration per letter** | ≥0.15s/letter | <0.10s/letter |
+
+**Implementation (in google-speech-provider.ts lines 313-457):**
 
 ```typescript
-// hooks/use-speech-recognition.ts
+// Key thresholds (empirically derived from testing)
+const MIN_SECONDS_PER_LETTER = 0.15  // Minimum time per letter for spelling
 
+// Examples from testing:
+// SPELLED words:
+//   "cat" (3 letters): 1.50s → 0.50s/letter ✅
+//   "garden" (6 letters): 1.80s → 0.30s/letter ✅
+// SAID words (should be rejected):
+//   "dangerous" (9 letters): 0.80s → 0.09s/letter ❌
+//   "beautiful" (9 letters): 0.60s → 0.07s/letter ❌
+```
+
+**Verdict Logic:**
+```typescript
+if (wordCount === 0) {
+  isSpelledOut = true  // No words detected - trust user
+} else if (isSingleWordTooFast) {
+  isSpelledOut = false  // Single word spoken too fast - REJECT
+} else if (hasMultipleWords && (hasMostlySingleLetters || wordCountMatchesLetters)) {
+  isSpelledOut = true  // Multiple words with spelling characteristics - PASS
+} else if (hasMultipleWords && hasSignificantGaps) {
+  isSpelledOut = true  // Multiple words with pauses - PASS
+} else if (wordCount === 1 && letterCount >= 3) {
+  isSpelledOut = durationPerLetter >= MIN_SECONDS_PER_LETTER  // Check timing
+} else {
+  isSpelledOut = true  // Default: trust user
+}
+```
+
+### 8.6 useSpeechRecognition Hook
+
+Located at `hooks/use-speech-recognition.ts`:
+
+```typescript
 export interface UseSpeechRecognitionReturn {
   isRecording: boolean
   startRecording: () => Promise<void>
-  stopRecording: () => void
-  analyserNode: AnalyserNode | null  // For VoiceWaveform
-  transcript: string                  // Real-time transcript
-  provider: SpeechProvider | null     // Current provider
+  stopRecording: () => Promise<StopRecordingMetrics>  // Now async!
+  transcript: string
+  clearTranscript: () => void
+  analyserNode: AnalyserNode | null
+  isSupported: boolean
+  provider: SpeechProvider | null
+  error: Error | null
+  speechDurationMs: number
+  getCurrentSpeechDuration: () => number
+  interimResultCount: number
 }
 
-export function useSpeechRecognition(options?: {
-  spellingMode?: boolean  // Enable spelling optimizations
-  onTranscript?: (text: string) => void
-}): UseSpeechRecognitionReturn
+export interface StopRecordingMetrics {
+  durationMs: number
+  interimCount: number
+  letterTimings: LetterTiming[]
+  averageLetterGapMs: number
+  looksLikeSpelling: boolean
+  // Audio-level timing (from Google - MORE RELIABLE)
+  audioWordTimings: AudioWordTiming[]
+  audioWordCount: number
+  avgAudioGapSec: number
+  looksLikeSpellingFromAudio: boolean  // PRIMARY anti-cheat signal
+}
 ```
 
-### 8.6 SpeechInput Component (Presentational — ✅ Done)
+**Critical: Async stopRecording()**
 
-The `SpeechInput` component at `components/ui/speech-input.tsx` is **presentational only**:
-
-- Accepts all props from parent (controlled component pattern)
-- Renders record/stop buttons, transcript display, helper buttons (Sentence/Dictionary/Play)
-- Optionally renders `VoiceWaveform` when `analyserNode` prop is provided
-- No hooks or state management internally
+The `stopRecording()` method is now async and waits for the FINAL result from Google before returning metrics. This is essential because word timing data only arrives with the final result.
 
 ```typescript
-// Usage with useSpeechRecognition hook
-function GameVoiceInput({ onSubmit, disabled }: GameVoiceInputProps) {
-  const {
-    analyserNode,
-    isRecording,
-    transcript,
-    startRecording,
-    stopRecording,
-  } = useSpeechRecognition({ spellingMode: true })
+const cleanup = React.useCallback(async (): Promise<StopRecordingMetrics> => {
+  // Stop the session - triggers Google to send FINAL result
+  if (sessionRef.current) {
+    sessionRef.current.stop()
+  }
 
-  return (
-    <SpeechInput
-      state={isRecording ? "recording" : "default"}
-      analyserNode={analyserNode}
-      inputText={formatTranscriptForDisplay(transcript)}  // Shows "R-U-N" instead of "are you in"
-      onRecordClick={startRecording}
-      onStopClick={stopRecording}
-    />
-  )
-}
+  // Wait for FINAL result (with 2s timeout)
+  if (!finalResultReceived) {
+    await new Promise<void>((resolve) => {
+      finalResultResolverRef.current = resolve
+      setTimeout(() => resolve(), 2000)  // Timeout
+    })
+  }
+
+  // Now we have word timing data for anti-cheat
+  return metrics
+}, [])
 ```
 
-### 8.7 VoiceWaveform Component (Presentational — ✅ Done)
+### 8.7 UI Components (Unchanged)
 
-The `VoiceWaveform` component is **purely presentational**:
+| Component | Location | Responsibility |
+|-----------|----------|----------------|
+| `VoiceWaveform` | `components/ui/voice-waveform.tsx` | Draw frequency bars from AnalyserNode |
+| `SpeechInput` | `components/ui/speech-input.tsx` | Presentational voice input with waveform |
 
-- Located at `components/ui/voice-waveform.tsx`
-- Takes only an `AnalyserNode` prop
-- Draws frequency bars on a canvas
-- Has no knowledge of recording or transcription
-- Respects `prefers-reduced-motion` for accessibility
-- **Integrated into SpeechInput**: Pass `analyserNode` prop to SpeechInput to auto-render waveform
+Both components are purely presentational and unchanged from previous implementation.
 
-This separation allows `VoiceWaveform` to be reused in other contexts (e.g., audio playback visualization) without modification.
+### 8.8 Speech Server
 
-### 8.8 Component Relationships
+Located at `speech-server/`:
 
-| Component/Hook | Type | Responsibility | Status |
-|----------------|------|----------------|--------|
-| `useSpeechRecognition` | Hook | Provider selection, audio pipeline | ✅ Done |
-| `SpeechRecognitionService` | Service | Provider abstraction (Deepgram/Web Speech) | ✅ Done |
-| `VoiceWaveform` | UI Component | Draw frequency bars from AnalyserNode | ✅ Done |
-| `SpeechInput` | UI Component | Presentational voice input with waveform + helper buttons | ✅ Done |
+| File | Purpose |
+|------|---------|
+| `index.ts` | WebSocket server (port 3002), connection handling |
+| `google-streaming.ts` | gRPC client, streaming session management |
+| `types.ts` | TypeScript interfaces for messages |
+
+**Running:**
+```bash
+# Development (both servers)
+npm run dev:all
+
+# Or separately
+npm run dev          # Next.js on port 3000
+npm run dev:speech   # Speech server on port 3002
+```
+
+**Environment Variables (in .env.local):**
+```bash
+GOOGLE_CLOUD_PROJECT_ID=your-project-id
+GOOGLE_CLOUD_CLIENT_EMAIL=service-account@project.iam.gserviceaccount.com
+GOOGLE_CLOUD_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n..."
+```
 
 ### 8.9 Error Handling
 
 | Scenario | Handling |
 |----------|----------|
-| Microphone permission denied | Show error, suggest keyboard input |
-| No audio detected | "We didn't hear anything. Please try again." |
-| Whisper API failure | Retry with exponential backoff, then show error |
-| Network timeout | 10-second timeout, then show error |
+| Speech server not running | Fall back to Web Speech API with warning |
+| WebSocket connection timeout | Error: "Is the speech server running? (npm run dev:speech)" |
+| Microphone permission denied | Error passed to onError callback |
+| Google API error | Error forwarded to client via WebSocket |
+| No audio detected | Empty transcript returned (not an error) |
 
-### 8.10 Recommended Input Strategy: Hybrid Approach
+### 8.10 Production Deployment
 
-> **See ADR-008** for full details on the hybrid input system.
+For production, the speech server must be deployed to a platform that supports:
+1. WebSocket connections
+2. Outbound gRPC calls to Google
 
-**Current Status (January 2026):**
-- Deepgram integration is complete and functional
-- Letter-by-letter spelling accuracy is limited by fundamental speech recognition constraints
-- Keyboard input (`SpeechInput mode="keyboard"`) is already implemented
+**Recommended: Google Cloud Run**
+- Native gRPC support
+- WebSocket support with connection timeout configuration
+- Auto-scaling based on connections
+- Min instances = 1 to avoid cold starts
 
-**Recommended Path Forward:**
-
-| Input Mode | Use Case | Matching |
-|------------|----------|----------|
-| **Keyboard** (default) | Competitive play, leaderboards | Strict (exact match) |
-| **Voice** (optional) | Casual play, accessibility | Generous (spelled OR spoken word) |
-
-**Why Hybrid:**
-1. Letter-by-letter voice spelling ("C-A-T") has ~70-80% practical accuracy
-2. Keyboard provides 100% accuracy for competitive integrity
-3. Voice remains available for accessibility and fun factor
-4. Player choice respects different preferences and contexts
-
-**Implementation Priority:**
-1. Keep current Deepgram integration for continued testing
-2. Implement input mode selector before game start
-3. Add generous voice matching (accept spelled letters OR whole word)
-4. Segment leaderboards by input mode if needed
+See Section 1.3 (Hybrid Cloud Architecture) for full deployment details
 
 ---
 
@@ -2571,6 +2834,175 @@ function validateVoiceAnswer(transcript: string, targetWord: string): boolean {
 
 ---
 
+### ADR-009: Google Cloud Speech-to-Text over Deepgram
+
+| Field | Value |
+|-------|-------|
+| **Date** | January 17, 2026 |
+| **Status** | Accepted |
+| **Deciders** | Project team |
+
+**Context:** We need a speech recognition provider that excels at letter-by-letter spelling detection AND provides word-level timestamps for anti-cheat verification.
+
+**Alternatives Evaluated:**
+
+| Provider | Cost/min | Letter Accuracy | Word Timing | Anti-Cheat | Verdict |
+|----------|----------|-----------------|-------------|------------|---------|
+| Google Cloud | $0.016 | Excellent | ✅ Yes | ✅ Yes | **Selected** |
+| Deepgram | $0.0077 | Good | ✅ Yes | ✅ Yes | Too aggressive word interpretation |
+| Azure Speech | $0.016 | Good | ✅ Yes | ✅ Yes | Removed after testing |
+| Web Speech API | Free | Poor | ❌ No | ❌ No | Fallback only |
+
+**Decision:** Use Google Cloud Speech-to-Text as the primary provider via a dedicated WebSocket server.
+
+**Rationale:**
+1. **Best letter recognition** — Google's `latest_short` model with speech context boosting accurately recognizes individual letters
+2. **Word-level timestamps** — Enables reliable anti-cheat by measuring actual speech duration per letter
+3. **gRPC streaming** — Sub-250ms latency for real-time feedback
+4. **Speech context** — Phrase list boosting improves recognition of letter names ("ay", "bee", "cee")
+
+**Consequences:**
+- Requires a separate WebSocket server (Next.js App Router doesn't support WebSockets)
+- Hybrid cloud architecture needed (Cloudflare Workers can't make outbound gRPC calls)
+- Higher cost than Deepgram (~2x), but better accuracy justifies it
+- More operational complexity (two services to deploy)
+
+---
+
+### ADR-010: Per-Letter Duration Anti-Cheat
+
+| Field | Value |
+|-------|-------|
+| **Date** | January 17, 2026 |
+| **Status** | Accepted |
+| **Deciders** | Project team |
+
+**Context:** Players were bypassing anti-cheat by saying words quickly. A fixed 0.8s duration threshold didn't scale with word length — "dangerous" (9 letters, 0.80s) passed while being said, not spelled.
+
+**Decision:** Implement per-letter duration checking with a minimum threshold of **0.15 seconds per letter**.
+
+**Empirical Data:**
+
+| Word | Letters | Duration | Per-Letter | Result |
+|------|---------|----------|------------|--------|
+| "cat" (spelled) | 3 | 1.50s | 0.50s/letter | ✅ Pass |
+| "garden" (spelled) | 6 | 1.80s | 0.30s/letter | ✅ Pass |
+| "dangerous" (said) | 9 | 0.80s | 0.09s/letter | ❌ Reject |
+| "beautiful" (said) | 9 | 0.60s | 0.07s/letter | ❌ Reject |
+
+**Threshold Derivation:**
+- Fastest observed spelling: ~0.20s/letter (very fast spellers)
+- Typical saying speed: ~0.08-0.10s/letter
+- Chosen threshold: **0.15s/letter** (generous buffer for fast spellers)
+
+**Implementation:**
+```typescript
+const MIN_SECONDS_PER_LETTER = 0.15
+const expectedMinDuration = letterCount * MIN_SECONDS_PER_LETTER
+const isSingleWordTooFast = wordCount === 1 &&
+  letterCount >= 3 &&
+  totalDuration < expectedMinDuration
+```
+
+**Consequences:**
+- More reliable detection across all word lengths
+- May occasionally reject very fast legitimate spellers (rare)
+- Requires final result before metrics (stopRecording is now async)
+
+---
+
+### ADR-011: Merriam-Webster API Integration
+
+| Field | Value |
+|-------|-------|
+| **Date** | January 17, 2026 |
+| **Status** | Proposed |
+| **Deciders** | Project team |
+
+**Context:** Need authoritative word data (definitions, example sentences, audio pronunciations) for the spelling game.
+
+**Decision:** Use Merriam-Webster Learner's Dictionary API with pre-caching strategy.
+
+**Why Learner's Dictionary (not Collegiate):**
+
+| Feature | Collegiate | Learner's | Decision |
+|---------|------------|-----------|----------|
+| Target audience | Native speakers | ESL learners | Learner's (simpler definitions) |
+| Example sentences | 113,000 | 160,000+ | Learner's |
+| Core vocabulary flagged | No | Yes (3,000 words) | Learner's |
+| Definition clarity | Technical | Simplified | Learner's (better for kids) |
+
+**Integration Architecture:**
+
+```
+DEVELOPMENT PHASE (Seeding):
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                  │
+│  scripts/seed-words.ts                                           │
+│         │                                                        │
+│         │ 1. Query MW API (1000/day free)                        │
+│         ▼                                                        │
+│  Merriam-Webster Learner's API                                   │
+│         │                                                        │
+│         │ 2. Parse response (definition, sentences, audio URL)   │
+│         ▼                                                        │
+│  ┌──────────────┐    ┌──────────────┐                            │
+│  │ Cloudflare   │    │ Cloudflare   │                            │
+│  │ D1 (words)   │    │ R2 (audio)   │                            │
+│  │              │    │              │                            │
+│  │ • word       │    │ • MP3 files  │                            │
+│  │ • definition │    │ • By word ID │                            │
+│  │ • sentences  │    │              │                            │
+│  │ • difficulty │    │              │                            │
+│  └──────────────┘    └──────────────┘                            │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+
+PRODUCTION PHASE (Gameplay):
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                  │
+│  Player starts game                                              │
+│         │                                                        │
+│         │ Query cached data (ZERO MW API calls)                  │
+│         ▼                                                        │
+│  ┌──────────────┐    ┌──────────────┐                            │
+│  │ Cloudflare   │    │ Cloudflare   │                            │
+│  │ D1 (words)   │    │ R2 (audio)   │                            │
+│  └──────────────┘    └──────────────┘                            │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**What MW API Provides:**
+
+| Data | Available | Notes |
+|------|-----------|-------|
+| Definition | ✅ Yes | Multiple senses, part of speech |
+| Example sentences | ✅ Yes | 160,000+ |
+| Audio pronunciation | ✅ Yes | MP3/WAV/OGG (single word only) |
+| Etymology | ✅ Yes | Word origin |
+| Difficulty indicator | ⚠️ Partial | Core vocabulary flagged (3,000 words) |
+
+**What We Must Build:**
+
+| Data | Status | Approach |
+|------|--------|----------|
+| Difficulty tier (1-7) | Build ourselves | Word length + syllables + frequency corpus |
+| Sentence audio | Build ourselves | Browser `speechSynthesis` API or Google TTS |
+| Word of the Day | Build ourselves | Maintain curated list |
+
+**Pricing:**
+- Free tier: 1,000 queries/day (sufficient for seeding)
+- Commercial: Contact for quote (if >1,000/day needed)
+
+**Consequences:**
+- Must maintain word database and seeding scripts
+- Audio files cached in R2 (storage cost)
+- Difficulty classification is manual effort
+- Branding requirement: Must display MW logo
+
+---
+
 ### Template for New ADRs
 
 When adding a new decision, copy this template:
@@ -2613,7 +3045,7 @@ This approach unblocks development immediately and isolates problems. The archit
 | **Database** | Local SQLite via `better-sqlite3` | Cloudflare D1 | After Phase 2 tested |
 | **Auth** | Mock auth (hardcoded dev user) | Google + Apple OAuth | After Phase 2 tested |
 | **Words** | Hardcoded seed data (50+ words) | Merriam-Webster API seeding | Before Phase 3 |
-| **Voice AI** | Browser SpeechRecognition API | Cloudflare Workers AI (Whisper) | After Phase 2 tested |
+| **Voice AI** | Google Speech via local WebSocket server | Google Speech via Cloud Run | After Phase 2 tested |
 | **Real-time** | Local state (no WebSocket) | Cloudflare Durable Objects | Phase 4 |
 
 **Why this works:**

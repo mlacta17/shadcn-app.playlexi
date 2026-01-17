@@ -50,7 +50,7 @@ export interface LetterTiming {
 }
 
 /**
- * Audio-level word timing from Deepgram.
+ * Audio-level word timing from Google Cloud Speech-to-Text.
  * This is the RELIABLE anti-cheat signal because it's based on actual audio,
  * not transcript arrival time (which depends on provider buffering).
  *
@@ -77,11 +77,11 @@ export interface AudioWordTiming {
  * ## Two Detection Methods (Transcript-based and Audio-based)
  *
  * ### 1. Transcript Timing (Less Reliable)
- * Tracks when letters appear in the transcript. Problem: Azure/OpenAI buffer
+ * Tracks when letters appear in the transcript. Problem: Some providers buffer
  * spelled letters and return complete words, so all letters appear at once.
  *
- * ### 2. Audio Word Timing (More Reliable) - NEW
- * Uses Deepgram's word-level timestamps from the actual audio.
+ * ### 2. Audio Word Timing (More Reliable)
+ * Uses Google Cloud Speech-to-Text's word-level timestamps from the actual audio.
  * - Spelling produces multiple word segments with gaps
  * - Saying produces one continuous word segment
  *
@@ -114,7 +114,7 @@ export interface StopRecordingMetrics {
   // ==========================================================================
 
   /**
-   * Word-level timing from actual audio (Deepgram only).
+   * Word-level timing from actual audio (Google Cloud Speech-to-Text).
    * Each entry represents a recognized word/letter with its audio timestamps.
    * Empty array if provider doesn't support word-level timing.
    */
@@ -205,18 +205,16 @@ export interface UseSpeechRecognitionReturn {
  * Speech recognition hook with provider abstraction.
  *
  * Automatically selects the best available provider:
- * 1. Azure Speech Services (if configured) — ~95-98% accuracy with phrase list boosting
- * 2. OpenAI Realtime (if API key configured) — good WER but semantic interpretation
- * 3. Deepgram (if API key configured) — ~95% accuracy for words
- * 4. Web Speech API (fallback) — ~70-80% accuracy
+ * 1. Google Cloud Speech-to-Text (if speech server running) — ~95-98% accuracy with speech context boosting
+ * 2. Web Speech API (fallback) — ~70-80% accuracy, no anti-cheat support
  *
  * ## Features
  * - Real-time transcript updates with optional throttling
  * - Audio visualization via analyserNode (shared with provider)
- * - Automatic keyword boosting for spelling (Azure phrase lists, Deepgram keywords)
+ * - Automatic keyword boosting for spelling (Google speech context)
  * - Graceful fallback between providers
  * - Zero duplicate media streams (reuses provider's audio pipeline)
- * - Async provider detection (Azure requires token endpoint check)
+ * - Async provider detection (Google requires WebSocket server check)
  *
  * ## Usage
  * ```tsx
@@ -294,13 +292,12 @@ export function useSpeechRecognition(
   const letterTimingsRef = React.useRef<LetterTiming[]>([])
   const lastLetterCountRef = React.useRef<number>(0)
 
-  // Audio word timing tracking (Google/Azure - MORE RELIABLE than transcript timing)
+  // Audio word timing tracking (Google - MORE RELIABLE than transcript timing)
   // This tracks the actual audio timestamps, not transcript arrival
   const audioWordTimingsRef = React.useRef<AudioWordTiming[]>([])
 
   // Provider-based anti-cheat detection
-  // Google: Uses multi-signal analysis (word count, gaps, duration)
-  // Azure: Uses Lexical field (if Azure is used as fallback)
+  // Google uses multi-signal analysis (word count, gaps, duration per letter)
   const providerBasedIsSpelledOutRef = React.useRef<boolean | null>(null)
   const lexicalValueRef = React.useRef<string>("")
 
@@ -316,16 +313,15 @@ export function useSpeechRecognition(
   }, [onTranscript, onError])
 
   // Check if supported - at minimum, sync providers are always checked
-  // Azure support is determined at startRecording time via getSpeechProviderAsync
+  // Google support is determined at startRecording time via getSpeechProviderAsync
   const isSupported = React.useMemo(() => {
     try {
-      // This checks sync providers (OpenAI, Deepgram, WebSpeech)
-      // Azure is always "supported" in browsers - actual availability
-      // is determined when we fetch the token endpoint
+      // This checks sync providers (WebSpeech)
+      // Google availability is determined when we check the WebSocket server
       const speechProvider = getSpeechProvider()
       return speechProvider.isSupported()
     } catch {
-      // Even if sync providers fail, Azure might still be available
+      // Even if sync providers fail, Google might still be available
       // Return true to allow the async check in startRecording
       return true
     }
@@ -426,7 +422,7 @@ export function useSpeechRecognition(
       averageLetterGapMs >= MIN_GAP_FOR_SPELLING // Multiple letters with gaps = spelling
 
     // =========================================================================
-    // Audio Word Timing Analysis (Deepgram - More Reliable)
+    // Audio Word Timing Analysis (Google - More Reliable)
     // =========================================================================
     // Calculate gaps between words in the actual audio
     const audioWordTimings = [...audioWordTimingsRef.current]
@@ -440,27 +436,23 @@ export function useSpeechRecognition(
     // ==========================================================================
     // ANTI-CHEAT: Provider-Based Detection
     // ==========================================================================
-    // The speech provider (Google or Azure) analyzes word timing and sets
-    // _isSpelledOut based on their detection algorithms:
+    // The speech provider (Google) analyzes word timing and sets
+    // _isSpelledOut based on multi-signal detection:
     //
-    // Google: Multi-signal analysis
+    // Google Multi-signal analysis:
     //   - Word count vs letter count
     //   - Single-letter word ratio
     //   - Gaps between words
-    //   - Total speech duration
-    //
-    // Azure: Lexical field pattern matching
-    //   - "D O G" (spaced) = spelled
-    //   - "dog" (continuous) = said
+    //   - Total speech duration per letter
     //
     // Priority order:
-    // 1. Provider-based detection (Google/Azure) - PRIMARY
+    // 1. Provider-based detection (Google) - PRIMARY
     // 2. Audio timing fallback - if provider didn't set flag
     // 3. Default to trust - if no data available
 
     let looksLikeSpellingFromAudio = true // Default: trust the user
 
-    // PRIMARY: Use provider-based detection (Google or Azure)
+    // PRIMARY: Use provider-based detection (Google)
     if (providerBasedIsSpelledOutRef.current !== null) {
       looksLikeSpellingFromAudio = providerBasedIsSpelledOutRef.current
 
@@ -579,8 +571,8 @@ export function useSpeechRecognition(
       // Reset final transcript tracking
       finalTranscriptRef.current = null
 
-      // Get provider using async version to properly check Azure availability
-      // Azure requires an async check because it needs to verify the token endpoint
+      // Get provider using async version to properly check Google availability
+      // Google requires an async check because it needs to verify the WebSocket server
       const speechProvider = await getSpeechProviderAsync()
       setProvider(speechProvider.name)
 
@@ -595,7 +587,7 @@ export function useSpeechRecognition(
         // Word Timing Callback (for anti-cheat)
         // =========================================================================
         // This is the KEY to reliable anti-cheat detection.
-        // Azure/Deepgram return actual audio timestamps for each word.
+        // Google returns actual audio timestamps for each word.
         // - Spelling "C-A-T": Three separate words with gaps in audio
         // - Saying "cat": One continuous word
         onWordTiming: (words) => {
@@ -618,10 +610,12 @@ export function useSpeechRecognition(
           // =================================================================
           // Extract provider-based anti-cheat metadata
           // =================================================================
-          // Both Google and Azure attach _isSpelledOut (boolean) and _lexical (string)
-          // to the first word timing entry:
-          // - Google: Uses multi-signal analysis (word count, gaps, duration)
-          // - Azure: Uses Lexical field pattern matching
+          // Google attaches _isSpelledOut (boolean) and _lexical (string)
+          // to the first word timing entry using multi-signal analysis:
+          // - Word count vs letter count
+          // - Single-letter word ratio
+          // - Gaps between words
+          // - Duration per letter (min 0.15s)
           const firstWord = words[0] as typeof words[0] & {
             _isSpelledOut?: boolean
             _lexical?: string

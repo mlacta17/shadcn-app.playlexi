@@ -19,7 +19,6 @@
     "@tanstack/react-table": "^8.21.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "microsoft-cognitiveservices-speech-sdk": "^1.47.0",
     "motion": "^12.23.26",
     "next": "16.0.10",
     "nucleo-core-outline-24": "^1.1.3",

@@ -1,7 +1,7 @@
 # PlayLexi — Product Requirements Document (PRD)
 
-> **Version:** 1.3
-> **Last Updated:** January 10, 2026
+> **Version:** 1.4
+> **Last Updated:** January 17, 2026
 > **Status:** Final Draft
 
 ---
@@ -880,7 +880,7 @@ When an answer is submitted:
 
 | Decision | Choice |
 |----------|--------|
-| Primary Provider | **Deepgram** (Nova-2 model) |
+| Primary Provider | **Google Cloud Speech-to-Text** (via WebSocket server) |
 | Fallback Provider | Web Speech API (browser built-in) |
 | Mode | Strict — what the provider hears is final |
 | No editing | Players cannot correct misheard words |
@@ -889,46 +889,76 @@ When an answer is submitted:
 
 #### 12.1.0 Provider Selection
 
-We evaluated multiple speech recognition providers for spelling accuracy:
+We evaluated multiple speech recognition providers for letter-by-letter spelling accuracy:
 
-| Provider | Cost | Real-Time | Spelling Accuracy | Decision |
-|----------|------|-----------|-------------------|----------|
-| **Deepgram** | $0.0043/min | ✅ Yes | ~95% | **✅ Selected** |
-| OpenAI Whisper | $0.006/min | ❌ No | ~85-90% | Rejected (batch only) |
-| AssemblyAI | $0.015/min | ✅ Yes | ~90% | Too expensive |
-| Google Cloud | $0.016/min | ✅ Yes | ~90% | Too expensive |
-| Web Speech API | Free | ✅ Yes | ~70-80% | **Fallback only** |
+| Provider | Cost | Real-Time | Word Timing | Anti-Cheat | Decision |
+|----------|------|-----------|-------------|------------|----------|
+| **Google Cloud** | $0.016/min | ✅ Yes | ✅ Yes | ✅ Yes | **✅ Selected** |
+| Deepgram | $0.0077/min | ✅ Yes | ✅ Yes | ✅ Yes | Considered (cheaper but less accurate for letters) |
+| AssemblyAI | $0.0025/min | ✅ Yes | ✅ Yes | ✅ Yes | Considered |
+| Azure Speech | $0.016/min | ✅ Yes | ✅ Yes | ✅ Yes | Removed (Google is better for letters) |
+| Web Speech API | Free | ✅ Yes | ❌ No | ❌ No | **Fallback only** |
 
-**Why Deepgram:**
-1. **Keywords Feature** — Boosts recognition of letter names (A, B, C, "bee", "see", "dee")
-2. **Real-Time Streaming** — Sub-200ms latency for instant feedback
-3. **Cost-Effective** — ~$0.0007 per 10-second spelling round
-4. **Scalability** — At 1000 players × 20 rounds/day = ~$14/day
+**Why Google Cloud Speech-to-Text:**
+1. **Best letter recognition** — Excellent at recognizing individual letters when spoken ("A", "B", "C")
+2. **Word-level timestamps** — Provides start/end times for each recognized word (critical for anti-cheat)
+3. **Speech context boosting** — Boosts recognition of letter names and phonetic pronunciations
+4. **Real-time streaming** — Sub-250ms latency via gRPC bidirectional streaming
+5. **Reliability** — Enterprise-grade service with excellent uptime
 
 **Cost Projection:**
-| Scale | Daily Rounds | Daily Cost | Monthly Cost |
-|-------|--------------|------------|--------------|
-| MVP (100 users) | 2,000 | ~$1.40 | ~$42 |
-| Growth (1,000 users) | 20,000 | ~$14 | ~$420 |
-| Scale (10,000 users) | 200,000 | ~$140 | ~$4,200 |
+| Scale | Daily Sessions | Avg Duration | Daily Cost | Monthly Cost |
+|-------|----------------|--------------|------------|--------------|
+| MVP (100 users) | 500 | 30 sec | ~$4 | ~$120 |
+| Growth (1,000 users) | 5,000 | 30 sec | ~$40 | ~$1,200 |
+| Scale (10,000 users) | 50,000 | 30 sec | ~$400 | ~$12,000 |
 
-**Implementation:**
+**Architecture:**
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     useSpeechRecognition Hook                    │
-│                            │                                     │
-│                            ▼                                     │
-│              SpeechRecognitionService (abstraction)              │
-│                            │                                     │
-│          ┌─────────────────┼─────────────────┐                  │
-│          ▼                 ▼                 ▼                  │
-│   DeepgramProvider   WebSpeechProvider   (Future: Whisper)      │
-│   (primary)          (fallback)                                  │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      Browser                                            │
+│                                                                         │
+│  useSpeechRecognition Hook                                              │
+│         │                                                               │
+│         ▼                                                               │
+│  SpeechRecognitionService (lib/speech-recognition-service.ts)           │
+│         │                                                               │
+│         ├─────────────────────────────────────────┐                     │
+│         ▼                                         ▼                     │
+│  GoogleSpeechProvider (PRIMARY)           WebSpeechProvider (FALLBACK)  │
+│         │                                 Browser built-in              │
+│         │ WebSocket (ws://localhost:3002)                               │
+│         ▼                                                               │
+│  Speech Server (speech-server/index.ts)                                 │
+│         │                                                               │
+│         │ gRPC (bidirectional streaming)                                │
+│         ▼                                                               │
+│  Google Cloud Speech-to-Text API                                        │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Why a Separate WebSocket Server?**
+1. **Next.js limitation**: App Router doesn't support WebSockets in route handlers
+2. **Google requires gRPC**: The streaming API uses gRPC bidirectional streaming, not REST
+3. **Cloudflare limitation**: Workers cannot make outbound gRPC calls (requires hybrid architecture)
 
 **Environment Variables:**
-- `NEXT_PUBLIC_DEEPGRAM_API_KEY` — Required for Deepgram (falls back to Web Speech API if not set)
+```bash
+# Google Cloud Speech-to-Text (required for primary provider)
+GOOGLE_CLOUD_PROJECT_ID=your-project-id
+GOOGLE_CLOUD_CLIENT_EMAIL=your-service-account@project.iam.gserviceaccount.com
+GOOGLE_CLOUD_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n..."
+```
+
+**Running the Speech Server:**
+```bash
+# Development: Run both Next.js and speech server
+npm run dev:all
+
+# Or run separately
+npm run dev          # Next.js on port 3000
+npm run dev:speech   # Speech server on port 3002
+```
 
 #### 12.1.1 Anti-Cheat: Spelled Letters vs Whole Word
 
@@ -936,30 +966,42 @@ For voice mode, players **must spell the word letter-by-letter**. Simply saying 
 
 | Input | Word | Result | Why |
 |-------|------|--------|-----|
-| "D O G" | dog | ✅ Valid | Letters separated by spaces |
-| "dee oh gee" | dog | ✅ Valid | Spoken letter names |
-| "delta oscar golf" | dog | ✅ Valid | NATO phonetic alphabet |
-| "dog" | dog | ❌ Invalid | Said the whole word |
-| "beautiful" | beautiful | ❌ Invalid | Said the whole word |
+| "C A T" | cat | ✅ Valid | Letters with pauses between them |
+| "cee ay tee" | cat | ✅ Valid | Spoken letter names |
+| "cat" | cat | ❌ Invalid | Said the whole word |
+| "dangerous" | dangerous | ❌ Invalid | Said the whole word |
 
-**Detection Strategies:**
-1. **Separator detection**: Input contains spaces/dashes between single characters
-2. **NATO phonetic**: Recognizes "alpha", "bravo", "charlie", etc.
-3. **Spoken letter names**: Recognizes "bee", "see", "dee", "double-u", etc.
-4. **Exact match rejection**: If input exactly matches the word without separators, reject
+**Anti-Cheat Detection (Google Speech Provider):**
 
-**Edge Cases:**
-- Single-letter words (a, I): Allow direct match
-- Homophones: "see" could mean letter C or the word "see" — context of word length helps disambiguate
+Google provides word-level timestamps from the actual audio. We use multiple signals to detect spelling vs saying:
+
+| Signal | Spelling Pattern | Saying Pattern |
+|--------|------------------|----------------|
+| Word count | Multiple words (one per letter) | Single word |
+| Single-letter words | High ratio (>50%) | Low ratio |
+| Gaps between words | ~100-500ms pauses | No gaps |
+| Duration per letter | ~0.15-0.50s per letter | <0.10s per letter |
+
+**Per-Letter Duration Threshold:**
+
+Based on empirical testing:
+- Spelling "cat" (3 letters): ~1.5s total → 0.50s/letter ✅
+- Spelling "garden" (6 letters): ~1.8s total → 0.30s/letter ✅
+- Saying "dangerous" (9 letters): ~0.8s total → 0.09s/letter ❌
+- Saying "beautiful" (9 letters): ~0.6s total → 0.07s/letter ❌
+
+**Minimum threshold: 0.15 seconds per letter**
+- Anything faster than this is physically impossible when spelling letter-by-letter
+- Very generous to accommodate fast spellers
 
 **Implementation:**
-- `isSpelledOut(input, correctWord)` — Returns true if input appears spelled out
-- `extractLettersFromVoice(input)` — Converts phonetic/spoken letters to actual letters
-- `validateAnswer(answer, word, inputMode)` — Uses input mode to apply voice-specific rules
+- `lib/providers/google-speech-provider.ts` — Multi-signal anti-cheat analysis
+- `hooks/use-speech-recognition.ts` — Async stopRecording() waits for FINAL result
+- `lib/answer-validation.ts` — Uses `looksLikeSpellingFromAudio` metric
 
 **User Feedback:**
-When a player says the whole word instead of spelling it, show a message:
-> "Please spell the word letter by letter (e.g., 'D-O-G')"
+When a player says the whole word instead of spelling it:
+> "Please spell the word letter by letter (e.g., 'C-A-T')"
 
 ### 12.2 Architecture
 

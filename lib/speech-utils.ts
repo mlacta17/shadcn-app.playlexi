@@ -95,12 +95,3 @@ export const GOOGLE_SPEECH_CONTEXT = {
   phrases: [...LETTER_PHRASES, ...PHONETIC_LETTER_NAMES],
   boost: 20,
 } as const
-
-/**
- * Letter phrase list for Azure Speech Services.
- * Azure uses a flat array of phrases for boosting.
- */
-export const AZURE_PHRASE_LIST = [
-  ...LETTER_PHRASES.map(l => l.toLowerCase()),
-  ...PHONETIC_LETTER_NAMES,
-] as const

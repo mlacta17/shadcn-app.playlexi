@@ -3,12 +3,10 @@
  *
  * Provider selection with automatic fallback:
  * 1. Google Cloud Speech-to-Text (PRIMARY) - WebSocket streaming via speech-server
- * 2. Azure Speech Services (SECONDARY) - Lexical-based anti-cheat
- * 3. Web Speech API (FALLBACK) - Browser built-in, no setup required
+ * 2. Web Speech API (FALLBACK) - Browser built-in, no setup required
  *
  * ## Setup
  * - For Google: Run `npm run dev:speech` to start WebSocket server on port 3002
- * - For Azure: Set AZURE_SPEECH_KEY and AZURE_SPEECH_REGION environment variables
  * - Web Speech API works out of the box in supported browsers
  *
  * ## Architecture
@@ -19,20 +17,19 @@
  * │                             ▼                                       │
  * │               SpeechRecognitionService (this file)                  │
  * │                             │                                       │
- * │           ┌─────────────────┼─────────────────┐                     │
- * │           ▼                 ▼                 ▼                     │
- * │     Google (PRIMARY)   Azure (SECONDARY)   WebSpeech (FALLBACK)    │
- * │     WebSocket + gRPC    SDK + Lexical      Browser built-in        │
+ * │           ┌─────────────────┴─────────────────┐                     │
+ * │           ▼                                   ▼                     │
+ * │     Google (PRIMARY)                   WebSpeech (FALLBACK)         │
+ * │     WebSocket + gRPC                   Browser built-in             │
  * └─────────────────────────────────────────────────────────────────────┘
  * ```
  *
  * ## Anti-Cheat Word Timing
- * Google and Azure provide word-level timestamps for anti-cheat:
+ * Google provides word-level timestamps for anti-cheat:
  * - Spelling "C-A-T": Multiple word segments with gaps (~100-500ms)
  * - Saying "cat": Single continuous word segment
  *
  * @see https://cloud.google.com/speech-to-text/docs
- * @see https://learn.microsoft.com/en-us/azure/ai-services/speech-service/
  */
 
 // =============================================================================
@@ -43,10 +40,9 @@
  * Available speech recognition providers.
  *
  * - "google": Google Cloud Speech-to-Text (PRIMARY - best letter-by-letter detection)
- * - "azure": Azure Speech Services (SECONDARY - good accuracy, phrase list boosting)
- * - "web-speech": Browser built-in (fallback - free, lower accuracy)
+ * - "web-speech": Browser built-in (fallback - free, lower accuracy, no anti-cheat)
  */
-export type SpeechProvider = "web-speech" | "azure" | "google"
+export type SpeechProvider = "web-speech" | "google"
 
 /**
  * Word-level timing data from speech recognition.
@@ -80,7 +76,7 @@ export interface SpeechRecognitionConfig {
    * Provides actual audio timestamps for each recognized word.
    * Used for anti-cheat detection (spelling vs saying).
    *
-   * Supported by Google and Azure providers.
+   * Supported by Google provider only.
    */
   onWordTiming?: (words: WordTimingData[]) => void
   /** Callback for errors */
@@ -129,7 +125,7 @@ export interface ISpeechRecognitionProvider {
 
 /**
  * Keywords to boost for spelling recognition.
- * Used by providers that support keyword boosting (Azure phrase list, Google speech context)
+ * Used by Google's speech context for better letter recognition.
  */
 export const SPELLING_KEYWORDS: string[] = [
   "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
@@ -143,8 +139,11 @@ export const SPELLING_KEYWORDS: string[] = [
 /**
  * Web Speech API provider (browser built-in).
  *
- * Used as a fallback when Google and Azure are not configured.
+ * Used as a fallback when Google is not configured.
  * Lower accuracy (~70-80%) but free and requires no setup.
+ *
+ * NOTE: This provider does NOT support word-level timing,
+ * so anti-cheat will not be available when using this fallback.
  */
 class WebSpeechProvider implements ISpeechRecognitionProvider {
   name: SpeechProvider = "web-speech"
@@ -282,17 +281,8 @@ declare global {
 // PROVIDER FACTORY
 // =============================================================================
 
-// Lazy import providers to avoid circular dependencies
-// and keep the main bundle smaller when they aren't used
-let azureProviderModule: typeof import("./providers/azure-speech-provider") | null = null
+// Lazy import Google provider to keep the main bundle smaller
 let googleProviderModule: typeof import("./providers/google-speech-provider") | null = null
-
-async function getAzureProvider() {
-  if (!azureProviderModule) {
-    azureProviderModule = await import("./providers/azure-speech-provider")
-  }
-  return azureProviderModule.getAzureSpeechProvider()
-}
 
 async function getGoogleProvider() {
   if (!googleProviderModule) {
@@ -303,26 +293,6 @@ async function getGoogleProvider() {
 
 // Singleton instance for WebSpeech provider
 let webSpeechProvider: WebSpeechProvider | null = null
-
-/**
- * Check if Azure Speech is configured (has server-side route).
- * We do a quick check by attempting to fetch the token endpoint.
- */
-let azureConfigured: boolean | null = null
-
-async function isAzureConfigured(): Promise<boolean> {
-  if (azureConfigured !== null) return azureConfigured
-
-  try {
-    const response = await fetch("/api/azure-speech/token", { method: "GET" })
-    // 503 means not configured, 200 means configured
-    azureConfigured = response.ok
-    return azureConfigured
-  } catch {
-    azureConfigured = false
-    return false
-  }
-}
 
 /**
  * Check if Google Speech WebSocket server is available.
@@ -378,14 +348,14 @@ async function isGoogleConfigured(): Promise<boolean> {
 /**
  * Get the best available speech recognition provider (sync version).
  *
- * NOTE: This sync version cannot check Google or Azure (requires async).
+ * NOTE: This sync version cannot check Google (requires async).
  * Always prefer getSpeechProviderAsync() which checks all providers.
  *
  * @returns The best available sync provider (WebSpeech only)
  * @throws Error if no provider is available
  */
 export function getSpeechProvider(): ISpeechRecognitionProvider {
-  // NOTE: Google and Azure are checked async in getSpeechProviderAsync().
+  // NOTE: Google is checked async in getSpeechProviderAsync().
   // This sync function is only used for initial isSupported check.
 
   // Fall back to Web Speech API (free, works in most browsers)
@@ -395,7 +365,7 @@ export function getSpeechProvider(): ISpeechRecognitionProvider {
   if (webSpeechProvider.isSupported()) {
     console.warn(
       "[SpeechRecognition] Sync check: Web Speech API available as fallback. " +
-      "Google/Azure will be checked async when recording starts."
+      "Google will be checked async when recording starts."
     )
     return webSpeechProvider
   }
@@ -407,18 +377,17 @@ export function getSpeechProvider(): ISpeechRecognitionProvider {
  * Get the best available speech recognition provider (async version).
  *
  * This is the PRIMARY function for getting a speech provider.
- * It checks Google first (best for letter-by-letter detection), then Azure.
+ * It checks Google first (best for letter-by-letter detection with anti-cheat).
  *
  * Priority:
- * 1. Google (if speech server running) — BEST for letter-by-letter word timing
- * 2. Azure (if configured) — Good accuracy with phrase list boosting
- * 3. Web Speech API (fallback) — free but lower accuracy
+ * 1. Google (if speech server running) — BEST for letter-by-letter word timing + anti-cheat
+ * 2. Web Speech API (fallback) — free but lower accuracy, NO anti-cheat
  *
  * @returns The best available provider
  * @throws Error if no provider is available
  */
 export async function getSpeechProviderAsync(): Promise<ISpeechRecognitionProvider> {
-  // Try Google first (BEST for letter-by-letter detection)
+  // Try Google first (BEST for letter-by-letter detection + anti-cheat)
   if (await isGoogleConfigured()) {
     const googleProvider = await getGoogleProvider()
     if (googleProvider.isSupported()) {
@@ -429,22 +398,11 @@ export async function getSpeechProviderAsync(): Promise<ISpeechRecognitionProvid
     }
   }
 
-  // Try Azure second (good accuracy with phrase list boosting)
-  if (await isAzureConfigured()) {
-    const azureProvider = await getAzureProvider()
-    if (azureProvider.isSupported()) {
-      if (process.env.NODE_ENV === "development") {
-        console.log("[SpeechRecognition] Using Azure Speech Services (phrase list boosting + word timing)")
-      }
-      return azureProvider
-    }
-  }
-
-  // Neither Google nor Azure available - warn and fall back to Web Speech API
+  // Google not available - warn and fall back to Web Speech API
   console.warn(
-    "[SpeechRecognition] Google and Azure not configured! " +
-    "Falling back to Web Speech API. Anti-cheat word timing will not be available. " +
-    "Configure Google Cloud Speech or Azure Speech Services for best experience."
+    "[SpeechRecognition] Google Speech server not available! " +
+    "Falling back to Web Speech API. Anti-cheat word timing will NOT be available. " +
+    "Run 'npm run dev:speech' to start the Google Speech server."
   )
 
   // Fall back to Web Speech API
@@ -457,14 +415,14 @@ export async function getSpeechProviderAsync(): Promise<ISpeechRecognitionProvid
 
   throw new Error(
     "No speech recognition provider available. " +
-    "Please configure Google Cloud Speech or Azure Speech Services."
+    "Please start the Google Speech server with 'npm run dev:speech'."
   )
 }
 
 /**
  * Check which providers are available.
  *
- * NOTE: Google and Azure availability requires async checks and defaults to false here.
+ * NOTE: Google availability requires async check and defaults to false here.
  * Use getAvailableProvidersAsync() for accurate status.
  *
  * @returns Object with availability status for each provider
@@ -474,7 +432,6 @@ export function getAvailableProviders(): Record<SpeechProvider, boolean> {
 
   return {
     google: googleConfigured ?? false,
-    azure: azureConfigured ?? false,
     "web-speech": webSpeechProvider.isSupported(),
   }
 }
@@ -482,21 +439,17 @@ export function getAvailableProviders(): Record<SpeechProvider, boolean> {
 /**
  * Check which providers are available (async version).
  *
- * This version accurately checks Google and Azure availability.
+ * This version accurately checks Google availability.
  *
  * @returns Object with availability status for each provider
  */
 export async function getAvailableProvidersAsync(): Promise<Record<SpeechProvider, boolean>> {
   if (!webSpeechProvider) webSpeechProvider = new WebSpeechProvider()
 
-  const [googleAvailable, azureAvailable] = await Promise.all([
-    isGoogleConfigured(),
-    isAzureConfigured(),
-  ])
+  const googleAvailable = await isGoogleConfigured()
 
   return {
     google: googleAvailable,
-    azure: azureAvailable,
     "web-speech": webSpeechProvider.isSupported(),
   }
 }
