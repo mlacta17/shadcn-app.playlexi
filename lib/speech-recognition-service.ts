@@ -1,11 +1,15 @@
 /**
- * Speech Recognition Service — Azure Speech Services for voice-to-text.
+ * Speech Recognition Service
  *
- * This module provides speech recognition using Azure Speech Services as the
- * PRIMARY and ONLY provider for production use. Azure provides:
- * - Phrase list boosting for letter names (~95-98% accuracy)
- * - Word-level timing data for anti-cheat detection
- * - Server-side token authentication (secure)
+ * Provider selection with automatic fallback:
+ * 1. Google Cloud Speech-to-Text (PRIMARY) - WebSocket streaming via speech-server
+ * 2. Azure Speech Services (SECONDARY) - Lexical-based anti-cheat
+ * 3. Web Speech API (FALLBACK) - Browser built-in, no setup required
+ *
+ * ## Setup
+ * - For Google: Run `npm run dev:speech` to start WebSocket server on port 3002
+ * - For Azure: Set AZURE_SPEECH_KEY and AZURE_SPEECH_REGION environment variables
+ * - Web Speech API works out of the box in supported browsers
  *
  * ## Architecture
  * ```
@@ -15,56 +19,20 @@
  * │                             ▼                                       │
  * │               SpeechRecognitionService (this file)                  │
  * │                             │                                       │
- * │                  ┌──────────┴──────────┐                            │
- * │                  ▼                     ▼                            │
- * │              Azure (PRIMARY)    WebSpeechAPI (fallback)             │
- * │           phrase list + timing       free, lower accuracy           │
+ * │           ┌─────────────────┼─────────────────┐                     │
+ * │           ▼                 ▼                 ▼                     │
+ * │     Google (PRIMARY)   Azure (SECONDARY)   WebSpeech (FALLBACK)    │
+ * │     WebSocket + gRPC    SDK + Lexical      Browser built-in        │
  * └─────────────────────────────────────────────────────────────────────┘
  * ```
  *
- * ## Provider Selection
- * - **Azure**: PRIMARY — Used for all production spelling recognition
- * - **Web Speech API**: FALLBACK ONLY — Used if Azure is not configured
- * - **Deepgram/OpenAI**: NOT USED — Code exists but disabled
- *
- * ## Setup Requirements (Azure Speech Services)
- * 1. Create Azure Speech resource in Azure Portal
- * 2. Copy subscription key and region
- * 3. Set environment variables:
- *    - AZURE_SPEECH_KEY (server-side only!)
- *    - AZURE_SPEECH_REGION (e.g., "eastus")
- *
- * ## Usage
- * ```ts
- * // Get Azure provider (recommended - async)
- * const provider = await getSpeechProviderAsync()
- *
- * // Start recognition with word timing for anti-cheat
- * const session = await provider.start({
- *   onInterimResult: (text) => setTranscript(text),
- *   onFinalResult: (text) => submitAnswer(text),
- *   onWordTiming: (words) => trackWordTiming(words), // For anti-cheat
- *   onError: (error) => console.error(error),
- * })
- *
- * // Stop recognition
- * session.stop()
- * ```
- *
- * ## Debugging
- * In development mode, Azure logs detailed events:
- * - `[Azure]` — Azure Speech SDK events and word timing
- * - `[Speech]` — Hook-level events (from useSpeechRecognition)
- *
  * ## Anti-Cheat Word Timing
- * Azure's detailed output provides word-level timestamps:
+ * Google and Azure provide word-level timestamps for anti-cheat:
  * - Spelling "C-A-T": Multiple word segments with gaps (~100-500ms)
  * - Saying "cat": Single continuous word segment
  *
- * This timing data is essential for detecting cheating.
- *
+ * @see https://cloud.google.com/speech-to-text/docs
  * @see https://learn.microsoft.com/en-us/azure/ai-services/speech-service/
- * @see PRD Section 12.1 — Voice Recognition
  */
 
 // =============================================================================
@@ -77,13 +45,8 @@
  * - "google": Google Cloud Speech-to-Text (PRIMARY - best letter-by-letter detection)
  * - "azure": Azure Speech Services (SECONDARY - good accuracy, phrase list boosting)
  * - "web-speech": Browser built-in (fallback - free, lower accuracy)
- *
- * NOTE: The following providers exist in code but are NOT used:
- * - "openai-realtime": OpenAI gpt-4o-transcribe (code exists, disabled)
- * - "deepgram": Deepgram Nova-2 (code exists, disabled)
- * - "whisper": OpenAI Whisper (not implemented)
  */
-export type SpeechProvider = "web-speech" | "deepgram" | "whisper" | "openai-realtime" | "azure" | "google"
+export type SpeechProvider = "web-speech" | "azure" | "google"
 
 /**
  * Word-level timing data from speech recognition.
@@ -117,7 +80,7 @@ export interface SpeechRecognitionConfig {
    * Provides actual audio timestamps for each recognized word.
    * Used for anti-cheat detection (spelling vs saying).
    *
-   * Only supported by Deepgram (Azure doesn't provide word-level streaming data).
+   * Supported by Google and Azure providers.
    */
   onWordTiming?: (words: WordTimingData[]) => void
   /** Callback for errors */
@@ -127,7 +90,6 @@ export interface SpeechRecognitionConfig {
   /**
    * Keywords to boost recognition for.
    * For spelling games, this should include all letter names.
-   * Only supported by Deepgram.
    */
   keywords?: string[]
 }
@@ -167,410 +129,12 @@ export interface ISpeechRecognitionProvider {
 
 /**
  * Keywords to boost for spelling recognition.
- * Used by providers that support keyword boosting (Azure phrase list, etc.)
+ * Used by providers that support keyword boosting (Azure phrase list, Google speech context)
  */
 export const SPELLING_KEYWORDS: string[] = [
   "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
   "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
 ]
-
-// =============================================================================
-// REMOVED PROVIDERS (Dead Code Cleanup)
-// =============================================================================
-// The following providers were removed from this file as they were never used:
-// - DeepgramProvider (~190 lines) - Deepgram Nova-2 WebSocket streaming
-// - OpenAIRealtimeProvider (~450 lines) - OpenAI gpt-4o-transcribe
-// - arrayBufferToBase64 helper - Only used by OpenAI provider
-//
-// Google Cloud Speech-to-Text and Azure Speech Services are the only
-// cloud providers used in production. WebSpeechProvider is the free fallback.
-// =============================================================================
-
-  /**
-   * Convert Float32 audio samples to Int16 PCM.
-   * OpenAI expects 16-bit signed integers in little-endian format.
-   */
-  private floatTo16BitPCM(float32Array: Float32Array): Int16Array {
-    const int16Array = new Int16Array(float32Array.length)
-    for (let i = 0; i < float32Array.length; i++) {
-      // Clamp to [-1, 1] range
-      const s = Math.max(-1, Math.min(1, float32Array[i]))
-      // Convert to 16-bit integer
-      int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7fff
-    }
-    return int16Array
-  }
-
-  async start(config: SpeechRecognitionConfig): Promise<SpeechRecognitionSession> {
-    const apiKey = this.getApiKey()
-    if (!apiKey) {
-      throw new Error("OpenAI API key not configured. Set NEXT_PUBLIC_OPENAI_API_KEY in .env.local")
-    }
-
-    const { onInterimResult, onFinalResult, onError } = config
-
-    // Use intent=transcription for transcription-only mode
-    const wsUrl = "wss://api.openai.com/v1/realtime?intent=transcription"
-
-    if (process.env.NODE_ENV === "development") {
-      console.log("[OpenAI] Connecting to:", wsUrl)
-    }
-
-    // Connect with API key via subprotocol (browser-compatible auth)
-    const socket = new WebSocket(wsUrl, [
-      "realtime",
-      `openai-insecure-api-key.${apiKey}`,
-      "openai-beta.realtime-v1",
-    ])
-
-    // State management
-    let isActive = true
-    let isClosed = false
-    let mediaStream: MediaStream | null = null
-    let audioContext: AudioContext | null = null
-    let scriptProcessor: ScriptProcessorNode | null = null
-    let analyserNode: AnalyserNode | null = null // For visualization - shared with hook
-    let accumulatedTranscript = ""
-    let sessionConfigured = false
-
-    /**
-     * Safely close all resources without throwing errors.
-     */
-    const cleanup = () => {
-      if (isClosed) return
-      isClosed = true
-      isActive = false
-
-      try {
-        scriptProcessor?.disconnect()
-      } catch {
-        // Ignore - already disconnected
-      }
-
-      try {
-        if (audioContext?.state !== "closed") {
-          audioContext?.close()
-        }
-      } catch {
-        // Ignore - already closed
-      }
-
-      try {
-        mediaStream?.getTracks().forEach((track) => track.stop())
-      } catch {
-        // Ignore
-      }
-    }
-
-    /**
-     * Configure session and start audio capture.
-     * Called after receiving transcription_session.created event.
-     */
-    const configureSessionAndStartAudio = async () => {
-      if (sessionConfigured || !isActive) return
-      sessionConfigured = true
-
-      try {
-        // Configure transcription session
-        // Structure follows official OpenAI docs:
-        // https://platform.openai.com/docs/guides/realtime-transcription
-        const sessionConfig = {
-          type: "transcription_session.update",
-          session: {
-            input_audio_format: "pcm16",
-            input_audio_transcription: {
-              model: "gpt-4o-transcribe",
-              // Aggressive prompt to force letter-by-letter output
-              // Key instructions:
-              // 1. NEVER combine letters into words
-              // 2. Output raw phonemes/letters with spaces
-              // 3. Explicit examples of what we want
-              prompt: `CRITICAL: Output ONLY individual letters separated by spaces. NEVER combine letters into words.
-
-Rules:
-- If you hear "see ay tea" → output "C A T" (not "cat")
-- If you hear "dee oh gee" → output "D O G" (not "dog")
-- If you hear the letters C, A, T spoken → output "C A T"
-- Each letter MUST be separated by a space
-- NEVER output a complete word without spaces
-
-This is a spelling bee. The user is spelling letter-by-letter. Transcribe each letter individually.`,
-              language: "en",
-            },
-            // VAD settings tuned for low-latency letter spelling
-            // - Lower threshold = more sensitive to speech
-            // - Shorter silence = faster end-of-speech detection
-            // - Shorter prefix = less audio buffered before speech
-            turn_detection: {
-              type: "server_vad",
-              threshold: 0.4,           // Default 0.5, lower = more sensitive
-              prefix_padding_ms: 200,   // Default 300ms, audio before speech start
-              silence_duration_ms: 300, // Default 500ms, wait before committing
-            },
-            // OpenAI expects this as an object with "type" property
-            input_audio_noise_reduction: {
-              type: "near_field",
-            },
-          },
-        }
-
-        if (process.env.NODE_ENV === "development") {
-          console.log("[OpenAI] Sending session config")
-        }
-
-        socket.send(JSON.stringify(sessionConfig))
-
-        // Get microphone access (browser determines actual sample rate)
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            channelCount: 1,
-            echoCancellation: true,
-            noiseSuppression: true,
-          },
-        })
-
-        // Create AudioContext (will use system sample rate, typically 44100 or 48000)
-        audioContext = new AudioContext()
-        const actualSampleRate = audioContext.sampleRate
-
-        if (process.env.NODE_ENV === "development") {
-          console.log(`[OpenAI] Browser sample rate: ${actualSampleRate}Hz, target: ${this.TARGET_SAMPLE_RATE}Hz`)
-        }
-
-        const source = audioContext.createMediaStreamSource(mediaStream)
-
-        // Create analyser for visualization (shared with hook - eliminates duplicate stream)
-        analyserNode = audioContext.createAnalyser()
-        analyserNode.fftSize = 256 // Small FFT for fast updates
-        analyserNode.smoothingTimeConstant = 0.6 // Slightly less smoothing for responsiveness
-
-        // ScriptProcessor is deprecated but has universal browser support
-        // AudioWorklet would be better but has compatibility issues
-        // Using fixed buffer size for consistent low-latency behavior
-        scriptProcessor = audioContext.createScriptProcessor(this.BUFFER_SIZE, 1, 1)
-
-        scriptProcessor.onaudioprocess = (event) => {
-          if (!isActive || socket.readyState !== WebSocket.OPEN) return
-
-          const inputData = event.inputBuffer.getChannelData(0)
-
-          // Resample from browser sample rate to 24kHz
-          const resampled = this.resample(inputData, actualSampleRate, this.TARGET_SAMPLE_RATE)
-
-          // Convert to 16-bit PCM
-          const pcmData = this.floatTo16BitPCM(resampled)
-
-          // Convert to base64
-          const base64Audio = arrayBufferToBase64(pcmData.buffer)
-
-          // Send to OpenAI
-          socket.send(JSON.stringify({
-            type: "input_audio_buffer.append",
-            audio: base64Audio,
-          }))
-        }
-
-        // Audio routing: source → analyser → scriptProcessor → destination
-        // This allows visualization while processing audio for transcription
-        source.connect(analyserNode)
-        analyserNode.connect(scriptProcessor)
-        scriptProcessor.connect(audioContext.destination)
-
-        if (process.env.NODE_ENV === "development") {
-          console.log("[OpenAI] Audio capture started")
-        }
-      } catch (err) {
-        console.error("[OpenAI] Setup error:", err)
-        onError?.(err instanceof Error ? err : new Error("Failed to setup audio"))
-        cleanup()
-        socket.close()
-      }
-    }
-
-    // Connection timeout - fail fast if WebSocket doesn't connect
-    const connectionTimeout = setTimeout(() => {
-      if (socket.readyState !== WebSocket.OPEN) {
-        console.error("[OpenAI] Connection timeout after 10s")
-        onError?.(new Error("OpenAI connection timeout - check your network"))
-        cleanup()
-        socket.close()
-      }
-    }, 10000)
-
-    // WebSocket event handlers
-    socket.onopen = () => {
-      clearTimeout(connectionTimeout)
-      if (process.env.NODE_ENV === "development") {
-        console.log("[OpenAI] WebSocket connected")
-      }
-    }
-
-    socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        const eventType = data.type
-
-        // Debug logging (skip noisy events)
-        if (process.env.NODE_ENV === "development") {
-          if (!eventType?.includes("audio_buffer")) {
-            console.log("[OpenAI] Event:", eventType)
-          }
-        }
-
-        // Session created - start configuration
-        if (eventType === "transcription_session.created") {
-          configureSessionAndStartAudio()
-        }
-
-        // Session configured successfully
-        if (eventType === "transcription_session.updated") {
-          if (process.env.NODE_ENV === "development") {
-            console.log("[OpenAI] Session configured successfully")
-          }
-        }
-
-        // Transcription in progress (interim results)
-        if (eventType === "conversation.item.input_audio_transcription.delta") {
-          const delta = data.delta || ""
-          if (delta) {
-            accumulatedTranscript += delta
-            onInterimResult?.(accumulatedTranscript)
-          }
-        }
-
-        // Transcription completed (final result)
-        if (eventType === "conversation.item.input_audio_transcription.completed") {
-          const transcript = data.transcript || accumulatedTranscript
-          if (transcript) {
-            if (process.env.NODE_ENV === "development") {
-              console.log("[OpenAI] Final transcript:", transcript)
-            }
-            onFinalResult?.(transcript)
-            accumulatedTranscript = ""
-          }
-        }
-
-        // Transcription failed - log full details for debugging
-        if (eventType === "conversation.item.input_audio_transcription.failed") {
-          // Extract all error details from the response
-          const errorDetails = {
-            message: data.error?.message || "Unknown",
-            type: data.error?.type || "Unknown",
-            code: data.error?.code || "Unknown",
-            param: data.error?.param || null,
-            item_id: data.item_id || null,
-            content_index: data.content_index ?? null,
-          }
-          console.warn("[OpenAI] Transcription failed:", JSON.stringify(errorDetails, null, 2))
-
-          // Log the full event for debugging in development
-          if (process.env.NODE_ENV === "development") {
-            console.warn("[OpenAI] Full failed event:", JSON.stringify(data, null, 2))
-          }
-
-          // Reset accumulated transcript for next attempt
-          accumulatedTranscript = ""
-        }
-
-        // API errors (session-level errors)
-        if (eventType === "error") {
-          const errorCode = data.error?.code || "Unknown"
-          const errorMsg = data.error?.message || "Unknown"
-
-          // Ignore non-critical errors that don't affect functionality
-          const ignorableErrors = [
-            "input_audio_buffer_commit_empty", // Buffer already committed by VAD
-          ]
-
-          if (ignorableErrors.includes(errorCode)) {
-            if (process.env.NODE_ENV === "development") {
-              console.log(`[OpenAI] Ignoring non-critical error: ${errorCode}`)
-            }
-            return
-          }
-
-          const errorDetails = {
-            message: errorMsg,
-            type: data.error?.type || "Unknown",
-            code: errorCode,
-          }
-          console.error("[OpenAI] API error:", JSON.stringify(errorDetails, null, 2))
-          onError?.(new Error(`OpenAI: ${errorMsg} (${errorCode})`))
-        }
-      } catch (parseErr) {
-        console.error("[OpenAI] Failed to parse message:", parseErr)
-      }
-    }
-
-    socket.onerror = () => {
-      console.error("[OpenAI] WebSocket error")
-      onError?.(new Error("OpenAI WebSocket connection error"))
-    }
-
-    socket.onclose = (event) => {
-      clearTimeout(connectionTimeout)
-      if (process.env.NODE_ENV === "development") {
-        console.log(`[OpenAI] WebSocket closed: ${event.code}`)
-      }
-      cleanup()
-    }
-
-    // Return session controller
-    return {
-      stop: () => {
-        // Prevent double-stop
-        if (!isActive) return
-        isActive = false
-
-        // With server_vad enabled, OpenAI automatically commits audio when speech ends.
-        // We don't need to manually commit - just close the connection gracefully.
-        // Manual commit can cause "buffer too small" errors if VAD already committed.
-
-        if (process.env.NODE_ENV === "development") {
-          console.log("[OpenAI] Stopping session (VAD handles auto-commit)")
-        }
-
-        // Brief delay to allow any pending transcriptions to complete
-        // Use 150ms instead of 300ms for snappier response
-        setTimeout(() => {
-          cleanup()
-          if (socket.readyState === WebSocket.OPEN) {
-            socket.close()
-          }
-        }, 150)
-      },
-      get isActive() {
-        return isActive && !isClosed
-      },
-      // Expose analyser for visualization - hook can use this instead of creating duplicate stream
-      get analyserNode() {
-        return analyserNode
-      },
-    }
-  }
-}
-
-/**
- * Convert ArrayBuffer to base64 string.
- * Used for encoding PCM audio data for OpenAI's API.
- *
- * Optimized for performance:
- * - Uses chunked String.fromCharCode to avoid stack overflow on large buffers
- * - Processes in 8KB chunks for optimal memory/speed balance
- * - ~10x faster than byte-by-byte string concatenation
- */
-function arrayBufferToBase64(buffer: ArrayBuffer | ArrayBufferLike): string {
-  const bytes = new Uint8Array(buffer as ArrayBuffer)
-  const chunkSize = 8192 // Process 8KB at a time for speed
-  let binary = ""
-
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length))
-    binary += String.fromCharCode.apply(null, chunk as unknown as number[])
-  }
-
-  return btoa(binary)
-}
 
 // =============================================================================
 // WEB SPEECH API PROVIDER (Fallback)
@@ -579,7 +143,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer | ArrayBufferLike): string {
 /**
  * Web Speech API provider (browser built-in).
  *
- * Used as a fallback when Deepgram is not configured.
+ * Used as a fallback when Google and Azure are not configured.
  * Lower accuracy (~70-80%) but free and requires no setup.
  */
 class WebSpeechProvider implements ISpeechRecognitionProvider {
@@ -737,9 +301,7 @@ async function getGoogleProvider() {
   return googleProviderModule.getGoogleSpeechProvider()
 }
 
-// Singleton instances
-// NOTE: Only Azure and WebSpeech are used. Deepgram/OpenAI providers exist
-// in this file but are NOT instantiated or used in the provider selection.
+// Singleton instance for WebSpeech provider
 let webSpeechProvider: WebSpeechProvider | null = null
 
 /**
@@ -816,22 +378,15 @@ async function isGoogleConfigured(): Promise<boolean> {
 /**
  * Get the best available speech recognition provider (sync version).
  *
- * NOTE: This sync version cannot check Azure (requires async token fetch).
- * Always prefer getSpeechProviderAsync() which checks Azure first.
+ * NOTE: This sync version cannot check Google or Azure (requires async).
+ * Always prefer getSpeechProviderAsync() which checks all providers.
  *
- * Priority (sync fallback only):
- * 1. Web Speech API (fallback) — free but lower accuracy
- *
- * IMPORTANT: Deepgram and OpenAI are NOT used. Azure is the primary provider
- * and must be checked via getSpeechProviderAsync().
- *
- * @returns The best available sync provider
+ * @returns The best available sync provider (WebSpeech only)
  * @throws Error if no provider is available
  */
 export function getSpeechProvider(): ISpeechRecognitionProvider {
-  // NOTE: Azure is the PRIMARY provider but requires async check.
+  // NOTE: Google and Azure are checked async in getSpeechProviderAsync().
   // This sync function is only used for initial isSupported check.
-  // Actual recording uses getSpeechProviderAsync() which checks Azure first.
 
   // Fall back to Web Speech API (free, works in most browsers)
   if (!webSpeechProvider) {
@@ -840,12 +395,12 @@ export function getSpeechProvider(): ISpeechRecognitionProvider {
   if (webSpeechProvider.isSupported()) {
     console.warn(
       "[SpeechRecognition] Sync check: Web Speech API available as fallback. " +
-      "Azure will be checked async when recording starts."
+      "Google/Azure will be checked async when recording starts."
     )
     return webSpeechProvider
   }
 
-  throw new Error("No speech recognition provider available. Configure Azure Speech Services.")
+  throw new Error("No speech recognition provider available.")
 }
 
 /**
@@ -855,11 +410,9 @@ export function getSpeechProvider(): ISpeechRecognitionProvider {
  * It checks Google first (best for letter-by-letter detection), then Azure.
  *
  * Priority:
- * 1. Google (if configured) — BEST for letter-by-letter word timing
+ * 1. Google (if speech server running) — BEST for letter-by-letter word timing
  * 2. Azure (if configured) — Good accuracy with phrase list boosting
  * 3. Web Speech API (fallback) — free but lower accuracy
- *
- * NOTE: Deepgram and OpenAI are NOT used.
  *
  * @returns The best available provider
  * @throws Error if no provider is available
@@ -894,7 +447,7 @@ export async function getSpeechProviderAsync(): Promise<ISpeechRecognitionProvid
     "Configure Google Cloud Speech or Azure Speech Services for best experience."
   )
 
-  // Fall back to Web Speech API only (no Deepgram/OpenAI)
+  // Fall back to Web Speech API
   if (!webSpeechProvider) {
     webSpeechProvider = new WebSpeechProvider()
   }
@@ -909,70 +462,10 @@ export async function getSpeechProviderAsync(): Promise<ISpeechRecognitionProvid
 }
 
 /**
- * Get a specific speech recognition provider.
- *
- * NOTE: Google is the PRIMARY provider. Azure is secondary. Web Speech API is fallback.
- * Deepgram, OpenAI, and Whisper are NOT used in this application.
- *
- * @param provider - The provider to get
- * @returns The requested provider (or Promise for async providers like Google/Azure)
- * @throws Error if the provider is not available or not supported
- */
-export function getSpecificProvider(
-  provider: SpeechProvider
-): ISpeechRecognitionProvider | Promise<ISpeechRecognitionProvider> {
-  switch (provider) {
-    case "google":
-      // Google requires async loading
-      return (async () => {
-        const googleProvider = await getGoogleProvider()
-        if (!googleProvider.isSupported()) {
-          throw new Error("Google Cloud Speech not configured. Set GOOGLE_CLOUD_PROJECT_ID, GOOGLE_CLOUD_CLIENT_EMAIL, and GOOGLE_CLOUD_PRIVATE_KEY.")
-        }
-        return googleProvider
-      })()
-
-    case "azure":
-      // Azure requires async loading
-      return (async () => {
-        const azureProvider = await getAzureProvider()
-        if (!azureProvider.isSupported()) {
-          throw new Error("Azure not configured. Set AZURE_SPEECH_KEY and AZURE_SPEECH_REGION.")
-        }
-        return azureProvider
-      })()
-
-    case "web-speech":
-      if (!webSpeechProvider) {
-        webSpeechProvider = new WebSpeechProvider()
-      }
-      if (!webSpeechProvider.isSupported()) {
-        throw new Error("Web Speech API not supported in this browser.")
-      }
-      return webSpeechProvider
-
-    // These providers exist in code but are NOT used
-    case "openai-realtime":
-    case "deepgram":
-    case "whisper":
-      throw new Error(
-        `Provider "${provider}" is not enabled. ` +
-        "This application uses Google Cloud Speech or Azure Speech Services."
-      )
-
-    default:
-      throw new Error(`Unknown provider: ${provider}`)
-  }
-}
-
-/**
  * Check which providers are available.
  *
- * NOTE: Google is the PRIMARY provider. Azure is secondary. Web Speech API is fallback.
- * Other providers (Deepgram, OpenAI, Whisper) are NOT used.
- *
- * Google and Azure availability is async and defaults to false in sync check.
- * Use getAvailableProvidersAsync for accurate status.
+ * NOTE: Google and Azure availability requires async checks and defaults to false here.
+ * Use getAvailableProvidersAsync() for accurate status.
  *
  * @returns Object with availability status for each provider
  */
@@ -980,12 +473,9 @@ export function getAvailableProviders(): Record<SpeechProvider, boolean> {
   if (!webSpeechProvider) webSpeechProvider = new WebSpeechProvider()
 
   return {
-    google: googleConfigured ?? false, // Requires async check for accurate result
-    azure: azureConfigured ?? false, // Requires async check for accurate result
-    "openai-realtime": false, // Not used
-    deepgram: false, // Not used
+    google: googleConfigured ?? false,
+    azure: azureConfigured ?? false,
     "web-speech": webSpeechProvider.isSupported(),
-    whisper: false, // Not implemented
   }
 }
 
@@ -993,9 +483,6 @@ export function getAvailableProviders(): Record<SpeechProvider, boolean> {
  * Check which providers are available (async version).
  *
  * This version accurately checks Google and Azure availability.
- *
- * NOTE: Google is the PRIMARY provider. Azure is secondary. Web Speech API is fallback.
- * Other providers (Deepgram, OpenAI, Whisper) are NOT used.
  *
  * @returns Object with availability status for each provider
  */
@@ -1010,9 +497,6 @@ export async function getAvailableProvidersAsync(): Promise<Record<SpeechProvide
   return {
     google: googleAvailable,
     azure: azureAvailable,
-    "openai-realtime": false, // Not used
-    deepgram: false, // Not used
     "web-speech": webSpeechProvider.isSupported(),
-    whisper: false, // Not implemented
   }
 }

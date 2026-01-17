@@ -115,7 +115,7 @@ export default function EndlessGamePage() {
    * - Saying "cat": All letters appear at once (<100ms total)
    * - If letters arrived too fast, answer is rejected
    */
-  const submitCurrentAnswer = React.useCallback(() => {
+  const submitCurrentAnswer = React.useCallback(async () => {
     // Prevent double-submission
     if (hasSubmittedRef.current) return
     if (!transcript) return
@@ -129,8 +129,10 @@ export default function EndlessGamePage() {
       autoSubmitTimeoutRef.current = null
     }
 
-    // Stop recording and get anti-cheat metrics
-    const metrics = stopRecording()
+    // Stop recording and wait for FINAL result (with word timing)
+    // This is critical for anti-cheat: we MUST wait for the final result
+    // because word timing data only arrives with the final recognition result
+    const metrics = await stopRecording()
 
     // Submit answer with timing data for anti-cheat validation
     // Priority: audio timing (from Azure/Deepgram) > letter timing (fallback)

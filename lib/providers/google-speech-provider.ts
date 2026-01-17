@@ -46,6 +46,7 @@ import type {
   SpeechProvider,
   WordTimingData,
 } from "../speech-recognition-service"
+import { cleanTranscript, float32ToInt16 } from "../speech-utils"
 
 // =============================================================================
 // CONSTANTS
@@ -84,33 +85,6 @@ interface ServerMessage {
   confidence?: number
   message?: string
   timestamp?: number
-}
-
-// =============================================================================
-// HELPERS
-// =============================================================================
-
-/**
- * Clean transcript text for spelling comparison.
- */
-function cleanTranscript(text: string): string {
-  return text
-    .replace(/[.,!?;:'"]/g, "")
-    .trim()
-}
-
-/**
- * Convert Float32Array audio to LINEAR16 Int16Array.
- * Google Speech requires LINEAR16 (signed 16-bit PCM).
- */
-function float32ToInt16(float32Array: Float32Array): Int16Array {
-  const int16Array = new Int16Array(float32Array.length)
-  for (let i = 0; i < float32Array.length; i++) {
-    // Clamp to [-1, 1] and convert to 16-bit signed integer
-    const s = Math.max(-1, Math.min(1, float32Array[i]))
-    int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7fff
-  }
-  return int16Array
 }
 
 // =============================================================================
@@ -168,6 +142,13 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
     let analyserNode: AnalyserNode | null = null
     let scriptProcessor: ScriptProcessorNode | null = null
     let lastTranscript = ""
+
+    // Accumulated transcript tracking
+    // Google sends interim results in chunks. High-stability results (>= 0.8)
+    // represent "committed" portions that won't change. We need to accumulate
+    // these to avoid losing parts of the transcript.
+    let accumulatedStableText = ""
+    let lastStability = 0
 
     /**
      * Cleanup all resources safely.
@@ -267,13 +248,49 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
               break
 
             case "interim":
-              if (message.transcript && message.transcript !== lastTranscript) {
-                lastTranscript = message.transcript
-                const text = cleanTranscript(message.transcript)
-                if (process.env.NODE_ENV === "development") {
-                  console.log(`[Google] interim: "${text}" (stability: ${message.stability?.toFixed(2) || "?"})`)
+              if (message.transcript) {
+                const stability = message.stability || 0
+                const rawText = cleanTranscript(message.transcript)
+
+                // When stability drops from high (>= 0.8) to low, it means Google
+                // has "committed" the previous high-stability portion and is now
+                // processing new audio. We need to accumulate the stable parts.
+                if (lastStability >= 0.8 && stability < 0.5) {
+                  // Previous result was stable, current is unstable = new chunk starting
+                  // The stable text should be accumulated
+                  accumulatedStableText = lastTranscript
                 }
-                onInterimResult?.(text)
+
+                // Build the full transcript: accumulated stable + current
+                let fullText: string
+                if (accumulatedStableText && stability < 0.8) {
+                  // We have accumulated stable text and current is unstable
+                  // Combine them (avoiding duplication)
+                  fullText = accumulatedStableText + " " + rawText
+                } else if (stability >= 0.8) {
+                  // High stability = this might become the new accumulated base
+                  // But only if it's longer than what we have
+                  if (rawText.length >= accumulatedStableText.length) {
+                    fullText = rawText
+                  } else {
+                    fullText = accumulatedStableText + " " + rawText
+                  }
+                } else {
+                  fullText = rawText
+                }
+
+                fullText = cleanTranscript(fullText)
+                lastStability = stability
+
+                if (fullText !== lastTranscript) {
+                  lastTranscript = fullText
+                  if (process.env.NODE_ENV === "development") {
+                    console.log(
+                      `[Google] interim: "${fullText}" (stability: ${stability.toFixed(2)}, accumulated: "${accumulatedStableText}")`
+                    )
+                  }
+                  onInterimResult?.(fullText)
+                }
               }
               break
 
@@ -293,19 +310,133 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
                     confidence: message.confidence || 0.9,
                   }))
 
-                  // Attach anti-cheat metadata
+                  // =================================================================
+                  // GOOGLE ANTI-CHEAT: Multi-Signal Detection
+                  // =================================================================
+                  // Since Google doesn't have Azure's Lexical field, we use multiple
+                  // signals from the word timing data to determine spelling vs saying:
+                  //
+                  // 1. Word count vs letter count
+                  // 2. Single-letter word ratio
+                  // 3. Gaps between words (spelling has pauses)
+                  // 4. Total speech duration vs letter count
+                  // 5. Individual word durations (letters are short)
+                  // =================================================================
+
+                  const wordCount = wordTimings.length
+                  const letterCount = text.replace(/\s/g, "").length
+                  const singleLetterWords = wordTimings.filter((w) => w.word.length === 1).length
+
+                  // Calculate gaps between words
+                  let totalGapTime = 0
+                  for (let i = 1; i < wordTimings.length; i++) {
+                    const gap = wordTimings[i].start - wordTimings[i - 1].end
+                    if (gap > 0) totalGapTime += gap
+                  }
+                  const avgGapMs = wordCount > 1 ? (totalGapTime / (wordCount - 1)) * 1000 : 0
+
+                  // Calculate total speech duration
+                  const totalDuration = wordTimings.length > 0
+                    ? wordTimings[wordTimings.length - 1].end - wordTimings[0].start
+                    : 0
+
+                  // Average duration per word
+                  const avgWordDuration = wordCount > 0 ? totalDuration / wordCount : 0
+
+                  // =================================================================
+                  // SIGNAL 1: Multiple words detected (strong signal for spelling)
+                  // If Google heard multiple separate words, user likely spelled
+                  // =================================================================
+                  const hasMultipleWords = wordCount > 1
+
+                  // =================================================================
+                  // SIGNAL 2: High ratio of single-letter words
+                  // Spelling produces mostly single letters: "C", "A", "T"
+                  // Saying produces multi-letter words: "cat"
+                  // =================================================================
+                  const singleLetterRatio = wordCount > 0 ? singleLetterWords / wordCount : 0
+                  const hasMostlySingleLetters = singleLetterRatio >= 0.5
+
+                  // =================================================================
+                  // SIGNAL 3: Word count matches or exceeds letter count
+                  // Spelling "CAT" → 3 words for 3 letters
+                  // Saying "cat" → 1 word for 3 letters
+                  // =================================================================
+                  const wordToLetterRatio = letterCount > 0 ? wordCount / letterCount : 0
+                  const wordCountMatchesLetters = wordToLetterRatio >= 0.6
+
+                  // =================================================================
+                  // SIGNAL 4: Gaps between words (spelling has pauses)
+                  // Spelling has ~100-500ms gaps between letters
+                  // Saying is continuous with no gaps
+                  // =================================================================
+                  const hasSignificantGaps = avgGapMs >= 80 // 80ms minimum gap
+
+                  // =================================================================
+                  // SIGNAL 5: Duration check for single words (PER-LETTER basis)
+                  // If only 1 word detected, check duration PER LETTER
+                  //
+                  // From analyzing the logs of SPELLED words:
+                  // - "sun" (3 letters): 1.50s → 0.50s/letter
+                  // - "run" (3 letters): 1.40s → 0.47s/letter
+                  // - "cat" (3 letters): 1.50s → 0.50s/letter
+                  // - "plant" (5 letters): 1.50s → 0.30s/letter
+                  // - "smile" (5 letters): 1.50s → 0.30s/letter
+                  // - "house" (5 letters): 1.50s → 0.30s/letter
+                  // - "garden" (6 letters): 1.80s → 0.30s/letter
+                  // - "market" (6 letters): 2.20s → 0.37s/letter
+                  // - "simple" (6 letters): 1.80s → 0.30s/letter
+                  //
+                  // SAID words (from failures):
+                  // - "dangerous" (9 letters): 0.80s → 0.09s/letter ← SHOULD FAIL
+                  // - "beautiful" (9 letters): 0.60s → 0.07s/letter ← CORRECTLY FAILED
+                  //
+                  // Minimum threshold: 0.15s per letter (very generous for fast spellers)
+                  // Anything below this is definitely not spelling
+                  // =================================================================
+                  const MIN_SECONDS_PER_LETTER = 0.15
+                  const expectedMinDuration = letterCount * MIN_SECONDS_PER_LETTER
+                  const durationPerLetter = letterCount > 0 ? totalDuration / letterCount : 0
+
+                  const isSingleWordTooFast = wordCount === 1 &&
+                    letterCount >= 3 &&
+                    totalDuration < expectedMinDuration
+
+                  // =================================================================
+                  // FINAL VERDICT: Combine signals
+                  // =================================================================
+                  let isSpelledOut: boolean
+
+                  if (wordCount === 0) {
+                    // No words detected - trust the user
+                    isSpelledOut = true
+                  } else if (wordCount === 1 && letterCount === 1) {
+                    // Single letter word for single letter - obviously spelled
+                    isSpelledOut = true
+                  } else if (isSingleWordTooFast) {
+                    // Single word spoken too fast for spelling - REJECT
+                    // Duration per letter is below the minimum threshold
+                    isSpelledOut = false
+                  } else if (hasMultipleWords && (hasMostlySingleLetters || wordCountMatchesLetters)) {
+                    // Multiple words with spelling characteristics - PASS
+                    isSpelledOut = true
+                  } else if (hasMultipleWords && hasSignificantGaps) {
+                    // Multiple words with pauses - likely spelling - PASS
+                    isSpelledOut = true
+                  } else if (wordCount === 1 && letterCount >= 3) {
+                    // Single word for multi-letter answer - check duration per letter
+                    // Must meet minimum threshold of 0.15s per letter
+                    isSpelledOut = durationPerLetter >= MIN_SECONDS_PER_LETTER
+                  } else {
+                    // Default: trust the user
+                    isSpelledOut = true
+                  }
+
+                  // Attach metadata to first word timing
                   const timingWithMetadata = wordTimings as (WordTimingData & {
                     _lexical?: string
                     _isSpelledOut?: boolean
                   })[]
-
-                  // Determine if this looks like spelling
-                  const wordCount = wordTimings.length
-                  const letterCount = text.replace(/\s/g, "").length
-                  const isLikelySpelled = wordCount >= letterCount * 0.7 && wordCount > 1
-                  const singleLetterWords = wordTimings.filter((w) => w.word.length === 1).length
-                  const hasMostlySingleLetters = singleLetterWords >= wordCount * 0.5
-                  const isSpelledOut = isLikelySpelled || hasMostlySingleLetters
 
                   if (timingWithMetadata.length > 0) {
                     timingWithMetadata[0]._isSpelledOut = isSpelledOut
@@ -314,8 +445,12 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
 
                   if (process.env.NODE_ENV === "development") {
                     console.log(
-                      `[Google] Anti-cheat: wordCount=${wordCount}, letterCount=${letterCount}, ` +
-                      `singleLetterWords=${singleLetterWords}, isSpelledOut=${isSpelledOut}`
+                      `[Google] Anti-cheat analysis:\n` +
+                      `  Words: ${wordCount}, Letters: ${letterCount}, SingleLetterWords: ${singleLetterWords}\n` +
+                      `  Duration: ${totalDuration.toFixed(2)}s (${durationPerLetter.toFixed(2)}s/letter, min: ${MIN_SECONDS_PER_LETTER}s/letter)\n` +
+                      `  Signals: multipleWords=${hasMultipleWords}, singleLetterRatio=${(singleLetterRatio * 100).toFixed(0)}%, ` +
+                      `wordToLetterRatio=${(wordToLetterRatio * 100).toFixed(0)}%, hasGaps=${hasSignificantGaps}, tooFast=${isSingleWordTooFast}\n` +
+                      `  Verdict: ${isSpelledOut ? "✅ SPELLED" : "❌ SAID (rejected)"}`
                     )
                   }
 

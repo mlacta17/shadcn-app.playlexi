@@ -53,6 +53,7 @@ import type {
   SpeechProvider,
   WordTimingData,
 } from "../speech-recognition-service"
+import { cleanTranscript } from "../speech-utils"
 
 // =============================================================================
 // TYPES
@@ -89,18 +90,6 @@ const LETTER_PHRASE_LIST = [
   "cue", "are", "ess", "tee", "you", "vee",
   "double you", "double-u", "ex", "why", "zee", "zed",
 ]
-
-/**
- * Clean transcript text for spelling comparison.
- * - Removes punctuation (periods, commas, question marks, etc.)
- * - Trims whitespace
- * - Preserves case (comparison should handle case-insensitivity)
- */
-function cleanTranscript(text: string): string {
-  return text
-    .replace(/[.,!?;:'"]/g, "") // Remove punctuation
-    .trim()
-}
 
 // =============================================================================
 // AZURE SPEECH PROVIDER

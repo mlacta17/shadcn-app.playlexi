@@ -149,9 +149,15 @@ export interface UseSpeechRecognitionReturn {
   startRecording: () => Promise<void>
   /**
    * Stop recording and get anti-cheat metrics.
-   * @returns Metrics object with duration and interim result count
+   *
+   * IMPORTANT: This method now returns a Promise to ensure we wait for
+   * the FINAL result from the speech provider before returning metrics.
+   * This is critical for anti-cheat because the word timing data only
+   * arrives with the final result.
+   *
+   * @returns Promise of metrics object with duration and anti-cheat data
    */
-  stopRecording: () => StopRecordingMetrics
+  stopRecording: () => Promise<StopRecordingMetrics>
   /** Current transcript (updated in real-time) */
   transcript: string
   /** Clear the transcript */
@@ -266,6 +272,12 @@ export function useSpeechRecognition(
   const onTranscriptRef = React.useRef(onTranscript)
   const onErrorRef = React.useRef(onError)
 
+  // Final transcript ref - stores the FINAL result from the provider
+  // This is critical because Google sends interim results in chunks, and the
+  // interim result at any moment may be incomplete (e.g., "a t" instead of "c a t")
+  // The final result is authoritative and should be used for answer validation.
+  const finalTranscriptRef = React.useRef<string | null>(null)
+
   // Speech timing refs for anti-cheat
   // We track when FIRST speech was detected and when LAST speech was detected
   // This gives us actual speaking time, not recording time (which includes silence)
@@ -282,14 +294,20 @@ export function useSpeechRecognition(
   const letterTimingsRef = React.useRef<LetterTiming[]>([])
   const lastLetterCountRef = React.useRef<number>(0)
 
-  // Audio word timing tracking (Deepgram only - MORE RELIABLE)
+  // Audio word timing tracking (Google/Azure - MORE RELIABLE than transcript timing)
   // This tracks the actual audio timestamps, not transcript arrival
   const audioWordTimingsRef = React.useRef<AudioWordTiming[]>([])
 
-  // Lexical-based anti-cheat from Azure (MOST RELIABLE)
-  // Azure's Lexical field shows "D O G" for spelling vs "dog" for saying
-  const lexicalBasedIsSpelledOutRef = React.useRef<boolean | null>(null)
+  // Provider-based anti-cheat detection
+  // Google: Uses multi-signal analysis (word count, gaps, duration)
+  // Azure: Uses Lexical field (if Azure is used as fallback)
+  const providerBasedIsSpelledOutRef = React.useRef<boolean | null>(null)
   const lexicalValueRef = React.useRef<string>("")
+
+  // Promise resolver for waiting for FINAL result
+  // This is critical for anti-cheat: we MUST wait for the final result
+  // because word timing data only arrives with the final result
+  const finalResultResolverRef = React.useRef<(() => void) | null>(null)
 
   // Keep refs in sync with latest callbacks (avoids re-creating session on callback change)
   React.useEffect(() => {
@@ -325,9 +343,47 @@ export function useSpeechRecognition(
 
   /**
    * Cleanup function - stops recording and releases resources.
-   * @returns Anti-cheat metrics including letter timing data
+   *
+   * IMPORTANT: This function waits for the FINAL result from the speech
+   * provider before returning. This ensures we have word timing data for
+   * anti-cheat detection. Without waiting, the metrics would show
+   * audioWordCount=0 and the anti-cheat would default to "pass".
+   *
+   * @returns Promise of anti-cheat metrics including word timing data
    */
-  const cleanup = React.useCallback((): StopRecordingMetrics => {
+  const cleanup = React.useCallback(async (): Promise<StopRecordingMetrics> => {
+    // Stop the session first - this triggers the provider to send FINAL result
+    if (sessionRef.current) {
+      sessionRef.current.stop()
+    }
+
+    // Wait for FINAL result to arrive (with timeout)
+    // The final result callback will resolve this promise
+    const MAX_WAIT_MS = 2000 // Maximum time to wait for final result
+    const finalResultReceived = providerBasedIsSpelledOutRef.current !== null
+
+    if (!finalResultReceived) {
+      if (process.env.NODE_ENV === "development") {
+        console.log("[Speech] Waiting for FINAL result before returning metrics...")
+      }
+
+      await new Promise<void>((resolve) => {
+        // Store the resolver so the onWordTiming callback can resolve it
+        finalResultResolverRef.current = resolve
+
+        // Timeout: don't wait forever
+        setTimeout(() => {
+          if (finalResultResolverRef.current) {
+            if (process.env.NODE_ENV === "development") {
+              console.log("[Speech] Timeout waiting for FINAL result, proceeding with available data")
+            }
+            finalResultResolverRef.current = null
+            resolve()
+          }
+        }, MAX_WAIT_MS)
+      })
+    }
+
     // Calculate SPEECH duration (not recording duration)
     // This is the time from first detected speech to last detected speech
     // Much more accurate for anti-cheat as it excludes silence
@@ -382,40 +438,46 @@ export function useSpeechRecognition(
       audioGaps.length > 0 ? audioGaps.reduce((sum, g) => sum + g, 0) / audioGaps.length : 0
 
     // ==========================================================================
-    // ANTI-CHEAT: Lexical-Based Detection (MOST RELIABLE)
+    // ANTI-CHEAT: Provider-Based Detection
     // ==========================================================================
-    // Azure's Lexical field is THE definitive signal:
-    // - Spelling "D-O-G" → Lexical: "D O G" (spaced single letters)
-    // - Saying "dog" → Lexical: "dog" (continuous word, no spaces)
+    // The speech provider (Google or Azure) analyzes word timing and sets
+    // _isSpelledOut based on their detection algorithms:
     //
-    // This works because Azure's phonetic recognizer transcribes what it
-    // actually HEARD, not how it chose to format the final Display text.
+    // Google: Multi-signal analysis
+    //   - Word count vs letter count
+    //   - Single-letter word ratio
+    //   - Gaps between words
+    //   - Total speech duration
+    //
+    // Azure: Lexical field pattern matching
+    //   - "D O G" (spaced) = spelled
+    //   - "dog" (continuous) = said
     //
     // Priority order:
-    // 1. Lexical-based detection (if available) - MOST RELIABLE
-    // 2. Audio timing fallback - less reliable but still useful
+    // 1. Provider-based detection (Google/Azure) - PRIMARY
+    // 2. Audio timing fallback - if provider didn't set flag
     // 3. Default to trust - if no data available
 
     let looksLikeSpellingFromAudio = true // Default: trust the user
 
-    // PRIMARY: Use Lexical-based detection from Azure
-    if (lexicalBasedIsSpelledOutRef.current !== null) {
-      looksLikeSpellingFromAudio = lexicalBasedIsSpelledOutRef.current
+    // PRIMARY: Use provider-based detection (Google or Azure)
+    if (providerBasedIsSpelledOutRef.current !== null) {
+      looksLikeSpellingFromAudio = providerBasedIsSpelledOutRef.current
 
       if (process.env.NODE_ENV === "development") {
         console.log(
-          `[Speech] Anti-cheat verdict (Lexical-based): ` +
-            `lexical="${lexicalValueRef.current}", ` +
-            `result=${looksLikeSpellingFromAudio ? "✅ SPELLED (spaces between letters)" : "❌ SAID (continuous word)"}`
+          `[Speech] Anti-cheat verdict (provider-based): ` +
+            `words="${lexicalValueRef.current}", ` +
+            `result=${looksLikeSpellingFromAudio ? "✅ SPELLED" : "❌ SAID (rejected)"}`
         )
       }
     }
-    // FALLBACK: Use audio timing if Lexical not available
+    // FALLBACK: Use audio timing if provider didn't set flag
     else if (audioWordCount === 0) {
       // No audio data - trust the transcript
       looksLikeSpellingFromAudio = true
     } else if (audioWordCount > 1) {
-      // Multiple words = definitely spelling (Azure heard separate utterances)
+      // Multiple words = definitely spelling (provider heard separate utterances)
       looksLikeSpellingFromAudio = true
     } else {
       // Single word detected - check if it's suspicious using duration
@@ -424,8 +486,8 @@ export function useSpeechRecognition(
 
       // Only REJECT if:
       // 1. Word has 3+ letters (not a single letter like "A")
-      // 2. Word was spoken very quickly (< 1.0 second)
-      const MIN_DURATION_FOR_SPELLING_SEC = 1.0
+      // 2. Word was spoken very quickly (< 0.8 second)
+      const MIN_DURATION_FOR_SPELLING_SEC = 0.8
       const isSuspicious = singleWord.length >= 3 && wordDuration < MIN_DURATION_FOR_SPELLING_SEC
 
       looksLikeSpellingFromAudio = !isSuspicious
@@ -441,7 +503,7 @@ export function useSpeechRecognition(
 
     if (process.env.NODE_ENV === "development" && audioWordCount > 0) {
       const words = audioWordTimings.map((w) => `"${w.word}"`).join(", ")
-      console.log(`[Speech] Azure returned ${audioWordCount} word(s): [${words}]`)
+      console.log(`[Speech] Provider returned ${audioWordCount} word(s): [${words}]`)
     }
 
     if (process.env.NODE_ENV === "development") {
@@ -463,10 +525,8 @@ export function useSpeechRecognition(
       }
     }
 
-    if (sessionRef.current) {
-      sessionRef.current.stop()
-      sessionRef.current = null
-    }
+    // Session was already stopped at the beginning of cleanup()
+    sessionRef.current = null
 
     // Reset all refs
     firstSpeechTimeRef.current = 0
@@ -475,8 +535,10 @@ export function useSpeechRecognition(
     letterTimingsRef.current = []
     lastLetterCountRef.current = 0
     audioWordTimingsRef.current = []
-    lexicalBasedIsSpelledOutRef.current = null
+    providerBasedIsSpelledOutRef.current = null
     lexicalValueRef.current = ""
+    finalTranscriptRef.current = null
+    finalResultResolverRef.current = null
     setAnalyserNode(null)
     setIsRecording(false)
 
@@ -511,9 +573,11 @@ export function useSpeechRecognition(
       lastLetterCountRef.current = 0
       // Reset audio word timing tracking
       audioWordTimingsRef.current = []
-      // Reset Lexical-based anti-cheat tracking
-      lexicalBasedIsSpelledOutRef.current = null
+      // Reset provider-based anti-cheat tracking
+      providerBasedIsSpelledOutRef.current = null
       lexicalValueRef.current = ""
+      // Reset final transcript tracking
+      finalTranscriptRef.current = null
 
       // Get provider using async version to properly check Azure availability
       // Azure requires an async check because it needs to verify the token endpoint
@@ -552,27 +616,38 @@ export function useSpeechRecognition(
           audioWordTimingsRef.current = processedTimings
 
           // =================================================================
-          // CRITICAL: Extract Lexical-based anti-cheat metadata from Azure
+          // Extract provider-based anti-cheat metadata
           // =================================================================
-          // Azure attaches _isSpelledOut (boolean) and _lexical (string) to the
-          // first word timing entry. This is the MOST RELIABLE anti-cheat signal.
-          // - _isSpelledOut: true means Lexical was "D O G" (spaced letters)
-          // - _isSpelledOut: false means Lexical was "dog" (continuous word)
+          // Both Google and Azure attach _isSpelledOut (boolean) and _lexical (string)
+          // to the first word timing entry:
+          // - Google: Uses multi-signal analysis (word count, gaps, duration)
+          // - Azure: Uses Lexical field pattern matching
           const firstWord = words[0] as typeof words[0] & {
             _isSpelledOut?: boolean
             _lexical?: string
           }
 
           if (typeof firstWord._isSpelledOut === "boolean") {
-            lexicalBasedIsSpelledOutRef.current = firstWord._isSpelledOut
+            providerBasedIsSpelledOutRef.current = firstWord._isSpelledOut
             lexicalValueRef.current = firstWord._lexical || ""
 
             if (process.env.NODE_ENV === "development") {
               console.log(
-                `[Speech] Lexical-based anti-cheat: ` +
-                  `lexical="${lexicalValueRef.current}", ` +
-                  `isSpelledOut=${lexicalBasedIsSpelledOutRef.current ? "✅ YES" : "❌ NO"}`
+                `[Speech] Provider anti-cheat: ` +
+                  `words="${lexicalValueRef.current}", ` +
+                  `isSpelledOut=${providerBasedIsSpelledOutRef.current ? "✅ YES" : "❌ NO"}`
               )
+            }
+
+            // Resolve the promise waiting for final results
+            // This allows stopRecording() to return with valid anti-cheat data
+            if (finalResultResolverRef.current) {
+              if (process.env.NODE_ENV === "development") {
+                console.log("[Speech] FINAL result received, resolving stopRecording promise")
+              }
+              const resolver = finalResultResolverRef.current
+              finalResultResolverRef.current = null
+              resolver()
             }
           }
 
@@ -656,6 +731,10 @@ export function useSpeechRecognition(
             lastSpeechTimeRef.current = Date.now()
           }
 
+          // Store the final result - this is authoritative and should be used
+          // for answer validation instead of interim results
+          finalTranscriptRef.current = text
+
           if (process.env.NODE_ENV === "development") {
             console.log(`[Speech:${speechProvider.name}] FINAL:`, text)
           }
@@ -689,7 +768,8 @@ export function useSpeechRecognition(
   }, [language, spellingMode, interimThrottleMs, cleanup])
 
   // Stop recording - returns anti-cheat metrics for validation
-  const stopRecording = React.useCallback((): StopRecordingMetrics => {
+  // Now async to wait for FINAL result before returning
+  const stopRecording = React.useCallback(async (): Promise<StopRecordingMetrics> => {
     return cleanup()
   }, [cleanup])
 
