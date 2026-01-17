@@ -124,7 +124,7 @@ export interface SubmitAnswerOptions {
   }
   /**
    * Audio-level timing data for voice mode anti-cheat (more reliable).
-   * Based on actual audio timestamps from Azure/Deepgram, not transcript arrival.
+   * Based on actual audio timestamps from Google Speech, not transcript arrival.
    *
    * This is the PRIMARY anti-cheat signal:
    * - Spelling "C-A-T": Multiple word segments with gaps in audio

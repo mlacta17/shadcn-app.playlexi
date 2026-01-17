@@ -1,22 +1,39 @@
 /**
  * Word Service — Data layer for spelling bee words.
  *
- * This module provides the interface and implementation for fetching words.
- * Currently uses mock data; will be replaced with database queries in Phase 4.
+ * This module provides the interface for fetching words in the game.
+ * Currently uses mock data for development; the implementation can be
+ * swapped to D1 queries without changing the interface.
  *
  * ## Architecture
- * - Defines the `Word` interface used throughout the app
- * - Provides `getWord()` to fetch words by difficulty tier
- * - Provides `getRandomWord()` for variety within a tier
- * - Mock data covers all 7 difficulty tiers per PRD Section 6.4
  *
- * ## Future Integration
- * The interface is designed to be database-agnostic. When connecting to
- * the real word database (Merriam-Webster sourced), only the implementation
- * changes — not the interface.
+ * The service uses the **Strategy Pattern** for data sources:
+ * - `MockWordDataSource` - In-memory mock data for development
+ * - `D1WordDataSource` - (Future) Cloudflare D1 database queries
+ *
+ * Game code uses the interface functions (`getRandomWord`, `getWordById`, etc.)
+ * which internally delegate to the configured data source.
+ *
+ * ## Swapping to D1
+ *
+ * When D1 is ready, change `USE_DATABASE = true` and ensure the database
+ * connection is passed to API routes via Cloudflare context.
  *
  * @see PRD Section 6 — Word System
+ * @see ADR-011 (Merriam-Webster API Integration)
  */
+
+// =============================================================================
+// CONFIGURATION
+// =============================================================================
+
+/**
+ * Feature flag: Use D1 database instead of mock data.
+ * Set to true when D1 is configured and seeded with Merriam-Webster data.
+ *
+ * TODO: Move to environment variable when deploying
+ */
+const USE_DATABASE = false
 
 // =============================================================================
 // TYPES
@@ -24,23 +41,25 @@
 
 /**
  * Word difficulty tier (1-7).
- * Maps to player rank tiers per PRD Section 6.5.
+ * Maps to player skill levels per Glicko-2 rating ranges.
  *
- * | Tier | Characteristics |
- * |------|-----------------|
- * | 1 | 3-4 letters, common, phonetic |
- * | 2 | 5-6 letters, common, mostly phonetic |
- * | 3 | 6-7 letters, some irregular spellings |
- * | 4 | 8-9 letters, silent letters, doubles |
- * | 5 | 10-11 letters, commonly misspelled |
- * | 6 | 12+ letters, complex patterns |
- * | 7 | Championship-level, obscure, foreign origins |
+ * | Tier | Rating Range | Characteristics |
+ * |------|--------------|-----------------|
+ * | 1 | 1000-1149 | 3-4 letters, common, phonetic |
+ * | 2 | 1150-1299 | 5-6 letters, common, mostly phonetic |
+ * | 3 | 1300-1449 | 6-7 letters, some irregular spellings |
+ * | 4 | 1450-1599 | 8-9 letters, silent letters, doubles |
+ * | 5 | 1600-1749 | 10-11 letters, commonly misspelled |
+ * | 6 | 1750-1899 | 12+ letters, complex patterns |
+ * | 7 | 1900+ | Championship-level, obscure, foreign origins |
+ *
+ * @see ADR-012 (Hidden Skill Rating System - Glicko-2)
  */
 export type WordTier = 1 | 2 | 3 | 4 | 5 | 6 | 7
 
 /**
- * Word data structure.
- * Matches the database schema from PRD Section 6.3.
+ * Word data structure used throughout the game.
+ * Matches the database schema in db/schema.ts.
  */
 export interface Word {
   /** Unique identifier */
@@ -53,7 +72,7 @@ export interface Word {
   definition: string
   /** Example sentence using the word */
   sentence: string
-  /** URL to audio pronunciation (optional for mock data) */
+  /** URL to audio pronunciation (R2 URL when using D1) */
   audioUrl?: string
   /** Part of speech (noun, verb, adjective, etc.) */
   partOfSpeech?: string
@@ -68,15 +87,25 @@ export type WordResult =
   | { success: false; error: string }
 
 // =============================================================================
-// MOCK DATA
+// DATA SOURCE INTERFACE
+// =============================================================================
+
+/**
+ * Interface for word data sources.
+ * Implement this to add new data sources (e.g., D1, test fixtures).
+ */
+interface WordDataSource {
+  getWordsByTier(tier: WordTier): Word[]
+  getWordById(id: string): Word | undefined
+}
+
+// =============================================================================
+// MOCK DATA SOURCE
 // =============================================================================
 
 /**
  * Mock words for development and testing.
- * Organized by tier for easy lookup.
- *
- * Note: Audio URLs are placeholders. In production, these will point to
- * cached Merriam-Webster audio files.
+ * Each tier has 4 sample words covering the characteristics defined above.
  */
 const MOCK_WORDS: Word[] = [
   // Tier 1 — Simple, 3-4 letters, phonetic
@@ -318,8 +347,39 @@ const MOCK_WORDS: Word[] = [
   },
 ]
 
+/**
+ * Mock data source implementation.
+ * Used during development before D1 is configured.
+ */
+const mockDataSource: WordDataSource = {
+  getWordsByTier(tier: WordTier): Word[] {
+    return MOCK_WORDS.filter((word) => word.tier === tier)
+  },
+
+  getWordById(id: string): Word | undefined {
+    return MOCK_WORDS.find((word) => word.id === id)
+  },
+}
+
 // =============================================================================
-// SERVICE FUNCTIONS
+// ACTIVE DATA SOURCE
+// =============================================================================
+
+/**
+ * Get the active data source based on configuration.
+ * When USE_DATABASE is true, this would return a D1-backed implementation.
+ */
+function getDataSource(): WordDataSource {
+  if (USE_DATABASE) {
+    // TODO: Return D1 data source when database is configured
+    // This would require passing the D1 binding from the request context
+    console.warn("[WordService] D1 not yet configured, falling back to mock")
+  }
+  return mockDataSource
+}
+
+// =============================================================================
+// PUBLIC API — WORD RETRIEVAL
 // =============================================================================
 
 /**
@@ -329,14 +389,14 @@ const MOCK_WORDS: Word[] = [
  * @returns Array of words in that tier
  */
 export function getWordsByTier(tier: WordTier): Word[] {
-  return MOCK_WORDS.filter((word) => word.tier === tier)
+  return getDataSource().getWordsByTier(tier)
 }
 
 /**
  * Get a random word from a specific tier.
  *
  * @param tier - Difficulty tier (1-7)
- * @param excludeIds - Word IDs to exclude (prevents repeats)
+ * @param excludeIds - Word IDs to exclude (prevents repeats in a session)
  * @returns A word result with success/error state
  *
  * @example
@@ -375,12 +435,17 @@ export function getRandomWord(
  * @returns The word if found, undefined otherwise
  */
 export function getWordById(id: string): Word | undefined {
-  return MOCK_WORDS.find((word) => word.id === id)
+  return getDataSource().getWordById(id)
 }
+
+// =============================================================================
+// PUBLIC API — GAME CONFIGURATION
+// =============================================================================
 
 /**
  * Get the timer duration for a word based on tier and input method.
- * Per PRD Section 4.3.
+ *
+ * Voice input gets a small bonus to account for speech processing latency.
  *
  * @param tier - Word difficulty tier
  * @param inputMethod - "voice" or "keyboard"
@@ -405,11 +470,31 @@ export function getTimerDuration(
 }
 
 /**
- * Get the starting tier for a player rank.
- * Per PRD Section 6.5.
+ * Convert Glicko-2 rating to word difficulty tier.
+ * Used by the skill rating system to select appropriate words.
+ *
+ * @param rating - Glicko-2 rating (typically 1000-1900)
+ * @returns Word tier (1-7)
+ *
+ * @see ADR-012 (Hidden Skill Rating System - Glicko-2)
+ */
+export function ratingToTier(rating: number): WordTier {
+  if (rating < 1150) return 1
+  if (rating < 1300) return 2
+  if (rating < 1450) return 3
+  if (rating < 1600) return 4
+  if (rating < 1750) return 5
+  if (rating < 1900) return 6
+  return 7
+}
+
+/**
+ * Get the starting tier for a player rank (legacy function).
+ * Prefer using `ratingToTier()` with Glicko-2 ratings.
  *
  * @param rank - Player rank name
  * @returns Starting word tier for that rank
+ * @deprecated Use ratingToTier() with Glicko-2 skill ratings instead
  */
 export function getStartingTierForRank(
   rank:
@@ -434,19 +519,33 @@ export function getStartingTierForRank(
 }
 
 // =============================================================================
-// AUDIO UTILITIES (Placeholder for Phase 4)
+// PUBLIC API — AUDIO PLAYBACK
 // =============================================================================
 
 /**
  * Play the pronunciation audio for a word.
- * Currently a no-op — will integrate with audio files in Phase 4.
+ *
+ * When audioUrl is available (from R2), plays the cached Merriam-Webster audio.
+ * Falls back to browser Speech Synthesis when no audio file exists.
  *
  * @param word - The word to pronounce
  */
 export async function playWordAudio(word: Word): Promise<void> {
-  // TODO: Phase 4 — Integrate with cached Merriam-Webster audio files
-  // For now, we'll use the browser's Speech Synthesis API as a fallback
-  if (typeof window !== "undefined" && "speechSynthesis" in window) {
+  if (typeof window === "undefined") return
+
+  // Prefer cached audio file from R2
+  if (word.audioUrl) {
+    try {
+      const audio = new Audio(word.audioUrl)
+      await audio.play()
+      return
+    } catch (error) {
+      console.warn("[WordService] Audio playback failed, using synthesis:", error)
+    }
+  }
+
+  // Fallback to browser speech synthesis
+  if ("speechSynthesis" in window) {
     const utterance = new SpeechSynthesisUtterance(word.word)
     utterance.rate = 0.8 // Slightly slower for clarity
     utterance.pitch = 1
@@ -455,17 +554,16 @@ export async function playWordAudio(word: Word): Promise<void> {
 }
 
 /**
- * Play "The word is [blank]" introduction.
- * Uses Speech Synthesis as a placeholder.
+ * Play "Your word is [word]" introduction.
  *
  * @param word - The word to introduce
  */
 export async function playWordIntro(word: Word): Promise<void> {
-  if (typeof window !== "undefined" && "speechSynthesis" in window) {
-    const utterance = new SpeechSynthesisUtterance(`The word is ${word.word}`)
-    utterance.rate = 0.9
-    window.speechSynthesis.speak(utterance)
-  }
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return
+
+  const utterance = new SpeechSynthesisUtterance(`Your word is ${word.word}`)
+  utterance.rate = 0.9
+  window.speechSynthesis.speak(utterance)
 }
 
 /**
@@ -474,11 +572,11 @@ export async function playWordIntro(word: Word): Promise<void> {
  * @param word - The word with sentence
  */
 export async function playWordSentence(word: Word): Promise<void> {
-  if (typeof window !== "undefined" && "speechSynthesis" in window) {
-    const utterance = new SpeechSynthesisUtterance(word.sentence)
-    utterance.rate = 0.9
-    window.speechSynthesis.speak(utterance)
-  }
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return
+
+  const utterance = new SpeechSynthesisUtterance(word.sentence)
+  utterance.rate = 0.9
+  window.speechSynthesis.speak(utterance)
 }
 
 /**
@@ -487,9 +585,9 @@ export async function playWordSentence(word: Word): Promise<void> {
  * @param word - The word with definition
  */
 export async function playWordDefinition(word: Word): Promise<void> {
-  if (typeof window !== "undefined" && "speechSynthesis" in window) {
-    const utterance = new SpeechSynthesisUtterance(word.definition)
-    utterance.rate = 0.9
-    window.speechSynthesis.speak(utterance)
-  }
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return
+
+  const utterance = new SpeechSynthesisUtterance(word.definition)
+  utterance.rate = 0.9
+  window.speechSynthesis.speak(utterance)
 }

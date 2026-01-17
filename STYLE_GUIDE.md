@@ -335,7 +335,7 @@ Some components use HTML Canvas for performance-critical rendering. These can't 
 useSpeechRecognition (hook) - owns microphone + speech recognition
 ├── analyserNode → VoiceWaveform (presentational)
 ├── transcript → display recognized speech
-├── provider → current provider info (deepgram or web-speech)
+├── provider → current provider info (google or web-speech)
 └── isRecording, startRecording, stopRecording → controls
 ```
 

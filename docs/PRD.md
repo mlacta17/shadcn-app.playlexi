@@ -59,9 +59,9 @@ The external marketing website (separate repo) has two buttons:
 ```
 Marketing Site → "Get Started" → PlayLexi App
                                       ↓
-                               Tutorial (3 steps)
+                               Tutorial (4 steps)
                                       ↓
-                               Placement Game
+                               Placement Test (adaptive)
                                       ↓
                                Rank Assignment
                                       ↓
@@ -72,30 +72,92 @@ Marketing Site → "Get Started" → PlayLexi App
                                Main App
 ```
 
-#### 2.2.1 Tutorial (3 Steps)
+#### 2.2.1 Tutorial (4 Steps)
 
 | Step | Title | Description |
 |------|-------|-------------|
 | 1 | "Press Start, then listen carefully to the word" | You can replay the word as many times as you'd like. Use the definition and sentence buttons for extra clues. |
 | 2 | "Use the microphone and spell the word letter by letter" | Saying the whole word will not count towards the microphone's recording, only letters. |
-| 3 | "Advance through as many rounds as you can" | You start with 3 lives, and each mistake costs one life. Once you run out, the game ends. |
+| 3 | "First, a quick placement test" | We'll ask you 10-15 words to find your level. This is just calibration — don't worry about mistakes! |
+| 4 | "In real games, you'll have lives" | In Endless mode, you start with 3 hearts. Each mistake costs one heart. When you run out, the game ends. In Blitz mode, there's no hearts — just a 3-minute timer! |
 
-- Progress bar shows completion (33% → 66% → 100%)
+- Progress bar shows completion (25% → 50% → 75% → 100%)
 - "Skip" link available on all steps
 - "Continue" button advances, "Go back" returns to previous
-- "Finish" on step 3 starts placement game
+- "Finish" on step 4 starts placement test
 
-#### 2.2.2 Placement Game
+**Why 4 Steps Instead of 3:**
 
-- Format: Endless mode
-- Hearts: 3 (same as regular Endless)
-- Purpose: Determine starting rank based on highest difficulty reached
-- One-time only (cannot be replayed)
-- Word difficulty increases each round until all hearts lost
+The placement test intentionally has NO hearts (to reduce pressure and collect full calibration data). However, the real game modes DO have hearts. Adding Step 4 bridges this gap by:
+1. Explicitly framing the placement test as "calibration, not a real game" (Step 3)
+2. Teaching the hearts mechanic BEFORE the first real game (Step 4)
+3. Explaining the difference between Endless (hearts) and Blitz (timer)
+
+This prevents confusion when players encounter hearts for the first time after placement.
+
+#### 2.2.2 Placement Test
+
+> **Note:** This section was updated per ADR-013 (Adaptive Placement Test) in ARCHITECTURE.md.
+
+**Format:** Adaptive placement test (not Endless mode)
+
+| Attribute | Value |
+|-----------|-------|
+| Words | 10-15 (adaptive) |
+| Hearts | **None** (calibration mode — no elimination) |
+| Purpose | Determine starting skill rating using Bayesian inference |
+| Duration | ~5 minutes max |
+| Replayable | No (one-time only) |
+
+**How It Works:**
+
+1. Player starts with equal probability of being in any tier (1-7)
+2. System serves a mid-difficulty word (Tier 4) first
+3. Based on correct/incorrect answer, tier probabilities update
+4. Next word is selected from the most uncertain tier
+5. Process continues until one tier has >80% probability OR 15 words completed
+6. Player is placed at the most probable tier
+
+**Player Experience:**
+
+- **No hearts displayed** (reduces pressure, collects full calibration data)
+- Progress bar shows "8/15 words"
+- Encouraging message: "Don't worry about mistakes — we're finding your level!"
+- No "game over" — test simply concludes when calibration completes
+
+**Technical:** See ADR-013 in ARCHITECTURE.md for Bayesian algorithm details.
+
+**Why No Hearts in Placement (Design Decision):**
+
+We considered three options for the placement test:
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **1. No hearts (chosen)** | Full calibration data, low anxiety, clean separation of concerns | Doesn't teach hearts mechanic |
+| 2. Hearts with elimination | Teaches mechanic, consistent with Endless | Cuts off data, high anxiety, inaccurate placement |
+| 3. Hearts with regeneration | Teaches hearts, full data | Introduces fake mechanic that doesn't exist elsewhere |
+
+**Decision: No hearts, but add Tutorial Step 4 to teach hearts before first real game.**
+
+Rationale:
+- The tutorial's job is to **teach mechanics** → Step 4 teaches hearts
+- The placement test's job is to **measure skill** → No hearts needed
+- These are separate responsibilities and should stay separate
+- Introducing a "hearts with regeneration" mechanic would confuse players when it doesn't exist in real games
+
+**Why Adaptive (vs. Original Endless):**
+
+| Aspect | Old (Endless) | New (Adaptive) |
+|--------|---------------|----------------|
+| Time | Variable (could be 50+ words) | Fixed ~5 minutes |
+| Accuracy | "Highest tier reached" | Bayesian confidence estimate |
+| Stress level | High (fear of elimination) | Low (calibration framing) |
+| Skilled players | Slog through easy content | Quickly tested at higher tiers |
+| Hearts | 3 (elimination on depletion) | None (calibration mode) |
 
 #### 2.2.3 Rank Assignment Screen
 
-After placement game:
+After placement test:
 - Display: Rank badge with tier name (e.g., "You've qualified as a 'New Bee' Rank")
 - Prompt: "Create an account to save your progress and continue playing for free."
 - Buttons: "Sign up with Google" | "Sign up with Apple"
@@ -127,7 +189,7 @@ Marketing Site → "I Have an Account" → PlayLexi App
 ```
 
 - Direct to OAuth (Google/Apple)
-- No tutorial, no placement game
+- No tutorial, no placement test
 - Straight to main app dashboard
 
 ---
@@ -349,7 +411,7 @@ Multiplayer games are divided into two match types, inspired by competitive game
 - Strictly ELO-matched opponents
 - Higher XP gains/losses
 - Displays rank prominently
-- Unlocked after completing placement game
+- Unlocked after completing placement test
 
 **Mode Selection UI:**
 ```
@@ -1036,6 +1098,31 @@ When a player says the whole word instead of spelling it:
 | No audio broadcast | Words/voice stay private to active player |
 | Elimination | Immediate redirect to results screen |
 
+### 12.6 Skill Rating System
+
+| Decision | Choice |
+|----------|--------|
+| Rating algorithm | **Glicko-2** (hidden) for skill estimation and difficulty matching |
+| Visible progression | **XP + Tier** system (unchanged) for leaderboards and profiles |
+| Placement | **Adaptive test** (10-15 words) using Bayesian inference |
+| Word selection | Based on Glicko-2 rating, not visible XP tier |
+| Matchmaking | Glicko-2 rating for skill-based pairing |
+
+**Two Systems, Different Purposes:**
+
+| System | Visible? | Purpose |
+|--------|----------|---------|
+| XP + Tier (3.3) | Yes | Progression rewards, leaderboards, bragging rights |
+| Glicko-2 Rating | No | Difficulty matching, matchmaking, adaptive learning |
+
+> **Technical Details:** See ADR-012 (Hidden Skill Rating System) and ADR-013 (Adaptive Placement Test) in ARCHITECTURE.md.
+
+**Why Hidden Rating?**
+- Players focus on XP progression (motivating)
+- System quietly adjusts difficulty to maintain "flow state"
+- Avoids anxiety from visible rating fluctuations
+- Similar to how Valorant has hidden MMR separate from visible rank
+
 ---
 
 ## 13. Edge Cases & Error Handling
@@ -1104,7 +1191,7 @@ When a player says the whole word instead of spelling it:
 |----------|----------|
 | No audio detected | "We didn't hear anything. Please try again." |
 | Audio too quiet | Same as above |
-| Whisper returns gibberish | Submitted as-is (strict mode — no second chances) |
+| Speech recognition returns gibberish | Submitted as-is (strict mode — no second chances) |
 | Microphone permission denied | Prompt to enable, offer keyboard as alternative |
 | Background noise interferes | Player responsible for quiet environment |
 
@@ -1147,9 +1234,9 @@ When a player says the whole word instead of spelling it:
 | Rule | Description |
 |------|-------------|
 | Storage | Voice audio is **never stored** — processed in memory |
-| Transmission | Encrypted via TLS |
-| Transcription | OpenAI Whisper (self-hosted) — no third-party access |
-| Retention | 0 seconds — deleted immediately after spelling extraction |
+| Transmission | Encrypted via TLS (WebSocket to speech server) |
+| Transcription | Google Cloud Speech-to-Text — gRPC streaming, no audio stored |
+| Retention | 0 seconds — deleted immediately after transcription |
 
 **Rationale:** Voice is sensitive biometric data. We minimize liability by not storing it.
 
@@ -1283,9 +1370,12 @@ When a player says the whole word instead of spelling it:
 |------|------------|
 | **Crown Points** | Points earned by Royal Bees competing for Bee Keeper title |
 | **Track** | A specific combination of game mode + input method (4 total) |
-| **Placement Game** | One-time assessment for new users to determine starting rank |
+| **Placement Test** | Adaptive one-time assessment (~10-15 words) for new users to determine starting skill rating using Bayesian inference. See Section 2.2.2. |
+| **Skill Rating (Hidden)** | Glicko-2 rating (1000-1900) used internally for word difficulty selection and matchmaking. Not visible to players. See ADR-012 in ARCHITECTURE.md. |
+| **Rating Deviation (RD)** | Glicko-2 uncertainty measure (30-350). High RD = uncertain skill, ratings change more. |
 | **Skeleton UI** | Shimmering placeholder shown while data is loading |
 | **Hybrid Matchmaking** | System that expands tier range over time to reduce queue wait |
+| **IRT (Item Response Theory)** | Statistical model used in placement test to estimate player skill based on correct/incorrect answers |
 
 ---
 

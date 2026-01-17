@@ -6,8 +6,8 @@
  * ## Why a Separate Server?
  *
  * Next.js App Router doesn't support WebSockets in route handlers. To achieve
- * true real-time streaming (like Azure provides), we need a persistent WebSocket
- * connection that can maintain a gRPC stream to Google.
+ * true real-time streaming, we need a persistent WebSocket connection that can
+ * maintain a gRPC stream to Google.
  *
  * ## How It Works
  *

@@ -223,7 +223,7 @@ Needed for a complete single-player experience:
 2. ~~CorrectAnswerFeedback~~ ✓ Done (now `GameFeedbackOverlay`)
 3. ~~WrongAnswerFeedback~~ ✓ Done (now `GameFeedbackOverlay`)
 4. TutorialCard
-5. ~~PlacementGameIntro~~ ✗ Removed (tutorial step 3 explains placement, no separate intro needed per PRD)
+5. ~~PlacementGameIntro~~ ✗ Removed (tutorial steps 3-4 explain placement + hearts, no separate intro needed per PRD)
 6. ~~RankReveal~~ ✗ Removed (it's a page, not a component — see `/onboarding/rank-result/page.tsx`)
 7. ProfileCompletionForm
 
@@ -446,12 +446,14 @@ The project uses **OKLCH color space** for perceptually uniform colors. Key toke
 | 2025-12-26 | Removed RoundIndicator from inventory — it's just inline text, not a component. Added Architecture Decision #4: "When NOT to Create a Component" with guidelines on avoiding over-abstraction. | Claude |
 | 2025-12-26 | Created RankBadge component structure with placeholder SVG paths. 7 tiers × 2 modes = 14 variants. Auto theme switching, size presets (sm/md/lg/xl). Expects files in `public/badges/`. | Claude |
 | 2025-12-30 | Added keyboard mode to SpeechInput. New `mode="keyboard"` prop with "Type to start"/"Enter to stop" buttons. Uses discriminated union types for type-safe mode-specific props. Added InputMode, InputState types and INPUT_MODE_PLACEHOLDERS constant for reusability. Improved accessibility with ARIA live regions. KeyboardInput now marked as Done (implemented within SpeechInput). | Claude |
-| 2026-01-02 | Removed PlacementGameIntro from inventory — tutorial step 3 already explains placement, no separate intro screen per PRD. | Claude |
+| 2026-01-02 | Removed PlacementGameIntro from inventory — tutorial steps 3-4 explain placement (no hearts) + hearts mechanic, no separate intro screen needed. | Claude |
 | 2026-01-02 | Removed RankReveal from component inventory — it's a full-screen page, not a reusable component. Only used once for initial placement flow. Implemented as `/onboarding/rank-result/page.tsx` instead. Follows Architecture Decision #4 (avoid over-abstraction for single-use UI). Figma: node `2610:6076`. | Claude |
 | 2026-01-08 | Added HexPattern component for decorative hexagonal backgrounds. Created as component (not static SVG) for future dynamic theming. Includes commented code for future color/scale/opacity props. Added TopNavbar to inventory (was missing). Updated STYLE_GUIDE.md with HexPattern documentation. Figma: node `2641:7585`. | Claude |
 | 2026-01-08 | Implemented Leaderboard components: LeaderboardTable (TanStack React Table + pagination), Pagination (composable nav), SearchInput (InputGroup composite). Added SearchIcon and FilterIcon to lib/icons.ts. Created Leaderboard page at `/leaderboard`. Marked LeaderboardRow, LeaderboardFilters, LeaderboardTabs as N/A (merged/existing components used). Figma: node `2435:33026`. | Claude |
 | 2026-01-08 | Refactored Leaderboard to follow shadcn data table patterns. Created reusable `DataTable` component in `components/ui/`. Separated column definitions to `leaderboard-columns.tsx`. Added semantic `--placement-gold/silver/bronze` color tokens to globals.css (replacing hardcoded Tailwind colors). Added `data-slot` attributes to all cell components. | Claude |
-| 2026-01-10 | Implemented speech recognition provider abstraction for improved accuracy. Created `lib/speech-recognition-service.ts` with Deepgram (~95%) and Web Speech API fallback. Created `useSpeechRecognition` hook. Deprecated old `useVoiceRecorder` hook. Added aggressive phonetic mapping and `formatTranscriptForDisplay()` for real-time letter display. Added `.env.example` for Deepgram API key. Updated all documentation. | Claude |
+| 2026-01-10 | Implemented speech recognition provider abstraction. Created `lib/speech-recognition-service.ts`. Created `useSpeechRecognition` hook. Deprecated old `useVoiceRecorder` hook. Added phonetic mapping and `formatTranscriptForDisplay()` for real-time letter display. | Claude |
+| 2026-01-17 | Updated tutorial from 3 steps to 4 steps. Step 3 now frames placement as "calibration", Step 4 teaches hearts mechanic. Placement test has NO hearts (by design) — see ADR-013 in ARCHITECTURE.md. This ensures: (1) tutorial teaches mechanics, (2) placement measures skill, (3) no fake mechanics introduced. | Claude |
+| 2026-01-17 | Replaced speech providers: Removed Azure/Deepgram, implemented Google Cloud Speech-to-Text as primary provider via dedicated WebSocket server (`speech-server/`). Web Speech API remains as fallback. Google provides word-level timestamps for anti-cheat. See ADR-009 in ARCHITECTURE.md. | Claude |
 
 ---
 

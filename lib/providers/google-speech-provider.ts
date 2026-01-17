@@ -313,8 +313,8 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
                   // =================================================================
                   // GOOGLE ANTI-CHEAT: Multi-Signal Detection
                   // =================================================================
-                  // Since Google doesn't have Azure's Lexical field, we use multiple
-                  // signals from the word timing data to determine spelling vs saying:
+                  // We use multiple signals from word timing data to determine
+                  // spelling vs saying:
                   //
                   // 1. Word count vs letter count
                   // 2. Single-letter word ratio

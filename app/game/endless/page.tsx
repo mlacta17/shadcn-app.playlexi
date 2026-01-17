@@ -75,8 +75,8 @@ export default function EndlessGamePage() {
   // ---------------------------------------------------------------------------
   // Voice Recording
   // ---------------------------------------------------------------------------
-  // Uses provider abstraction: Azure (~95-98%) > OpenAI > Deepgram > Web Speech (fallback)
-  // Provider is selected automatically based on configured API keys
+  // Uses provider abstraction: Google Cloud Speech (~95%+) > Web Speech API (fallback)
+  // Google is selected automatically if speech server is running (npm run dev:speech)
   const {
     isRecording,
     startRecording,
@@ -135,7 +135,7 @@ export default function EndlessGamePage() {
     const metrics = await stopRecording()
 
     // Submit answer with timing data for anti-cheat validation
-    // Priority: audio timing (from Azure/Deepgram) > letter timing (fallback)
+    // Priority: audio timing (from Google word timestamps) > letter timing (fallback)
     gameActions.submitAnswer(transcript, {
       // PRIMARY: Audio-level timing from speech provider (more reliable)
       audioTiming: {

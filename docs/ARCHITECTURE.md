@@ -968,7 +968,7 @@ Based on research of competitive games (Valorant, Chess.com, Duolingo), PlayLexi
 | Method | Route | Purpose |
 |--------|-------|---------|
 | GET | `/api/words/random` | Get word for round |
-| POST | `/api/voice/transcribe` | Transcribe audio via Whisper |
+| WS | `ws://localhost:3002` | Speech recognition (Google Cloud via WebSocket) |
 | GET | `/api/notifications` | Get notifications |
 | PATCH | `/api/notifications/[id]/read` | Mark as read |
 | POST | `/api/chat/send` | Send preset message |
@@ -1719,9 +1719,10 @@ The project uses **OKLCH color space** for perceptually uniform colors. All toke
 | Database | D1 | SQLite-based serverless database |
 | Real-time | Durable Objects | WebSocket connections, game state |
 | File Storage | R2 | Audio files, avatars (S3-compatible) |
-| Voice AI | Workers AI | Whisper model for transcription |
 | KV Storage | Workers KV | Session tokens, cache |
 | Queues | Queues | Background jobs (XP calculations, notifications) |
+
+**Note:** Speech recognition runs on Google Cloud Run (see Section 1.3 Hybrid Architecture), not Workers AI.
 
 ### 12.3 Cloudflare Configuration
 
@@ -1956,8 +1957,8 @@ const cspHeader = `
 | Rule | Implementation |
 |------|----------------|
 | No storage | Audio processed in-memory, never written to disk |
-| Encryption | TLS 1.3 for all audio transmission |
-| No third-party access | Whisper runs on Workers AI (Cloudflare-hosted) |
+| Encryption | TLS for WebSocket + gRPC audio transmission |
+| Google Cloud | Speech-to-Text API — audio streamed, not stored |
 | Immediate deletion | Buffer cleared after transcription returns |
 
 ---
@@ -2605,7 +2606,7 @@ function GameTimer({ totalSeconds, remainingSeconds }: GameTimerProps) {
 - No risk of two hooks fighting over the same MediaStream
 - Clear separation: hook handles logic, components handle UI
 - Easier to test — mock one hook, not three
-- Provider abstraction allows switching between Deepgram (~95% accuracy) and Web Speech API (fallback)
+- Provider abstraction allows switching between Google Cloud Speech (~95%+ accuracy) and Web Speech API (fallback)
 
 **Consequences:**
 - Hook is larger and more complex
@@ -2663,9 +2664,9 @@ useSpeechRecognition (owns audio pipeline + provider selection)
 | **Status** | Accepted |
 | **Deciders** | Project team |
 
-**Context:** What happens when Whisper transcribes incorrectly? Should we allow players to edit?
+**Context:** What happens when speech recognition transcribes incorrectly? Should we allow players to edit?
 
-**Decision:** Strict mode — what Whisper hears is final. No editing allowed.
+**Decision:** Strict mode — what the speech recognizer hears is final. No editing allowed.
 
 **Rationale:**
 - Allowing edits on low confidence is exploitable (mumble intentionally to get keyboard fallback)
@@ -2720,7 +2721,7 @@ useSpeechRecognition (owns audio pipeline + provider selection)
    - Single letters sound like common words ("R" → "are", "U" → "you")
    - Fast spellers outpace speech recognition's ability to segment letters
    - Background noise significantly impacts single-letter detection
-   - Even premium providers (Deepgram ~95% accuracy) struggle with letter sequences
+   - Even premium providers (~95% accuracy) struggle with letter sequences
 
 2. **Technical Constraints:**
    - Building custom speech-to-letter recognition would require:
@@ -3003,6 +3004,458 @@ PRODUCTION PHASE (Gameplay):
 
 ---
 
+### ADR-012: Hidden Skill Rating System (Glicko-2)
+
+| Field | Value |
+|-------|-------|
+| **Date** | January 17, 2026 |
+| **Status** | Proposed |
+| **Deciders** | Project team |
+
+**Context:** Players need appropriate difficulty matching without requiring hundreds of games to reach their true skill level. The current XP system (Section 3.3 in PRD) provides visible progression but doesn't account for skill uncertainty or adapt quickly to new players.
+
+**Problem Statement:**
+1. **Cold Start Problem**: New players must grind through easy content before reaching appropriate difficulty
+2. **Fixed XP Thresholds**: +5 XP per round means ~400+ games to advance from Tier 1 to Tier 7
+3. **No Skill Uncertainty**: System can't distinguish "new player at true skill" from "grinding veteran"
+4. **Matchmaking Quality**: Public multiplayer needs skill-based matching, not just XP-based
+
+**Decision:** Implement a **hidden Glicko-2 skill rating system** alongside the visible XP/tier system.
+
+**Key Insight: Two Separate Systems**
+
+| System | Purpose | Visibility | Used For |
+|--------|---------|------------|----------|
+| **XP + Tier** (existing) | Progression, rewards, bragging rights | Visible to player | Leaderboards, profile display |
+| **Glicko-2 Rating** (new) | Skill estimation, difficulty matching | Hidden | Word selection, multiplayer matchmaking |
+
+**Glicko-2 Overview:**
+
+Glicko-2 is a rating system designed for online games that addresses Elo's limitations:
+
+| Component | Description | Range |
+|-----------|-------------|-------|
+| **Rating (r)** | Estimated skill level | 1000-1900 (maps to tiers 1-7) |
+| **Rating Deviation (RD)** | Uncertainty in rating | 30-350 (lower = more confident) |
+| **Volatility (σ)** | How much skill tends to change | 0.03-0.10 |
+
+**Why Glicko-2 over Elo:**
+1. **Tracks Uncertainty**: New players have high RD → ratings change faster
+2. **Handles Inactivity**: RD increases if player hasn't played recently
+3. **Volatility Component**: Players who improve/decline rapidly are tracked
+4. **Industry Standard**: Used by Lichess, FIDE online, many competitive games
+
+**How It Works in PlayLexi:**
+
+```
+NEW PLAYER:
+Rating: 1500 (middle skill)
+RD: 350 (maximum uncertainty)
+→ First few games change rating significantly (±100-150 points)
+→ System quickly converges on true skill level
+
+ESTABLISHED PLAYER:
+Rating: 1650 (skill estimate)
+RD: 60 (low uncertainty)
+→ Games change rating minimally (±15-30 points)
+→ Stable difficulty, occasional calibration
+```
+
+**Rating-to-Tier Mapping:**
+
+| Tier | Name | Rating Range | Notes |
+|------|------|--------------|-------|
+| 1 | New Bee | 1000-1149 | Starting range for low performers |
+| 2 | Bumble Bee | 1150-1299 | |
+| 3 | Busy Bee | 1300-1449 | |
+| 4 | Honey Bee | 1450-1599 | Default starting rating (1500) |
+| 5 | Worker Bee | 1600-1749 | |
+| 6 | Royal Bee | 1750-1899 | |
+| 7 | Bee Keeper | 1900+ | Elite tier |
+
+**Word Selection Algorithm:**
+
+```typescript
+function selectWordForPlayer(playerRating: number, playerRD: number): Word {
+  // Map rating to difficulty tier
+  const targetTier = Math.floor((playerRating - 1000) / 150) + 1
+  const clampedTier = Math.max(1, Math.min(7, targetTier))
+
+  // High RD = uncertain skill = sample from adjacent tiers for calibration
+  if (playerRD > 150) {
+    // Sample from ±1 tier for faster convergence
+    const tierRange = [clampedTier - 1, clampedTier, clampedTier + 1]
+    return getRandomWordFromTiers(tierRange.filter(t => t >= 1 && t <= 7))
+  }
+
+  // Low RD = confident = serve from target tier with occasional challenges
+  return getRandomWordFromTier(clampedTier)
+}
+```
+
+**Rating Update Formula (Simplified):**
+
+```typescript
+function updateRating(
+  player: { rating: number, rd: number, volatility: number },
+  wordTier: number,
+  wasCorrect: boolean
+): { rating: number, rd: number, volatility: number } {
+  // Word difficulty as "opponent rating"
+  const wordRating = 1000 + (wordTier - 1) * 150 + 75 // Midpoint of tier
+
+  // Expected probability of correct answer (Item Response Theory)
+  const expectedProbability = 1 / (1 + Math.pow(10, (wordRating - player.rating) / 400))
+
+  // Actual outcome
+  const actualOutcome = wasCorrect ? 1 : 0
+
+  // Update rating (simplified - full Glicko-2 uses more complex math)
+  const rdFactor = 1 / (1 + (3 * Math.pow(player.rd / 400, 2)))
+  const ratingChange = (actualOutcome - expectedProbability) * rdFactor * 32
+
+  return {
+    rating: player.rating + ratingChange,
+    rd: calculateNewRD(player.rd, wasCorrect),
+    volatility: calculateNewVolatility(player.volatility, ratingChange)
+  }
+}
+```
+
+**Database Schema Addition:**
+
+```typescript
+// db/schema.ts - New table for skill ratings
+export const userSkillRatings = sqliteTable('user_skill_ratings', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  track: text('track', { enum: rankTracks }).notNull(),
+
+  // Glicko-2 components
+  rating: real('rating').notNull().default(1500),
+  ratingDeviation: real('rating_deviation').notNull().default(350),
+  volatility: real('volatility').notNull().default(0.06),
+
+  // Derived tier (for quick queries)
+  estimatedTier: integer('estimated_tier').notNull().default(4),
+
+  // Tracking
+  gamesPlayed: integer('games_played').notNull().default(0),
+  lastPlayedAt: integer('last_played_at', { mode: 'timestamp' }),
+
+  // Season support
+  seasonId: text('season_id'),
+  seasonHighestRating: real('season_highest_rating').default(1500),
+
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+}, (table) => ({
+  userTrackUnique: unique().on(table.userId, table.track),
+  trackRatingIdx: index('idx_skill_ratings_track_rating').on(table.track, table.rating),
+}));
+```
+
+**Integration with Existing XP System:**
+
+The Glicko-2 system **does not replace** the XP system — they serve different purposes:
+
+| Event | XP Effect | Glicko-2 Effect |
+|-------|-----------|-----------------|
+| Correct answer | +5 XP (Endless) | Rating increases (based on word tier vs player rating) |
+| Wrong answer | 0 XP | Rating decreases (based on word tier vs player rating) |
+| Win multiplayer 1st | +50 XP | Rating increases (based on opponent ratings) |
+| Reach new tier (XP) | Tier badge updates | No effect (Glicko-2 tier is hidden) |
+
+**Coexistence Rules:**
+1. **Visible tier** comes from XP (existing system, unchanged)
+2. **Word difficulty** comes from Glicko-2 rating (new)
+3. **Matchmaking** uses Glicko-2 rating for skill-based pairing
+4. **Leaderboards** use XP (visible metric players understand)
+
+**Consequences:**
+
+*Positive:*
+- New players quickly reach appropriate difficulty
+- Skill-based matchmaking improves game quality
+- System adapts to improving/declining players
+- Separate concerns: XP = engagement, Glicko-2 = skill
+
+*Negative:*
+- Additional complexity (two rating systems)
+- Players may be confused why word difficulty doesn't match visible tier
+- Must maintain two parallel systems
+- RD decay needs background job or lazy evaluation
+
+**Files to Create:**
+
+1. `lib/rating/glicko2.ts` — Core Glicko-2 algorithm implementation
+2. `lib/rating/word-selector.ts` — Rating-aware word selection
+3. `db/schema.ts` — Add `userSkillRatings` table
+4. Update `lib/game-logic.ts` — Call rating updates after each answer
+
+---
+
+### ADR-013: Adaptive Placement Test
+
+| Field | Value |
+|-------|-------|
+| **Date** | January 17, 2026 |
+| **Status** | Accepted |
+| **Deciders** | Project team |
+
+**Context:** The original placement system used an Endless game until 3 hearts are lost, ranking based on "highest difficulty reached." This approach has issues:
+
+1. **Slow Convergence**: Player might spell 20+ easy words before reaching challenging content
+2. **High Variance**: Lucky/unlucky word selection affects placement
+3. **Player Frustration**: Skilled players must slog through trivial content
+4. **Inaccurate Placement**: Single failure point doesn't distinguish "almost tier 5" from "solid tier 4"
+
+**Inspiration:** Valorant placement matches, Duolingo placement test, GRE/GMAT adaptive testing.
+
+**Decision:** Replace the "Endless until elimination" placement with an **adaptive placement test** that uses Bayesian probability to converge on skill level in 10-15 words. **The placement test has NO hearts.**
+
+---
+
+#### Sub-Decision: No Hearts in Placement Test
+
+**The Question:** Should the placement test include hearts?
+
+**Options Considered:**
+
+| Option | Description | Verdict |
+|--------|-------------|---------|
+| **1. No hearts** | Pure calibration, no elimination | ✅ **Chosen** |
+| 2. Hearts with elimination | Same as Endless (3 hearts, game over on depletion) | ❌ Rejected |
+| 3. Hearts with regeneration | Hearts deplete but regenerate, no elimination | ❌ Rejected |
+| 4. Cosmetic hearts | Hearts displayed but don't affect gameplay | ❌ Rejected |
+
+**Why No Hearts (Option 1):**
+
+*Game Design Perspective:*
+- **Separation of concerns**: Tutorial teaches mechanics, placement measures skill
+- **Full calibration data**: The Bayesian algorithm NEEDS wrong answers to find skill boundaries
+- **Duolingo model**: Their placement test is explicitly different from regular lessons
+- **Reduced anxiety**: "Calibration" framing is less stressful than "test you can fail"
+
+*Engineering Perspective:*
+- **No special cases**: Hearts either exist (Endless) or don't (Blitz, Placement)
+- **No fake mechanics**: Regeneration doesn't exist elsewhere — introducing it creates confusion
+- **Clean state machine**: Placement ends on convergence/word count, not heart depletion
+- **Reusable components**: Same game UI, just without HeartsDisplay component
+
+**Why NOT Hearts with Elimination (Option 2):**
+
+- Cuts off calibration data (3 wrong = game over, but we need more data points)
+- A skilled player with 3 unlucky words gets placed wrong
+- High anxiety contradicts "finding your level" framing
+- Variable length (could be 50+ words for skilled players)
+
+**Why NOT Hearts with Regeneration (Option 3):**
+
+- **Introduces a mechanic that doesn't exist anywhere else**
+- Players would expect regeneration in Endless (it doesn't exist)
+- Creates "unlearning" problem — they learn wrong behavior
+- More complex implementation for zero benefit
+- Violates principle: "Don't teach mechanics in onboarding that don't exist in real game"
+
+**Why NOT Cosmetic Hearts (Option 4):**
+
+- "Fake" hearts create trust issues when they become real
+- Player thinks "I had 3 hearts and lost 4 times but didn't lose?"
+- Confusing UX — hearts should mean something or not appear
+
+**Solution for Teaching Hearts:**
+
+Add **Tutorial Step 4** (before placement) that explicitly teaches the hearts mechanic:
+
+> "In real games, you'll have lives. In Endless mode, you start with 3 hearts. Each mistake costs one heart. When you run out, the game ends. In Blitz mode, there's no hearts — just a 3-minute timer!"
+
+This way:
+1. Players learn hearts exist (Tutorial Step 4)
+2. Placement explicitly frames itself as "calibration, not a game" (Tutorial Step 3)
+3. First real Endless game → hearts feel familiar, not surprising
+
+---
+
+**How Adaptive Testing Works:**
+
+```
+INITIAL STATE:
+Tier Probabilities: [14%, 14%, 14%, 14%, 14%, 14%, 14%]
+(Equal chance of any tier)
+
+WORD 1: Serve Tier 4 word (middle difficulty)
+→ Player answers CORRECTLY
+→ Update: Lower tiers become less likely, higher tiers more likely
+Tier Probabilities: [5%, 8%, 12%, 18%, 22%, 20%, 15%]
+
+WORD 2: Serve Tier 5 word (probing higher skill)
+→ Player answers CORRECTLY
+→ Update: High tiers become more likely
+Tier Probabilities: [2%, 4%, 8%, 15%, 25%, 28%, 18%]
+
+WORD 3: Serve Tier 6 word (testing upper bound)
+→ Player answers INCORRECTLY
+→ Update: Tier 6-7 become less likely, Tier 5 becomes most likely
+Tier Probabilities: [2%, 3%, 6%, 18%, 45%, 20%, 6%]
+
+... continue until confidence threshold met ...
+
+FINAL: Tier 5 has >80% probability → Place at Tier 5
+```
+
+**Algorithm Overview:**
+
+```typescript
+interface PlacementState {
+  tierProbabilities: number[]  // [T1, T2, T3, T4, T5, T6, T7] - sums to 1.0
+  wordsAttempted: number
+  correctByTier: Record<number, number>
+  incorrectByTier: Record<number, number>
+}
+
+function getNextPlacementWord(state: PlacementState): {
+  tier: number
+  isComplete: boolean
+  estimatedTier?: number
+} {
+  // Find tier with highest uncertainty (closest to 50% probability)
+  const uncertainTier = findMostUncertainTier(state.tierProbabilities)
+
+  // Check if we've converged (one tier has >80% probability)
+  const maxProb = Math.max(...state.tierProbabilities)
+  const isComplete = maxProb > 0.80 || state.wordsAttempted >= 15
+
+  if (isComplete) {
+    return {
+      tier: uncertainTier,
+      isComplete: true,
+      estimatedTier: state.tierProbabilities.indexOf(maxProb) + 1
+    }
+  }
+
+  return { tier: uncertainTier, isComplete: false }
+}
+
+function updateProbabilities(
+  state: PlacementState,
+  wordTier: number,
+  wasCorrect: boolean
+): PlacementState {
+  const newProbs = [...state.tierProbabilities]
+
+  // Bayesian update based on Item Response Theory
+  for (let t = 1; t <= 7; t++) {
+    // P(correct | player at tier t, word at tier wordTier)
+    const expectedCorrectProb = getExpectedProbability(t, wordTier)
+
+    // Likelihood given observed outcome
+    const likelihood = wasCorrect ? expectedCorrectProb : (1 - expectedCorrectProb)
+
+    // Update probability using Bayes' rule
+    newProbs[t - 1] *= likelihood
+  }
+
+  // Normalize to sum to 1.0
+  const sum = newProbs.reduce((a, b) => a + b, 0)
+  return {
+    ...state,
+    tierProbabilities: newProbs.map(p => p / sum),
+    wordsAttempted: state.wordsAttempted + 1,
+    correctByTier: wasCorrect
+      ? { ...state.correctByTier, [wordTier]: (state.correctByTier[wordTier] || 0) + 1 }
+      : state.correctByTier,
+    incorrectByTier: !wasCorrect
+      ? { ...state.incorrectByTier, [wordTier]: (state.incorrectByTier[wordTier] || 0) + 1 }
+      : state.incorrectByTier,
+  }
+}
+
+// Expected probability of correct answer based on IRT model
+function getExpectedProbability(playerTier: number, wordTier: number): number {
+  // 3-parameter logistic model (simplified)
+  const skillDiff = playerTier - wordTier
+  return 0.10 + 0.85 / (1 + Math.exp(-1.5 * skillDiff))
+  // Returns ~95% for easy words, ~50% for matched difficulty, ~15% for hard words
+}
+```
+
+**Placement Test UI Flow:**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PLACEMENT TEST                                │
+│                                                                  │
+│   Progress: ████████░░░░░░░░ 8/15 words                          │
+│                                                                  │
+│   (No hearts - this is calibration, not elimination)             │
+│                                                                  │
+│   [Word audio plays]                                             │
+│   [Input component]                                              │
+│                                                                  │
+│   "Don't worry about mistakes — we're finding your level!"      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Key Differences from Original Placement:**
+
+| Aspect | Original (Endless-based) | New (Adaptive) |
+|--------|--------------------------|----------------|
+| Format | Endless with 3 hearts | Fixed 10-15 words, **no hearts** |
+| Hearts | 3 (elimination on depletion) | **None** (calibration mode) |
+| Word selection | Progressive difficulty | Adaptive based on performance |
+| End condition | All hearts lost | Probability converges or max words |
+| Accuracy | "Highest tier reached" | Bayesian estimate with confidence |
+| Player experience | Stressful (can fail) | Low pressure (calibration only) |
+| Time | Variable (could be 50+ words) | Fixed ~5 minutes max |
+| Teaches hearts? | Yes (by doing) | No (Tutorial Step 4 teaches instead) |
+
+**Integration with Glicko-2:**
+
+After placement test completes:
+
+```typescript
+function initializeGlicko2FromPlacement(estimatedTier: number): SkillRating {
+  return {
+    rating: 1000 + (estimatedTier - 1) * 150 + 75, // Midpoint of tier
+    ratingDeviation: 200, // Still uncertain, but lower than complete unknown
+    volatility: 0.06,
+  }
+}
+```
+
+**PRD Updates Made:**
+
+The following PRD sections have been updated to reflect this decision:
+
+1. **Section 2.2** (User Flow diagram): Changed "Tutorial (3 steps)" → "Tutorial (4 steps)"
+2. **Section 2.2.1** (Tutorial): Added Step 4 to teach hearts mechanic before first real game
+3. **Section 2.2.2** (Placement Test): Documented no-hearts decision with full rationale
+
+**Consequences:**
+
+*Positive:*
+- Faster, more accurate placement (~5 minutes vs potentially 20+ minutes)
+- Better player experience (no failure pressure)
+- More accurate skill estimation via Bayesian inference
+- Consistent experience length for all players
+- No fake mechanics (hearts behave consistently across all modes)
+- Clean separation: tutorial teaches, placement measures
+
+*Negative:*
+- More complex implementation than simple Endless mode
+- Requires careful tuning of IRT parameters
+- Tutorial now has 4 steps instead of 3 (slightly longer onboarding)
+- Players don't experience hearts until first real game (mitigated by Tutorial Step 4)
+
+**Files to Create:**
+
+1. `lib/placement/placement-engine.ts` — Adaptive placement algorithm
+2. `lib/placement/irt-model.ts` — Item Response Theory calculations
+3. `components/placement/placement-progress.tsx` — Progress UI (no hearts)
+4. Update `app/(auth)/onboarding/placement/page.tsx` — Use new engine
+
+---
+
 ### Template for New ADRs
 
 When adding a new decision, copy this template:
@@ -3112,7 +3565,7 @@ After Phase 2 is working locally, complete these before Phase 3:
 
 | Task | Type | Details | Status |
 |------|------|---------|--------|
-| 2.1 | Hook | `useSpeechRecognition` — mic access, AnalyserNode, Deepgram/Web Speech API | ✅ Done |
+| 2.1 | Hook | `useSpeechRecognition` — mic access, AnalyserNode, Google/Web Speech API | ✅ Done |
 | 2.1b | Service | `SpeechRecognitionService` — provider abstraction for speech-to-text | ✅ Done |
 | 2.2 | Hook | `useGameTimer` — countdown with warning/critical states | ✅ Done |
 | 2.2b | Hook | `useGameFeedback` — overlay state and timing | ✅ Done |
@@ -3123,7 +3576,7 @@ After Phase 2 is working locally, complete these before Phase 3:
 | 2.6 | Component | `HeartsDisplay` — 3 hearts with loss animation | ✅ Done |
 | 2.6b | Component | `GameFeedbackOverlay` — correct/wrong answer flash overlay | ✅ Done |
 | 2.7 | Component | `RoundIndicator` — "Round 1" badge | ✗ Removed (inline text, not a component) |
-| 2.9 | API | Speech recognition via Deepgram WebSocket API | ✅ Done (client-side) |
+| 2.9 | API | Speech recognition via Google WebSocket server | ✅ Done (client-side) |
 | 2.10 | API | `/api/games` — create solo game session | Not Started |
 | 2.11 | API | `/api/games/[gameId]/submit` — submit answer, check correctness | Not Started |
 | 2.12 | Page | `/play/single/endless/page.tsx` — mode selection | Not Started |
@@ -3144,7 +3597,7 @@ After Phase 2 is working locally, complete these before Phase 3:
 
 ### 20.5 Phase 3: Onboarding
 
-**Goal:** New users can complete tutorial, placement game, and create profile.
+**Goal:** New users can complete tutorial, placement test, and create profile.
 
 **Documents to Reference:**
 - PRD.md Section 2.2 — New user flow details
@@ -3156,18 +3609,19 @@ After Phase 2 is working locally, complete these before Phase 3:
 | 3.3 | Component | `RankBadge` — tier badge (7 variants × 2 modes) | ✅ Done |
 | 3.4 | Component | `RankReveal` — animation showing earned rank | Not Started |
 | 3.5 | Component | `ProfileCompletionForm` — username, age, avatar | Not Started |
-| 3.6 | Page | `/onboarding/tutorial/page.tsx` — 3-step tutorial | Not Started |
-| 3.7 | Page | `/onboarding/placement/page.tsx` — placement game | Not Started |
+| 3.6 | Page | `/onboarding/tutorial/page.tsx` — 4-step tutorial | Not Started |
+| 3.7 | Page | `/onboarding/placement/page.tsx` — adaptive placement test (no hearts) | Not Started |
 | 3.8 | Page | `/onboarding/rank-result/page.tsx` — rank assignment | Not Started |
 | 3.9 | Page | `/onboarding/complete-profile/page.tsx` — profile form | Not Started |
-| 3.10 | Logic | Placement rank calculation (based on highest tier reached) | Not Started |
+| 3.10 | Logic | Placement algorithm (Bayesian tier estimation) | Not Started |
 | 3.11 | API | `/api/users/check-username` — availability check | Not Started |
 | 3.12 | API | Update user profile after OAuth | Not Started |
 
 **Exit Criteria:**
-- [ ] New user sees tutorial on first visit
+- [ ] New user sees 4-step tutorial on first visit
+- [ ] Tutorial Step 4 teaches hearts mechanic
 - [ ] Can skip or complete tutorial
-- [ ] Placement game determines starting rank
+- [ ] Placement test (no hearts) determines starting rank via Bayesian inference
 - [ ] Rank reveal shows appropriate tier badge
 - [ ] Profile completion validates unique username
 - [ ] User lands on main app after completion
