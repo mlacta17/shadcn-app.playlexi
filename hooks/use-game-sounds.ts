@@ -40,85 +40,122 @@ export interface UseGameSoundsReturn {
   setEnabled: (enabled: boolean) => void
   /** Set master volume (0-1) */
   setVolume: (volume: number) => void
+  /** Unlock audio context (call on user interaction for Safari) */
+  unlockAudio: () => void
 }
 
 /**
- * Hook for managing game sound effects.
+ * Hook for managing game sound effects using Web Audio API.
  *
- * This hook handles audio preloading and playback for game feedback sounds.
- * Follows the same pattern as other game hooks: hook owns logic, components are presentational.
+ * ## Why Web Audio API instead of HTMLAudioElement?
+ *
+ * Safari (especially iOS) has known issues with HTMLAudioElement:
+ * 1. Reusing the same Audio element causes volume drops
+ * 2. Microphone AudioContext interferes with Audio element playback
+ * 3. Audio context can get "suspended" requiring user interaction to resume
+ *
+ * Web Audio API solves these by:
+ * 1. Creating new buffer sources for each play (no reuse issues)
+ * 2. Using a single AudioContext that can coexist with microphone
+ * 3. Properly managing context state (suspended/running)
  *
  * ## Features
- * - Preloads sounds on mount for instant playback
- * - Respects user's sound preferences (enable/disable)
- * - Volume control
- * - Graceful fallback if audio fails to load
- * - Memoized play functions to prevent unnecessary re-renders
- *
- * ## Audio Format
- * Uses MP3 for universal browser support (including iOS Safari).
- * Recommended settings: 128kbps, 44.1kHz, mono.
+ * - Preloads sounds as AudioBuffers on mount
+ * - Each play() creates a new source node (no reuse issues)
+ * - Handles Safari's autoplay restrictions gracefully
+ * - Volume control via GainNode
+ * - Respects user's sound preferences
  *
  * ## Usage
  * ```tsx
  * function GameScreen() {
- *   const { playCorrect, playWrong } = useGameSounds()
+ *   const { playCorrect, playWrong, unlockAudio } = useGameSounds()
  *
- *   const handleAnswer = (isCorrect: boolean) => {
- *     if (isCorrect) {
- *       playCorrect()
- *     } else {
- *       playWrong()
- *     }
+ *   // Call unlockAudio on first user interaction (for Safari)
+ *   const handleFirstInteraction = () => {
+ *     unlockAudio()
  *   }
  *
- *   return <AnswerButton onClick={() => handleAnswer(true)} />
+ *   const handleAnswer = (isCorrect: boolean) => {
+ *     if (isCorrect) playCorrect()
+ *     else playWrong()
+ *   }
+ *
+ *   return <AnswerButton onClick={handleAnswer} />
  * }
  * ```
- *
- * @param options - Configuration options
  */
 function useGameSounds(options: UseGameSoundsOptions = {}): UseGameSoundsReturn {
   const { volume: initialVolume = 1, enabled: initialEnabled = true } = options
 
-  // Audio elements cache - persists across renders
-  const audioCache = React.useRef<Map<SoundName, HTMLAudioElement>>(new Map())
+  // Refs for Web Audio API components (persist across renders)
+  const audioContextRef = React.useRef<AudioContext | null>(null)
+  const gainNodeRef = React.useRef<GainNode | null>(null)
+  const bufferCache = React.useRef<Map<SoundName, AudioBuffer>>(new Map())
 
   // State
   const [isReady, setIsReady] = React.useState(false)
   const [enabled, setEnabled] = React.useState(initialEnabled)
-  const [volume, setVolume] = React.useState(initialVolume)
+  const [volume, setVolumeState] = React.useState(initialVolume)
+
+  /**
+   * Initialize AudioContext lazily (Safari requires user gesture)
+   */
+  const getAudioContext = React.useCallback(() => {
+    if (!audioContextRef.current) {
+      // Create AudioContext (with webkit prefix for older Safari)
+      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+      audioContextRef.current = new AudioContextClass()
+
+      // Create master gain node for volume control
+      gainNodeRef.current = audioContextRef.current.createGain()
+      gainNodeRef.current.gain.value = volume
+      gainNodeRef.current.connect(audioContextRef.current.destination)
+    }
+    return audioContextRef.current
+  }, [volume])
+
+  /**
+   * Resume AudioContext if suspended (required by Safari after user gesture)
+   */
+  const unlockAudio = React.useCallback(() => {
+    const ctx = getAudioContext()
+    if (ctx.state === "suspended") {
+      ctx.resume().catch(() => {
+        // Ignore errors - context may already be running
+      })
+    }
+  }, [getAudioContext])
+
+  /**
+   * Fetch and decode an audio file into an AudioBuffer
+   */
+  const loadSound = React.useCallback(async (name: SoundName): Promise<AudioBuffer | null> => {
+    try {
+      const ctx = getAudioContext()
+      const response = await fetch(SOUND_PATHS[name])
+      const arrayBuffer = await response.arrayBuffer()
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer)
+      return audioBuffer
+    } catch (error) {
+      console.warn(`[useGameSounds] Failed to load sound: ${name}`, error)
+      return null
+    }
+  }, [getAudioContext])
 
   // Preload all sounds on mount
   React.useEffect(() => {
     let isMounted = true
-    const cache = audioCache.current
 
     const preloadSounds = async () => {
       const soundNames = Object.keys(SOUND_PATHS) as SoundName[]
 
       await Promise.all(
-        soundNames.map((name) => {
-          return new Promise<void>((resolve) => {
-            const audio = new Audio(SOUND_PATHS[name])
-            audio.preload = "auto"
-            audio.volume = volume
-
-            // Resolve on load or error (graceful fallback)
-            audio.addEventListener("canplaythrough", () => {
-              cache.set(name, audio)
-              resolve()
-            }, { once: true })
-
-            audio.addEventListener("error", () => {
-              // Log warning but don't fail - game works without sound
-              console.warn(`[useGameSounds] Failed to load sound: ${name}`)
-              resolve()
-            }, { once: true })
-
-            // Trigger load
-            audio.load()
-          })
+        soundNames.map(async (name) => {
+          const buffer = await loadSound(name)
+          if (buffer && isMounted) {
+            bufferCache.current.set(name, buffer)
+          }
         })
       )
 
@@ -132,44 +169,85 @@ function useGameSounds(options: UseGameSoundsOptions = {}): UseGameSoundsReturn 
     return () => {
       isMounted = false
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loadSound])
 
-  // Update volume on all cached audio elements when volume changes
+  // Update gain node when volume changes
   React.useEffect(() => {
-    audioCache.current.forEach((audio) => {
-      audio.volume = Math.max(0, Math.min(1, volume))
-    })
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = Math.max(0, Math.min(1, volume))
+    }
   }, [volume])
 
-  // Play function - memoized with useCallback
+  // Cleanup AudioContext on unmount
+  React.useEffect(() => {
+    return () => {
+      if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+        audioContextRef.current.close().catch(() => {
+          // Ignore close errors
+        })
+      }
+    }
+  }, [])
+
+  /**
+   * Play a sound by creating a new buffer source.
+   * Each call creates a fresh source node, avoiding Safari's reuse issues.
+   */
   const play = React.useCallback(
     (sound: SoundName) => {
       if (!enabled) return
 
-      const audio = audioCache.current.get(sound)
-      if (!audio) {
-        // Sound not loaded - fail silently (game continues without sound)
+      const buffer = bufferCache.current.get(sound)
+      if (!buffer) {
+        // Sound not loaded - fail silently
         return
       }
 
-      // Reset to beginning (allows rapid repeated plays)
-      audio.currentTime = 0
+      try {
+        const ctx = getAudioContext()
 
-      // Play with error handling
-      audio.play().catch(() => {
-        // Autoplay may be blocked - fail silently
-        // This is expected behavior on some browsers until user interaction
-      })
+        // Resume context if suspended (Safari autoplay policy)
+        if (ctx.state === "suspended") {
+          ctx.resume().catch(() => {})
+        }
+
+        // Create a new source node for this playback
+        // (This is the key fix for Safari - never reuse source nodes)
+        const source = ctx.createBufferSource()
+        source.buffer = buffer
+
+        // Connect through gain node for volume control
+        if (gainNodeRef.current) {
+          source.connect(gainNodeRef.current)
+        } else {
+          source.connect(ctx.destination)
+        }
+
+        // Play immediately
+        source.start(0)
+
+        // Source nodes auto-cleanup after playback ends
+      } catch (error) {
+        // Fail silently - game continues without sound
+        console.warn(`[useGameSounds] Playback error for ${sound}:`, error)
+      }
     },
-    [enabled]
+    [enabled, getAudioContext]
   )
 
   // Convenience methods
   const playCorrect = React.useCallback(() => play("correct"), [play])
   const playWrong = React.useCallback(() => play("wrong"), [play])
 
-  // Memoize the return object to provide stable reference
-  // This prevents unnecessary effect re-runs in consuming components
+  // Volume setter that updates both state and gain node
+  const setVolume = React.useCallback((newVolume: number) => {
+    const clampedVolume = Math.max(0, Math.min(1, newVolume))
+    setVolumeState(clampedVolume)
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = clampedVolume
+    }
+  }, [])
+
   return React.useMemo(
     () => ({
       playCorrect,
@@ -178,8 +256,9 @@ function useGameSounds(options: UseGameSoundsOptions = {}): UseGameSoundsReturn 
       isReady,
       setEnabled,
       setVolume,
+      unlockAudio,
     }),
-    [playCorrect, playWrong, play, isReady, setEnabled, setVolume]
+    [playCorrect, playWrong, play, isReady, setEnabled, setVolume, unlockAudio]
   )
 }
 
