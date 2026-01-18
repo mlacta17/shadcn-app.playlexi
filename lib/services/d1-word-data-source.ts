@@ -100,13 +100,13 @@ function mapDbRowToWord(row: typeof words.$inferSelect): Word {
  *
  * @example
  * ```typescript
- * // In a Cloudflare Pages API route
- * import { getRequestContext } from "@cloudflare/next-on-pages"
+ * // In a Cloudflare Workers API route (via OpenNext)
+ * import { getCloudflareContext } from "@opennextjs/cloudflare"
  * import { createDb } from "@/db"
  * import { createD1WordDataSource } from "@/lib/services/d1-word-data-source"
  *
  * export async function GET() {
- *   const { env } = getRequestContext()
+ *   const { env } = await getCloudflareContext({ async: true })
  *   const db = createDb(env.DB)
  *   const dataSource = createD1WordDataSource(db)
  *
@@ -118,55 +118,70 @@ function mapDbRowToWord(row: typeof words.$inferSelect): Word {
 export function createD1WordDataSource(db: Database): AsyncWordDataSource {
   return {
     async getWordsByTier(tier: WordTier): Promise<Word[]> {
-      const rows = await db
-        .select()
-        .from(words)
-        .where(eq(words.difficultyTier, tier))
-
-      return rows.map(mapDbRowToWord)
-    },
-
-    async getWordById(id: string): Promise<Word | undefined> {
-      const [row] = await db
-        .select()
-        .from(words)
-        .where(eq(words.id, id))
-        .limit(1)
-
-      return row ? mapDbRowToWord(row) : undefined
-    },
-
-    async getRandomWord(tier: WordTier, excludeIds: string[] = []): Promise<Word | undefined> {
-      // Build query with optional exclusion
-      let query = db
-        .select()
-        .from(words)
-        .where(
-          excludeIds.length > 0
-            ? and(
-                eq(words.difficultyTier, tier),
-                notInArray(words.id, excludeIds)
-              )
-            : eq(words.difficultyTier, tier)
-        )
-        .orderBy(sql`RANDOM()`)
-        .limit(1)
-
-      const [row] = await query
-
-      // If no word found (all excluded), try again without exclusions
-      if (!row && excludeIds.length > 0) {
-        const [fallbackRow] = await db
+      try {
+        const rows = await db
           .select()
           .from(words)
           .where(eq(words.difficultyTier, tier))
+
+        return rows.map(mapDbRowToWord)
+      } catch (error) {
+        console.error("[D1] Failed to fetch words by tier:", error)
+        throw new Error(`Database error: Failed to fetch words for tier ${tier}`)
+      }
+    },
+
+    async getWordById(id: string): Promise<Word | undefined> {
+      try {
+        const [row] = await db
+          .select()
+          .from(words)
+          .where(eq(words.id, id))
+          .limit(1)
+
+        return row ? mapDbRowToWord(row) : undefined
+      } catch (error) {
+        console.error("[D1] Failed to fetch word by ID:", error)
+        throw new Error(`Database error: Failed to fetch word ${id}`)
+      }
+    },
+
+    async getRandomWord(tier: WordTier, excludeIds: string[] = []): Promise<Word | undefined> {
+      try {
+        // Build query with optional exclusion
+        let query = db
+          .select()
+          .from(words)
+          .where(
+            excludeIds.length > 0
+              ? and(
+                  eq(words.difficultyTier, tier),
+                  notInArray(words.id, excludeIds)
+                )
+              : eq(words.difficultyTier, tier)
+          )
           .orderBy(sql`RANDOM()`)
           .limit(1)
 
-        return fallbackRow ? mapDbRowToWord(fallbackRow) : undefined
-      }
+        const [row] = await query
 
-      return row ? mapDbRowToWord(row) : undefined
+        // If no word found (all excluded), try again without exclusions
+        if (!row && excludeIds.length > 0) {
+          const [fallbackRow] = await db
+            .select()
+            .from(words)
+            .where(eq(words.difficultyTier, tier))
+            .orderBy(sql`RANDOM()`)
+            .limit(1)
+
+          return fallbackRow ? mapDbRowToWord(fallbackRow) : undefined
+        }
+
+        return row ? mapDbRowToWord(row) : undefined
+      } catch (error) {
+        console.error("[D1] Failed to fetch random word:", error)
+        throw new Error(`Database error: Failed to fetch random word for tier ${tier}`)
+      }
     },
   }
 }
