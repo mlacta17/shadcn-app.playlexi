@@ -84,7 +84,7 @@ GOOGLE_CLOUD_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY
 MERRIAM_WEBSTER_API_KEY=your-api-key
 
 # Speech server URL (local development)
-NEXT_PUBLIC_SPEECH_SERVER_URL=ws://localhost:3001
+NEXT_PUBLIC_SPEECH_SERVER_URL=ws://localhost:3002
 ```
 
 ### 3. Setup Cloudflare D1 Database
@@ -183,21 +183,20 @@ In Cloudflare Pages settings → Functions → R2 bucket bindings:
 
 The speech server needs to run separately (Cloudflare Workers can't make gRPC calls).
 
-**Option A: Google Cloud Run** (Recommended)
+> **Scaling Strategy:** Start with Railway, migrate to Cloud Run when needed.
+> See [speech-server/DEPLOYMENT.md](../speech-server/DEPLOYMENT.md) for detailed instructions.
 
-```bash
-cd speech-server
+**Phase 1: Railway** (Recommended for start)
 
-# Build and deploy
-gcloud run deploy playlexi-speech \
-  --source . \
-  --allow-unauthenticated \
-  --set-env-vars="GOOGLE_CLOUD_PROJECT_ID=...,GOOGLE_CLOUD_CLIENT_EMAIL=...,GOOGLE_CLOUD_PRIVATE_KEY=..."
-```
+1. Create account at https://railway.app
+2. Deploy from GitHub, set root directory to `speech-server`
+3. Add environment variables (Google Cloud credentials)
+4. Get URL and set `NEXT_PUBLIC_SPEECH_SERVER_URL=wss://your-app.up.railway.app`
 
-**Option B: Railway/Render**
+**Phase 2: Cloud Run** (When scaling requires it)
 
-Deploy the `speech-server/` directory as a Node.js app.
+Migrate when Railway hits limits (~3,000 concurrent connections) or you need lower latency.
+See [speech-server/DEPLOYMENT.md](../speech-server/DEPLOYMENT.md) for Cloud Run setup.
 
 ### 6. Apply Production Migrations
 
@@ -287,7 +286,8 @@ For development:
            ▼                  ▼                  ▼
 ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
 │  Cloudflare      │ │  Speech Server   │ │  Cloudflare R2   │
-│  Pages (Next.js) │ │  (Cloud Run)     │ │  (Audio Files)   │
+│  Pages (Next.js) │ │  (Railway/       │ │  (Audio Files)   │
+│                  │ │   Cloud Run)     │ │                  │
 └────────┬─────────┘ └────────┬─────────┘ └──────────────────┘
          │                    │
          │                    │
@@ -298,11 +298,15 @@ For development:
 └──────────────────┘ └──────────────────┘
 ```
 
+**Speech Server Platform Strategy:**
+- **Phase 1 (0-1K DAU):** Railway ($5-50/month) - simple, no cold starts
+- **Phase 2 (1K+ DAU):** Cloud Run ($65+/month) - auto-scaling, lower latency
+
 ---
 
 ## Cost Estimates
 
-For a small to medium deployment (~1,000 daily active users):
+### Phase 1: 0-1,000 DAU (Railway)
 
 | Service | Monthly Cost |
 |---------|-------------|
@@ -311,11 +315,26 @@ For a small to medium deployment (~1,000 daily active users):
 | Cloudflare R2 | ~$0.50 (10GB storage) |
 | Google Speech-to-Text | ~$20-50 (depending on usage) |
 | Merriam-Webster API | Free (non-commercial) |
-| Google Cloud Run | ~$5-10 (speech server) |
+| Speech Server (Railway) | $5-50 |
 
-**Total**: ~$25-60/month for 1,000 DAU
+**Total**: ~$25-100/month for 1,000 DAU
 
-The architecture is designed to minimize costs while maintaining performance:
+### Phase 2: 1,000-10,000 DAU (Cloud Run)
+
+| Service | Monthly Cost |
+|---------|-------------|
+| Cloudflare Pages | Free |
+| Cloudflare D1 | ~$5-20 |
+| Cloudflare R2 | ~$1-5 |
+| Google Speech-to-Text | ~$50-400 |
+| Merriam-Webster API | Free (non-commercial) |
+| Speech Server (Cloud Run) | $65-200 |
+
+**Total**: ~$120-625/month for 1,000-10,000 DAU
+
+### Cost Optimization Notes
+
 - Words are pre-cached (zero runtime MW API calls)
 - Audio files are served from R2 (cheap object storage)
 - Google Speech only used during active voice input
+- Speech server scales with actual usage

@@ -75,7 +75,7 @@
 
 ### 1.3 Hybrid Cloud Architecture
 
-PlayLexi uses a **hybrid cloud architecture** with Cloudflare as the primary platform and Google Cloud for speech recognition.
+PlayLexi uses a **hybrid cloud architecture** with Cloudflare as the primary platform and a separate speech recognition server.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -104,18 +104,19 @@ PlayLexi uses a **hybrid cloud architecture** with Cloudflare as the primary pla
 │                             │ WebSocket (WSS)                                 │
 │                             ▼                                                 │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │                      GOOGLE CLOUD (us-central1)                       │    │
+│  │                    SPEECH SERVER (Railway → Cloud Run)                │    │
 │  │                                                                       │    │
 │  │   ┌─────────────────────────────────────────────────────────────┐    │    │
-│  │   │                    Cloud Run                                  │    │    │
-│  │   │                                                               │    │    │
-│  │   │   ┌─────────────┐         ┌─────────────┐                    │    │    │
-│  │   │   │  WebSocket  │  gRPC   │   Google    │                    │    │    │
-│  │   │   │   Server    │ ──────► │  Speech     │                    │    │    │
-│  │   │   │  (Node.js)  │         │  API        │                    │    │    │
-│  │   │   └─────────────┘         └─────────────┘                    │    │    │
-│  │   │                                                               │    │    │
-│  │   └─────────────────────────────────────────────────────────────┘    │    │
+│  │   │  Phase 1: Railway           │  Phase 2: Google Cloud Run    │    │    │
+│  │   │  (0-1K DAU, $5-50/mo)       │  (1K+ DAU, $65+/mo)           │    │    │
+│  │   │                              │                               │    │    │
+│  │   │   ┌─────────────┐            │   ┌─────────────┐             │    │    │
+│  │   │   │  WebSocket  │            │   │  WebSocket  │             │    │    │
+│  │   │   │   Server    │ ─────────────► │   Server    │ ──► Google  │    │    │
+│  │   │   │  (Node.js)  │            │   │  (Node.js)  │     Speech  │    │    │
+│  │   │   └─────────────┘            │   └─────────────┘     API     │    │    │
+│  │   │                              │                               │    │    │
+│  │   └──────────────────────────────┴───────────────────────────────┘    │    │
 │  │                                                                       │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                                                               │
@@ -130,18 +131,30 @@ PlayLexi uses a **hybrid cloud architecture** with Cloudflare as the primary pla
 | Database | Cloudflare D1 | Serverless SQL, integrated |
 | Multiplayer | Cloudflare Durable Objects | Native WebSocket support |
 | Static Assets | Cloudflare R2 | Zero egress fees |
-| **Speech Recognition** | **Google Cloud Run** | gRPC required (Cloudflare Workers cannot make outbound gRPC calls) |
+| **Speech Recognition** | **Railway → Cloud Run** | gRPC required (Cloudflare cannot make gRPC calls) |
 
 **Technical Limitation:**
-Cloudflare Workers cannot make outbound gRPC calls, which Google Speech-to-Text requires for real-time streaming. This necessitates a separate WebSocket server deployed on Google Cloud Run.
+Cloudflare Workers cannot make outbound gRPC calls, which Google Speech-to-Text requires for real-time streaming. This necessitates a separate WebSocket server.
 
-**Cost Projections (Hybrid):**
+**Speech Server Scaling Strategy (Decision: January 2025):**
 
-| Users | Cloud Run | Google Speech | Cloudflare | Total/month |
-|-------|-----------|---------------|------------|-------------|
-| 1K | ~$5 | ~$40 | Free tier | ~$45 |
-| 10K | ~$50 | ~$400 | ~$50 | ~$500 |
-| 100K | ~$500 | ~$4,000 | ~$500 | ~$5,000 |
+| Phase | Scale | Platform | Rationale |
+|-------|-------|----------|-----------|
+| Phase 1 | 0-1K DAU | Railway | Simple deployment, no cold starts, $5-50/mo |
+| Phase 2 | 1K-10K DAU | Cloud Run | Auto-scaling, lower latency, $65-500/mo |
+| Phase 3 | 10K+ DAU | Cloud Run (scaled) | Multi-instance, $500+/mo |
+
+**Migration triggers:** Connection errors, latency complaints, costs exceeding $50-100/mo on Railway.
+
+**Cost Projections:**
+
+| Users | Speech Server | Google Speech | Cloudflare | Total/month |
+|-------|---------------|---------------|------------|-------------|
+| 1K | Railway ~$20 | ~$40 | Free tier | ~$60 |
+| 10K | Cloud Run ~$150 | ~$400 | ~$50 | ~$600 |
+| 100K | Cloud Run ~$1,000 | ~$4,000 | ~$500 | ~$5,500 |
+
+See [speech-server/DEPLOYMENT.md](../speech-server/DEPLOYMENT.md) for detailed deployment instructions.
 
 ### 1.3 Why These Choices
 
@@ -1550,13 +1563,23 @@ For production, the speech server must be deployed to a platform that supports:
 1. WebSocket connections
 2. Outbound gRPC calls to Google
 
-**Recommended: Google Cloud Run**
-- Native gRPC support
-- WebSocket support with connection timeout configuration
-- Auto-scaling based on connections
-- Min instances = 1 to avoid cold starts
+**Scaling Strategy (Decision: January 2025):**
 
-See Section 1.3 (Hybrid Cloud Architecture) for full deployment details
+| Phase | Scale | Platform | Monthly Cost |
+|-------|-------|----------|--------------|
+| Phase 1 | 0-1K DAU | Railway | $5-50 |
+| Phase 2 | 1K+ DAU | Cloud Run | $65+ |
+
+**Phase 1: Railway** (Start here)
+- Simple deployment, no cold starts
+- Up to ~3,000 concurrent connections
+
+**Phase 2: Cloud Run** (When scaling requires)
+- Native gRPC support (same network as Google Speech API)
+- Auto-scaling based on connections
+- Min instances = 1 to eliminate cold starts
+
+See [speech-server/DEPLOYMENT.md](../speech-server/DEPLOYMENT.md) for deployment instructions.
 
 ---
 
@@ -3498,7 +3521,7 @@ This approach unblocks development immediately and isolates problems. The archit
 | **Database** | Local SQLite via `better-sqlite3` | Cloudflare D1 | After Phase 2 tested |
 | **Auth** | Mock auth (hardcoded dev user) | Google + Apple OAuth | After Phase 2 tested |
 | **Words** | Hardcoded seed data (50+ words) | Merriam-Webster API seeding | Before Phase 3 |
-| **Voice AI** | Google Speech via local WebSocket server | Google Speech via Cloud Run | After Phase 2 tested |
+| **Voice AI** | Google Speech via local WebSocket server | Google Speech via Railway → Cloud Run | After Phase 2 tested |
 | **Real-time** | Local state (no WebSocket) | Cloudflare Durable Objects | Phase 4 |
 
 **Why this works:**

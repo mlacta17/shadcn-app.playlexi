@@ -2,6 +2,10 @@
 
 A dedicated WebSocket server for real-time speech recognition using Google Cloud Speech-to-Text.
 
+> **Deployment:** See [DEPLOYMENT.md](./DEPLOYMENT.md) for production deployment instructions.
+>
+> **Scaling Strategy:** Start with Railway ($5-50/mo), migrate to Cloud Run ($65+/mo) when scaling requires it.
+
 ## Architecture
 
 ```
@@ -34,8 +38,20 @@ A dedicated WebSocket server for real-time speech recognition using Google Cloud
 3. **Separation of Concerns** - The Next.js app handles HTTP/rendering, this server
    handles real-time audio streaming. Each does one thing well.
 
-4. **Scalability** - This server can be scaled independently. In production, you might
-   run multiple instances behind a load balancer with sticky sessions.
+4. **Scalability** - This server can be scaled independently. No Redis/state sync needed
+   because each session is stateless and isolated.
+
+## Scaling Strategy
+
+| Phase | Scale | Platform | Monthly Cost |
+|-------|-------|----------|--------------|
+| Phase 1 | 0-1K DAU | Railway | $5-50 |
+| Phase 2 | 1K-10K DAU | Cloud Run | $65-500 |
+| Phase 3 | 10K+ DAU | Cloud Run (scaled) | $500+ |
+
+**When to migrate:** Connection errors, latency complaints, or costs exceeding $50-100/mo on Railway.
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed instructions.
 
 ## Protocol
 
@@ -71,7 +87,7 @@ A dedicated WebSocket server for real-time speech recognition using Google Cloud
 }
 ```
 
-## Running
+## Running Locally
 
 ```bash
 # Development (from project root)
@@ -93,3 +109,5 @@ Uses the same `.env.local` as the main app:
 - `index.ts` - Server entry point, WebSocket handling
 - `google-streaming.ts` - Google Cloud Speech gRPC streaming logic
 - `types.ts` - TypeScript interfaces
+- `package.json` - Dependencies for standalone deployment
+- `DEPLOYMENT.md` - Production deployment guide
