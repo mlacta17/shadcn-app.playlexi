@@ -44,15 +44,21 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
+import { getCloudflareContext } from "@opennextjs/cloudflare"
 import type { WordTier, Word } from "@/lib/word-service"
 import { createDb } from "@/db"
 import { createD1WordDataSource } from "@/lib/services/d1-word-data-source"
 
 // =============================================================================
-// EDGE RUNTIME - Required for Cloudflare Pages
+// CLOUDFLARE ENV AUGMENTATION
 // =============================================================================
 
-export const runtime = "edge"
+// Extend the global CloudflareEnv interface to include our D1 binding
+declare global {
+  interface CloudflareEnv {
+    DB: D1Database
+  }
+}
 
 // =============================================================================
 // TYPE DEFINITIONS
@@ -69,11 +75,6 @@ interface ErrorResponse {
 }
 
 type ApiResponse = SuccessResponse | ErrorResponse
-
-// Cloudflare environment type
-interface CloudflareEnv {
-  DB: D1Database
-}
 
 // =============================================================================
 // VALIDATION
@@ -133,10 +134,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<ApiRespons
       )
     }
 
-    // Get D1 database binding from Cloudflare context
-    // In Cloudflare Pages, the env is available via getRequestContext
-    const { getRequestContext } = await import("@cloudflare/next-on-pages")
-    const { env } = getRequestContext<CloudflareEnv>()
+    // Get D1 database binding from Cloudflare context via OpenNext
+    const { env } = await getCloudflareContext({ async: true })
 
     // Create database connection and data source
     const db = createDb(env.DB)

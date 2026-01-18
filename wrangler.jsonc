@@ -1,0 +1,35 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "playlexi",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2024-12-30",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Static assets configuration for OpenNext
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+
+  // D1 Database binding
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "playlexi-db",
+      "database_id": "4e43d083-6606-4888-b48d-5a4a6ddc9d08"
+    }
+  ],
+
+  // R2 Storage for audio files and cache
+  "r2_buckets": [
+    {
+      "binding": "R2_ASSETS",
+      "bucket_name": "playlexi-assets"
+    }
+  ],
+
+  // Environment variables (non-secrets)
+  "vars": {
+    "ENVIRONMENT": "production"
+  }
+}

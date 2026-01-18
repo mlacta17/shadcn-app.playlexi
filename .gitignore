@@ -44,3 +44,9 @@ next-env.d.ts
 # speech server build output
 speech-server/dist/
 speech-server/node_modules/
+
+# OpenNext build output
+.open-next/
+
+# Wrangler
+.wrangler/
