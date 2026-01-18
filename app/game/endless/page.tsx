@@ -70,8 +70,7 @@ export default function EndlessGamePage() {
   // ---------------------------------------------------------------------------
   // Sound Effects
   // ---------------------------------------------------------------------------
-  // unlockAudio is called on first user interaction (required for Safari)
-  const { playCorrect, playWrong, unlockAudio } = useGameSounds()
+  const { playCorrect, playWrong } = useGameSounds()
 
   // ---------------------------------------------------------------------------
   // Voice Recording
@@ -295,8 +294,6 @@ export default function EndlessGamePage() {
 
   const handleRecordStart = async () => {
     if (gameState.phase !== "playing") return
-    // Unlock audio context on first interaction (required for Safari)
-    unlockAudio()
     await startRecording()
   }
 
