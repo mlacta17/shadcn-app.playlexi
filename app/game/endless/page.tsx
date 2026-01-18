@@ -49,7 +49,7 @@ export default function EndlessGamePage() {
   // ---------------------------------------------------------------------------
   // Game Session State
   // ---------------------------------------------------------------------------
-  const { state: gameState, actions: gameActions } = useGameSession(
+  const { state: gameState, actions: gameActions, computed } = useGameSession(
     "endless",
     "voice"
   )
@@ -405,7 +405,7 @@ export default function EndlessGamePage() {
               Round {gameState.currentRound || 1}
             </h1>
             <p className="text-sm text-muted-foreground">
-              Spell the word that you hear:
+              {computed.isLoading ? "Loading next word..." : "Spell the word that you hear:"}
             </p>
           </div>
 
@@ -426,19 +426,20 @@ export default function EndlessGamePage() {
 
             {/* Speech Input - without integrated waveform since we show it separately above */}
             {/* Uses displayTranscript to show interpreted letters (e.g., "R-U-N") instead of raw speech */}
+            {/* Disabled during loading to prevent interaction while fetching */}
             <SpeechInput
               mode="voice"
-              state={isRecording ? "recording" : "default"}
-              inputText={displayTranscript}
+              state={computed.isLoading ? "default" : isRecording ? "recording" : "default"}
+              inputText={computed.isLoading ? "" : displayTranscript}
               definition={currentWord?.definition}
               playPressed={activeHelper === "play"}
               sentencePressed={activeHelper === "sentence"}
               dictionaryPressed={activeHelper === "definition"}
-              onRecordClick={handleRecordStart}
+              onRecordClick={computed.isLoading ? undefined : handleRecordStart}
               onStopClick={handleRecordStop}
-              onPlayClick={handlePlayWord}
-              onDictionaryClick={handlePlayDefinition}
-              onSentenceClick={handlePlaySentence}
+              onPlayClick={computed.isLoading ? undefined : handlePlayWord}
+              onDictionaryClick={computed.isLoading ? undefined : handlePlayDefinition}
+              onSentenceClick={computed.isLoading ? undefined : handlePlaySentence}
             />
           </div>
         </div>

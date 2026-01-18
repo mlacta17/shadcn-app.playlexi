@@ -4,12 +4,12 @@ import * as React from "react"
 import {
   type Word,
   type WordTier,
-  getRandomWord,
   getTimerDuration,
   playWordIntro,
   playWordSentence,
   playWordDefinition,
 } from "@/lib/word-service"
+import { fetchRandomWord } from "@/lib/word-fetcher"
 import {
   validateAnswer,
   isEmptyAnswer,
@@ -37,13 +37,15 @@ export type InputMethod = "voice" | "keyboard"
  *
  * State transitions:
  * ```
- * idle → ready → playing → checking → feedback → (playing | result)
- *                                          ↑__________↓
+ * idle → loading → ready → playing → checking → feedback → (loading | result)
+ *            ↑                                       ↓
+ *            └───────────────────────────────────────┘
  * ```
  *
  * | Phase | Description |
  * |-------|-------------|
  * | idle | Game not started, waiting for player action |
+ * | loading | Fetching word from API (shows loading indicator) |
  * | ready | Word loaded, about to play audio intro |
  * | playing | Player is spelling (timer running) |
  * | checking | Answer submitted, validating |
@@ -52,6 +54,7 @@ export type InputMethod = "voice" | "keyboard"
  */
 export type GamePhase =
   | "idle"
+  | "loading"
   | "ready"
   | "playing"
   | "checking"
@@ -187,6 +190,8 @@ export interface UseGameSessionReturn {
     isActive: boolean
     /** Whether the game is over */
     isGameOver: boolean
+    /** Whether a word is currently being loaded */
+    isLoading: boolean
     /** XP earned (calculated based on mode) */
     xpEarned: number
   }
@@ -311,42 +316,67 @@ export function useGameSession(
 
   /**
    * Load the next word and transition to ready phase.
+   *
+   * This is now async to support fetching words from the D1 database.
+   * The function:
+   * 1. Sets phase to "loading" (shows loading UI)
+   * 2. Fetches word from API or mock data
+   * 3. Sets phase to "ready" with the new word
+   *
+   * @see lib/word-fetcher.ts for the data source abstraction
    */
-  const loadNextWord = React.useCallback(() => {
+  const loadNextWord = React.useCallback(async () => {
+    // First, transition to loading state
+    let currentTier: WordTier = INITIAL_TIER
+    let usedWordIds: string[] = []
+    let inputMethod: InputMethod = "voice"
+
     setState((prev) => {
-      const result = getRandomWord(prev.currentTier, prev.usedWordIds)
-
-      if (!result.success) {
-        return { ...prev, error: result.error, phase: "result" }
-      }
-
-      const word = result.word
-      const timerDuration = getTimerDuration(word.tier, prev.inputMethod)
-
-      return {
-        ...prev,
-        currentWord: word,
-        timerDuration,
-        usedWordIds: [...prev.usedWordIds, word.id],
-        phase: "ready" as const,
-        error: null,
-      }
+      // Capture current values for the async fetch
+      currentTier = prev.currentTier
+      usedWordIds = prev.usedWordIds
+      inputMethod = prev.inputMethod
+      return { ...prev, phase: "loading" as const }
     })
+
+    // Fetch word asynchronously
+    const result = await fetchRandomWord(currentTier, usedWordIds)
+
+    if (!result.success) {
+      setState((prev) => ({
+        ...prev,
+        error: result.error,
+        phase: "result" as const,
+      }))
+      return
+    }
+
+    const word = result.word
+    const timerDuration = getTimerDuration(word.tier, inputMethod)
+
+    // Update state with the loaded word
+    setState((prev) => ({
+      ...prev,
+      currentWord: word,
+      timerDuration,
+      usedWordIds: [...prev.usedWordIds, word.id],
+      phase: "ready" as const,
+      error: null,
+    }))
   }, [])
 
   /**
    * Start a new game.
    */
-  const startGame = React.useCallback(() => {
+  const startGame = React.useCallback(async () => {
     setState((prev) => ({
       ...createInitialState(prev.mode, prev.inputMethod),
       phase: "idle",
     }))
 
     // Small delay then load first word
-    setTimeout(() => {
-      loadNextWord()
-    }, 100)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    await loadNextWord()
   }, [loadNextWord])
 
   /**
@@ -484,7 +514,7 @@ export function useGameSession(
   /**
    * Move to the next word after feedback.
    */
-  const nextWord = React.useCallback(() => {
+  const nextWord = React.useCallback(async () => {
     setState((prev) => {
       if (prev.phase !== "feedback") return prev
 
@@ -506,8 +536,8 @@ export function useGameSession(
       }
     })
 
-    // Load next word
-    loadNextWord()
+    // Load next word (async)
+    await loadNextWord()
   }, [loadNextWord])
 
   /**
@@ -601,6 +631,7 @@ export function useGameSession(
 
   const isActive = !["idle", "result"].includes(state.phase)
   const isGameOver = state.phase === "result"
+  const isLoading = state.phase === "loading"
 
   // XP calculation per PRD Section 15.2.2
   const xpEarned =
@@ -631,6 +662,7 @@ export function useGameSession(
     accuracy,
     isActive,
     isGameOver,
+    isLoading,
     xpEarned,
   }
 

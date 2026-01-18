@@ -6,10 +6,10 @@
  * ## Commands
  *
  * Generate migration from schema changes:
- *   npx drizzle-kit generate:sqlite
+ *   npx drizzle-kit generate
  *
  * Push schema directly (dev only, no migration files):
- *   npx drizzle-kit push:sqlite
+ *   npx drizzle-kit push
  *
  * Open Drizzle Studio (GUI for database):
  *   npx drizzle-kit studio
@@ -17,28 +17,21 @@
  * @see https://orm.drizzle.team/kit-docs/overview
  */
 
-import type { Config } from "drizzle-kit"
+import { defineConfig } from "drizzle-kit"
 
-export default {
+export default defineConfig({
   // Schema location
   schema: "./db/schema.ts",
 
   // Output directory for migrations
   out: "./migrations",
 
-  // Database driver (SQLite for D1)
-  driver: "d1",
-
-  // D1 database configuration for local development
-  // Wrangler creates this file when running locally
-  dbCredentials: {
-    wranglerConfigPath: "./wrangler.toml",
-    dbName: "playlexi-db",
-  },
+  // Database dialect
+  dialect: "sqlite",
 
   // Verbose logging during migrations
   verbose: true,
 
   // Strict mode - fail on warnings
   strict: true,
-} satisfies Config
+})

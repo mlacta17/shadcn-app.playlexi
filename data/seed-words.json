@@ -1,0 +1,86 @@
+{
+  "description": "Seed words for PlayLexi organized by difficulty tier (1-7)",
+  "source": "Curated list for initial seeding. Words will be enriched with MW API data.",
+  "tiers": {
+    "1": {
+      "name": "New Bee",
+      "description": "Common 3-4 letter words",
+      "words": [
+        "cat", "dog", "run", "sit", "hat", "bed", "cup", "sun", "red", "big",
+        "hot", "wet", "fun", "map", "pen", "box", "bus", "leg", "arm", "eye",
+        "ear", "lip", "toe", "day", "sky", "sea", "ice", "fog", "mud", "ant"
+      ]
+    },
+    "2": {
+      "name": "Bumble Bee",
+      "description": "Simple 4-5 letter words",
+      "words": [
+        "apple", "happy", "water", "house", "plant", "table", "chair", "bread",
+        "light", "night", "dream", "sleep", "clean", "fresh", "green", "brown",
+        "black", "white", "small", "large", "quick", "quiet", "sunny", "rainy",
+        "windy", "cloud", "river", "ocean", "beach", "grass"
+      ]
+    },
+    "3": {
+      "name": "Busy Bee",
+      "description": "Common 5-6 letter words",
+      "words": [
+        "castle", "garden", "bridge", "forest", "island", "stream", "summer",
+        "winter", "spring", "autumn", "orange", "purple", "silver", "golden",
+        "secret", "simple", "sudden", "wonder", "silent", "famous", "hungry",
+        "thirsty", "lonely", "friendly", "careful", "helpful", "peaceful", "joyful",
+        "playful", "graceful"
+      ]
+    },
+    "4": {
+      "name": "Honey Bee",
+      "description": "Intermediate 6-7 letter words",
+      "words": [
+        "ancient", "balance", "captain", "discover", "elegant", "familiar",
+        "generous", "harmony", "imagine", "journey", "kingdom", "language",
+        "mystery", "natural", "original", "patience", "quality", "response",
+        "solution", "tradition", "umbrella", "valuable", "whisper", "yesterday",
+        "abundant", "brilliant", "champion", "delicate", "enormous", "festival"
+      ]
+    },
+    "5": {
+      "name": "Worker Bee",
+      "description": "Advanced 7-8 letter words",
+      "words": [
+        "adventure", "beautiful", "celebrate", "determine", "education",
+        "fortunate", "guarantee", "hospitality", "illustrate", "journalism",
+        "knowledge", "literature", "magnificent", "navigation", "observation",
+        "particular", "quarantine", "revolution", "spectacular", "tremendous",
+        "unanimous", "vocabulary", "wilderness", "accomplish", "boundaries",
+        "conscience", "discipline", "enthusiasm", "fascinating", "gratitude"
+      ]
+    },
+    "6": {
+      "name": "Royal Bee",
+      "description": "Complex 8-10 letter words",
+      "words": [
+        "achievement", "bibliography", "circumstance", "demonstrate",
+        "entrepreneur", "fundamental", "grandiloquent", "hypothetical",
+        "independent", "jurisdiction", "kaleidoscope", "labyrinthine",
+        "melancholy", "nomenclature", "omnipotent", "perpendicular",
+        "idiosyncrasy", "reminiscent", "serendipity", "temperament",
+        "ubiquitous", "venerable", "wherewithal", "xylophone", "acquiesce",
+        "cacophony", "chameleon", "dichotomy", "ephemeral", "formidable"
+      ]
+    },
+    "7": {
+      "name": "Bee Keeper",
+      "description": "Championship-level obscure words",
+      "words": [
+        "antediluvian", "connoisseur", "chrysanthemum", "doppelganger",
+        "ecclesiastical", "flibbertigibbet", "gubernatorial", "hemorrhage",
+        "idiosyncratic", "juxtaposition", "Kafkaesque", "loquacious",
+        "malfeasance", "nomenclature", "onomatopoeia", "phantasmagoria",
+        "quixotic", "reconnaissance", "sesquipedalian", "tintinnabulation",
+        "unconscionable", "verisimilitude", "weltanschauung", "xerophyte",
+        "prestidigitation", "pulchritudinous", "psychosomatic", "rhinoceros",
+        "surreptitious", "supercilious"
+      ]
+    }
+  }
+}

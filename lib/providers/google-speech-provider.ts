@@ -373,49 +373,65 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
                   const hasSignificantGaps = avgGapMs >= 80 // 80ms minimum gap
 
                   // =================================================================
-                  // SIGNAL 5: Duration check for single words (PER-LETTER basis)
-                  // If only 1 word detected, check duration PER LETTER
-                  //
-                  // From analyzing the logs of SPELLED words:
-                  // - "sun" (3 letters): 1.50s → 0.50s/letter
-                  // - "run" (3 letters): 1.40s → 0.47s/letter
-                  // - "cat" (3 letters): 1.50s → 0.50s/letter
-                  // - "plant" (5 letters): 1.50s → 0.30s/letter
-                  // - "smile" (5 letters): 1.50s → 0.30s/letter
-                  // - "house" (5 letters): 1.50s → 0.30s/letter
-                  // - "garden" (6 letters): 1.80s → 0.30s/letter
-                  // - "market" (6 letters): 2.20s → 0.37s/letter
-                  // - "simple" (6 letters): 1.80s → 0.30s/letter
-                  //
-                  // SAID words (from failures):
-                  // - "dangerous" (9 letters): 0.80s → 0.09s/letter ← SHOULD FAIL
-                  // - "beautiful" (9 letters): 0.60s → 0.07s/letter ← CORRECTLY FAILED
-                  //
-                  // Minimum threshold: 0.15s per letter (very generous for fast spellers)
-                  // Anything below this is definitely not spelling
+                  // SIGNAL 5: Single-word detection (PRIMARY anti-cheat)
                   // =================================================================
-                  const MIN_SECONDS_PER_LETTER = 0.15
-                  const expectedMinDuration = letterCount * MIN_SECONDS_PER_LETTER
+                  // When spelling "C-A-T":
+                  //   - Google hears 3 separate words: ["C", "A", "T"]
+                  //   - wordCount=3, singleLetterWords=3
+                  //
+                  // When SAYING "cat":
+                  //   - Google hears 1 word: ["cat"]
+                  //   - wordCount=1, singleLetterWords=0
+                  //
+                  // KEY INSIGHT: If wordCount===1 AND singleLetterWords===0 AND
+                  // the word has 2+ letters, the user SAID the word, not spelled it.
+                  // Duration is irrelevant because slow speakers can still cheat.
+                  //
+                  // Exception: Single-letter words like "I" or "A" are legitimate.
+                  // =================================================================
+                  const isSingleWordNotSpelled =
+                    wordCount === 1 &&
+                    singleLetterWords === 0 &&
+                    letterCount >= 2
+
+                  // =================================================================
+                  // SIGNAL 6: Duration check (SECONDARY - backup for edge cases)
+                  // =================================================================
+                  // Even if we somehow missed signal 5, extremely fast speech
+                  // (< 0.10s per letter) is physically impossible when spelling.
+                  //
+                  // Minimum threshold: 0.10s per letter (very generous)
+                  // This catches fast talkers who speak whole words quickly.
+                  // =================================================================
+                  const MIN_SECONDS_PER_LETTER = 0.10
                   const durationPerLetter = letterCount > 0 ? totalDuration / letterCount : 0
 
-                  const isSingleWordTooFast = wordCount === 1 &&
+                  const isTooFastForSpelling =
                     letterCount >= 3 &&
-                    totalDuration < expectedMinDuration
+                    durationPerLetter < MIN_SECONDS_PER_LETTER
 
                   // =================================================================
-                  // FINAL VERDICT: Combine signals
+                  // FINAL VERDICT: Combine signals with clear logic
+                  // =================================================================
+                  // Priority order:
+                  // 1. Single-letter answers → always valid
+                  // 2. Single word with 0 single-letter-words → SAID, not spelled
+                  // 3. Multiple words with spelling pattern → valid spelling
+                  // 4. Too fast for spelling → reject
+                  // 5. Default → trust the user
                   // =================================================================
                   let isSpelledOut: boolean
 
                   if (wordCount === 0) {
                     // No words detected - trust the user
                     isSpelledOut = true
-                  } else if (wordCount === 1 && letterCount === 1) {
-                    // Single letter word for single letter - obviously spelled
+                  } else if (letterCount === 1) {
+                    // Single letter answer (like "I" or "A") - always valid
                     isSpelledOut = true
-                  } else if (isSingleWordTooFast) {
-                    // Single word spoken too fast for spelling - REJECT
-                    // Duration per letter is below the minimum threshold
+                  } else if (isSingleWordNotSpelled) {
+                    // CRITICAL: Google heard ONE word with multiple letters
+                    // and zero single-letter-words → user SAID the word
+                    // Example: "fun" heard as ["fun"], not ["F", "U", "N"]
                     isSpelledOut = false
                   } else if (hasMultipleWords && (hasMostlySingleLetters || wordCountMatchesLetters)) {
                     // Multiple words with spelling characteristics - PASS
@@ -423,10 +439,9 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
                   } else if (hasMultipleWords && hasSignificantGaps) {
                     // Multiple words with pauses - likely spelling - PASS
                     isSpelledOut = true
-                  } else if (wordCount === 1 && letterCount >= 3) {
-                    // Single word for multi-letter answer - check duration per letter
-                    // Must meet minimum threshold of 0.15s per letter
-                    isSpelledOut = durationPerLetter >= MIN_SECONDS_PER_LETTER
+                  } else if (isTooFastForSpelling) {
+                    // Backup: Duration too fast to be spelling - REJECT
+                    isSpelledOut = false
                   } else {
                     // Default: trust the user
                     isSpelledOut = true
@@ -447,9 +462,9 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
                     console.log(
                       `[Google] Anti-cheat analysis:\n` +
                       `  Words: ${wordCount}, Letters: ${letterCount}, SingleLetterWords: ${singleLetterWords}\n` +
-                      `  Duration: ${totalDuration.toFixed(2)}s (${durationPerLetter.toFixed(2)}s/letter, min: ${MIN_SECONDS_PER_LETTER}s/letter)\n` +
-                      `  Signals: multipleWords=${hasMultipleWords}, singleLetterRatio=${(singleLetterRatio * 100).toFixed(0)}%, ` +
-                      `wordToLetterRatio=${(wordToLetterRatio * 100).toFixed(0)}%, hasGaps=${hasSignificantGaps}, tooFast=${isSingleWordTooFast}\n` +
+                      `  Duration: ${totalDuration.toFixed(2)}s (${durationPerLetter.toFixed(2)}s/letter)\n` +
+                      `  Signals: singleWordNotSpelled=${isSingleWordNotSpelled}, tooFast=${isTooFastForSpelling}, ` +
+                      `multipleWords=${hasMultipleWords}, singleLetterRatio=${(singleLetterRatio * 100).toFixed(0)}%\n` +
                       `  Verdict: ${isSpelledOut ? "✅ SPELLED" : "❌ SAID (rejected)"}`
                     )
                   }
