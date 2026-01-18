@@ -342,9 +342,7 @@ async function isGoogleConfigured(): Promise<boolean> {
     })
 
     googleConfigured = result
-    if (process.env.NODE_ENV === "development") {
-      console.log(`[SpeechRecognition] Google Speech server ${result ? "available" : "not available"} at ${wsUrl}`)
-    }
+    console.log(`[SpeechRecognition] Google Speech server ${result ? "available ✅" : "not available ❌"} at ${wsUrl}`)
     return result
   } catch {
     googleConfigured = false
@@ -398,9 +396,7 @@ export async function getSpeechProviderAsync(): Promise<ISpeechRecognitionProvid
   if (await isGoogleConfigured()) {
     const googleProvider = await getGoogleProvider()
     if (googleProvider.isSupported()) {
-      if (process.env.NODE_ENV === "development") {
-        console.log("[SpeechRecognition] Using Google Cloud Speech-to-Text (letter-by-letter word timing)")
-      }
+      console.log("[SpeechRecognition] Using Google Cloud Speech-to-Text ✅")
       return googleProvider
     }
   }

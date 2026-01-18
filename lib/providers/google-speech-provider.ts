@@ -226,9 +226,7 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
 
         ws!.onopen = () => {
           clearTimeout(timeout)
-          if (process.env.NODE_ENV === "development") {
-            console.log("[Google] WebSocket connected")
-          }
+          console.log("[Google] Connected to speech server ✅", SPEECH_SERVER_URL)
           resolve()
         }
 
