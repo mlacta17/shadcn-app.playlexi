@@ -65,34 +65,10 @@ const SPEECH_SERVER_URL: string =
   process.env.NEXT_PUBLIC_SPEECH_SERVER_URL || "ws://localhost:3002"
 
 /**
- * Detect if we're running on Safari/iOS.
- *
- * Safari has specific audio requirements:
- * - Prefers 44100 Hz sample rate (48000 causes stuttering)
- * - Needs audio "warm-up" from user interaction
- * - Has audio ducking issues with getUserMedia
- */
-const isSafari = (): boolean => {
-  if (typeof navigator === "undefined") return false
-  const ua = navigator.userAgent
-  // Safari but not Chrome (Chrome includes "Safari" in UA)
-  return /Safari/.test(ua) && !/Chrome/.test(ua)
-}
-
-/**
  * Audio capture settings for LINEAR16 format.
- *
- * IMPORTANT: Safari prefers 44100 Hz. Using 48000 causes stuttering and the
- * first ~500ms of audio may be lost during hardware reconfiguration.
- * Google Speech API accepts both 16000 and 44100 Hz audio.
- *
- * @see https://github.com/chrisguttandin/standardized-audio-context/issues/489
- * @see https://github.com/goldfire/howler.js/issues/1141
  */
 const AUDIO_CONFIG = {
-  // Use Safari's preferred sample rate to avoid hardware switching latency.
-  // Google Speech API accepts various sample rates and will resample server-side.
-  sampleRate: isSafari() ? 44100 : 16000,
+  sampleRate: 16000, // 16kHz as required by Google
   channelCount: 1, // Mono
   chunkIntervalMs: 100, // Send audio every 100ms for low latency
 }
@@ -178,19 +154,27 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
     let lastStability = 0
 
     /**
-     * Stop audio capture immediately.
-     *
-     * This releases Safari's audio hardware resources so game sounds can play
-     * without conflict. Called as soon as recording stops, before waiting for
-     * the final result from Google.
-     *
-     * IMPORTANT: On Safari, having two AudioContexts active simultaneously
-     * (one for speech at 16kHz, one for game sounds at 48kHz) causes latency
-     * and audio glitches. Closing the speech AudioContext immediately prevents
-     * this conflict.
+     * Cleanup all resources safely.
      */
-    const stopAudioCapture = () => {
-      // Stop audio processing first (prevents more audio from being captured)
+    const cleanup = () => {
+      if (isClosed) return
+      isClosed = true
+      isActive = false
+
+      // Close WebSocket
+      if (ws) {
+        try {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "stop" }))
+            ws.close()
+          }
+        } catch {
+          // Ignore
+        }
+        ws = null
+      }
+
+      // Stop audio processing
       if (scriptProcessor) {
         try {
           scriptProcessor.disconnect()
@@ -207,11 +191,9 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
         } catch {
           // Ignore
         }
-        // Note: Don't null analyserNode - it may still be referenced by the session
       }
 
-      // Close audio context IMMEDIATELY (critical for Safari)
-      // This releases the audio hardware so game sounds can play without lag
+      // Close audio context
       if (audioContext && audioContext.state !== "closed") {
         try {
           audioContext.close()
@@ -221,7 +203,7 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
         audioContext = null
       }
 
-      // Stop media stream (releases microphone)
+      // Stop media stream
       if (mediaStream) {
         try {
           mediaStream.getTracks().forEach((track) => track.stop())
@@ -230,65 +212,9 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
         }
         mediaStream = null
       }
-
-      // SAFARI FIX: Reset audio ducking by triggering a brief speechSynthesis event.
-      // Safari ducks (lowers volume of) all audio when microphone is active.
-      // This ducking can persist after the microphone is released.
-      // Triggering speechSynthesis resets the audio routing to normal volume.
-      // We use a silent utterance (empty string) so the user doesn't hear anything.
-      // @see https://bugs.webkit.org/show_bug.cgi?id=218012
-      if (isSafari() && typeof window !== "undefined" && "speechSynthesis" in window) {
-        try {
-          // Cancel any ongoing speech first
-          window.speechSynthesis.cancel()
-          // Create a silent utterance to reset audio ducking
-          const silentUtterance = new SpeechSynthesisUtterance("")
-          silentUtterance.volume = 0
-          window.speechSynthesis.speak(silentUtterance)
-          // Cancel it immediately - the act of starting resets the audio routing
-          setTimeout(() => {
-            window.speechSynthesis.cancel()
-          }, 50)
-        } catch {
-          // Ignore errors - this is just an optimization for Safari
-        }
-      }
-    }
-
-    /**
-     * Cleanup all resources safely (WebSocket + audio).
-     * Called after we've received final results or timed out.
-     */
-    const cleanup = () => {
-      if (isClosed) return
-      isClosed = true
-      isActive = false
-
-      // Stop audio capture first (may already be stopped)
-      stopAudioCapture()
-
-      // Close WebSocket
-      if (ws) {
-        try {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.close()
-          }
-        } catch {
-          // Ignore
-        }
-        ws = null
-      }
     }
 
     try {
-      // SAFARI FIX: Cancel any ongoing speech synthesis before recording.
-      // Safari's audio ducking can get stuck if speechSynthesis is active
-      // when we acquire the microphone, causing volume to stay low.
-      // @see https://bugs.webkit.org/show_bug.cgi?id=218012
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        window.speechSynthesis.cancel()
-      }
-
       // Connect to WebSocket server
       ws = new WebSocket(SPEECH_SERVER_URL)
 
@@ -577,9 +503,8 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
         }
       }
 
-      // Send start message with language and sample rate
-      // Safari uses 44100 Hz to avoid audio hardware switching latency
-      ws.send(JSON.stringify({ type: "start", language, sampleRate: AUDIO_CONFIG.sampleRate }))
+      // Send start message with language
+      ws.send(JSON.stringify({ type: "start", language }))
 
       // Get microphone stream
       mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -643,18 +568,12 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
             console.log("[Google] Stopping session")
           }
 
-          // CRITICAL: Stop audio capture IMMEDIATELY
-          // This releases the AudioContext so game sounds can play without
-          // Safari lag. The WebSocket stays open to receive final results.
-          stopAudioCapture()
-
           // Send stop message to get final results
           if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: "stop" }))
           }
 
-          // Wait for final results then close WebSocket
-          // Audio is already stopped, so this delay doesn't affect game sounds
+          // Wait a moment for final results then cleanup
           setTimeout(cleanup, 500)
         },
         get isActive() {
