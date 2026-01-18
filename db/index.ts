@@ -11,9 +11,10 @@
  * ```typescript
  * // app/api/example/route.ts
  * import { createDb } from "@/db"
+ * import { getCloudflareContext } from "@opennextjs/cloudflare"
  *
  * export async function GET(request: Request) {
- *   const { env } = getRequestContext() // from @cloudflare/next-on-pages
+ *   const { env } = await getCloudflareContext({ async: true })
  *   const db = createDb(env.DB)
  *
  *   const users = await db.query.users.findMany()
@@ -86,6 +87,9 @@ export type Database = ReturnType<typeof createDb>
 
 // Re-export schema for convenient access
 export * from "./schema"
+
+// Re-export inferred types for convenient access
+export * from "./types"
 
 // Re-export common Drizzle operators for queries
 export { eq, and, or, gt, gte, lt, lte, ne, isNull, isNotNull, inArray, notInArray, like, sql } from "drizzle-orm"

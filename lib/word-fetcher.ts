@@ -41,15 +41,17 @@ import { getRandomWord as getRandomWordSync } from "./word-service"
 /**
  * Feature flag: Use D1 database instead of mock data.
  *
- * When true:
- * - Fetches words from /api/words/random endpoint
- * - Requires local D1 database to be seeded
+ * This is the PRIMARY word fetching mechanism for the app.
+ *
+ * When true (default):
+ * - Fetches words from /api/words/random endpoint (D1 database)
+ * - Falls back to mock data on API failure
  *
  * When false:
  * - Uses synchronous mock data from word-service.ts
- * - Good for development without database setup
+ * - Useful for offline development without database
  *
- * TODO: Move to environment variable for production deployment
+ * In production, this is always true since D1 is configured.
  */
 export const USE_DATABASE = true
 

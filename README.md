@@ -1,36 +1,77 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PlayLexi
 
-## Getting Started
+A competitive spelling bee game with voice recognition and anti-cheat detection.
 
-First, run the development server:
+## Quick Start
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Install dependencies
+npm install
+
+# Start development (Next.js + Speech Server)
+npm run dev:all
+
+# Or run separately:
+npm run dev          # Next.js on http://localhost:3000
+npm run dev:speech   # Speech server on ws://localhost:3002
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Architecture
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Service | Technology | URL |
+|---------|------------|-----|
+| **Web App** | Next.js 16 + Cloudflare Workers | https://app.playlexi.com |
+| **Speech Server** | Node.js WebSocket + Google Cloud | wss://speech.playlexi.com |
+| **Database** | Cloudflare D1 (SQLite) | Serverless |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Documentation
 
-## Learn More
+- **[Product Requirements](docs/PRD.md)** — Game mechanics, features, roadmap
+- **[Architecture](docs/ARCHITECTURE.md)** — Technical design, data flow, patterns
+- **[Setup Guide](docs/SETUP.md)** — Development and deployment instructions
+- **[Component Inventory](docs/COMPONENT_INVENTORY.md)** — UI components and their status
 
-To learn more about Next.js, take a look at the following resources:
+## Key Commands
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+# Development
+npm run dev:all              # Start both Next.js and speech server
+npm run dev                  # Start Next.js only
+npm run dev:speech           # Start speech server only
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# Database
+npm run db:migrate           # Run migrations (local)
+npm run db:migrate:prod      # Run migrations (production)
+npm run db:seed              # Seed words (local)
+npm run db:seed:prod         # Seed words (production)
+npm run db:studio            # Open Drizzle Studio
 
-## Deploy on Vercel
+# Deployment
+npm run deploy               # Build and deploy to Cloudflare Workers
+npm run preview              # Preview production build locally
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Tech Stack
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Frontend**: Next.js 16, React, Tailwind CSS, shadcn/ui
+- **Backend**: Cloudflare Workers, D1 Database, R2 Storage
+- **Speech**: Google Cloud Speech-to-Text via WebSocket streaming
+- **ORM**: Drizzle ORM with D1 adapter
+
+## Project Structure
+
+```
+├── app/                    # Next.js App Router pages
+├── components/             # React components (UI + game)
+├── lib/                    # Business logic and services
+├── hooks/                  # React custom hooks
+├── speech-server/          # WebSocket server for speech recognition
+├── db/                     # Database schema and connection
+├── scripts/                # CLI utilities (seeding, uploads)
+├── docs/                   # Architecture and setup documentation
+└── migrations/             # D1 SQL migrations
+```
+
+## License
+
+Private — All rights reserved.

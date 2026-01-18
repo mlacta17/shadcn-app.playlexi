@@ -29,11 +29,14 @@
 
 /**
  * Feature flag: Use D1 database instead of mock data.
- * Set to true when D1 is configured and seeded with Merriam-Webster data.
  *
- * TODO: Move to environment variable when deploying
+ * NOTE: This flag is now DEPRECATED. The app always uses the D1 database
+ * via the /api/words/random endpoint. Mock data is only used as a fallback
+ * when the API call fails (handled in word-fetcher.ts).
+ *
+ * @deprecated Use word-fetcher.ts for async word fetching
  */
-const USE_DATABASE = false
+const USE_DATABASE = false // Kept for backward compatibility with sync getRandomWord()
 
 // =============================================================================
 // TYPES
