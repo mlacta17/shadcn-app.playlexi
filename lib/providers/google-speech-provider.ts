@@ -154,27 +154,19 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
     let lastStability = 0
 
     /**
-     * Cleanup all resources safely.
+     * Stop audio capture immediately.
+     *
+     * This releases Safari's audio hardware resources so game sounds can play
+     * without conflict. Called as soon as recording stops, before waiting for
+     * the final result from Google.
+     *
+     * IMPORTANT: On Safari, having two AudioContexts active simultaneously
+     * (one for speech at 16kHz, one for game sounds at 48kHz) causes latency
+     * and audio glitches. Closing the speech AudioContext immediately prevents
+     * this conflict.
      */
-    const cleanup = () => {
-      if (isClosed) return
-      isClosed = true
-      isActive = false
-
-      // Close WebSocket
-      if (ws) {
-        try {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: "stop" }))
-            ws.close()
-          }
-        } catch {
-          // Ignore
-        }
-        ws = null
-      }
-
-      // Stop audio processing
+    const stopAudioCapture = () => {
+      // Stop audio processing first (prevents more audio from being captured)
       if (scriptProcessor) {
         try {
           scriptProcessor.disconnect()
@@ -191,9 +183,11 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
         } catch {
           // Ignore
         }
+        // Note: Don't null analyserNode - it may still be referenced by the session
       }
 
-      // Close audio context
+      // Close audio context IMMEDIATELY (critical for Safari)
+      // This releases the audio hardware so game sounds can play without lag
       if (audioContext && audioContext.state !== "closed") {
         try {
           audioContext.close()
@@ -203,7 +197,7 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
         audioContext = null
       }
 
-      // Stop media stream
+      // Stop media stream (releases microphone)
       if (mediaStream) {
         try {
           mediaStream.getTracks().forEach((track) => track.stop())
@@ -211,6 +205,31 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
           // Ignore
         }
         mediaStream = null
+      }
+    }
+
+    /**
+     * Cleanup all resources safely (WebSocket + audio).
+     * Called after we've received final results or timed out.
+     */
+    const cleanup = () => {
+      if (isClosed) return
+      isClosed = true
+      isActive = false
+
+      // Stop audio capture first (may already be stopped)
+      stopAudioCapture()
+
+      // Close WebSocket
+      if (ws) {
+        try {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.close()
+          }
+        } catch {
+          // Ignore
+        }
+        ws = null
       }
     }
 
@@ -568,12 +587,18 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
             console.log("[Google] Stopping session")
           }
 
+          // CRITICAL: Stop audio capture IMMEDIATELY
+          // This releases the AudioContext so game sounds can play without
+          // Safari lag. The WebSocket stays open to receive final results.
+          stopAudioCapture()
+
           // Send stop message to get final results
           if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: "stop" }))
           }
 
-          // Wait a moment for final results then cleanup
+          // Wait for final results then close WebSocket
+          // Audio is already stopped, so this delay doesn't affect game sounds
           setTimeout(cleanup, 500)
         },
         get isActive() {
