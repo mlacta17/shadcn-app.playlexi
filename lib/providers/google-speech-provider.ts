@@ -230,6 +230,29 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
         }
         mediaStream = null
       }
+
+      // SAFARI FIX: Reset audio ducking by triggering a brief speechSynthesis event.
+      // Safari ducks (lowers volume of) all audio when microphone is active.
+      // This ducking can persist after the microphone is released.
+      // Triggering speechSynthesis resets the audio routing to normal volume.
+      // We use a silent utterance (empty string) so the user doesn't hear anything.
+      // @see https://bugs.webkit.org/show_bug.cgi?id=218012
+      if (isSafari() && typeof window !== "undefined" && "speechSynthesis" in window) {
+        try {
+          // Cancel any ongoing speech first
+          window.speechSynthesis.cancel()
+          // Create a silent utterance to reset audio ducking
+          const silentUtterance = new SpeechSynthesisUtterance("")
+          silentUtterance.volume = 0
+          window.speechSynthesis.speak(silentUtterance)
+          // Cancel it immediately - the act of starting resets the audio routing
+          setTimeout(() => {
+            window.speechSynthesis.cancel()
+          }, 50)
+        } catch {
+          // Ignore errors - this is just an optimization for Safari
+        }
+      }
     }
 
     /**

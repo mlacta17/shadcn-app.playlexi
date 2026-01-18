@@ -304,6 +304,12 @@ let webSpeechProvider: WebSpeechProvider | null = null
 let googleConfigured: boolean | null = null
 
 /**
+ * Pending check promise to prevent race conditions.
+ * Multiple concurrent calls will wait for the same check to complete.
+ */
+let googleConfigPending: Promise<boolean> | null = null
+
+/**
  * WebSocket server URL for Google Speech.
  * Uses environment variable in production, falls back to localhost for development.
  */
@@ -311,43 +317,54 @@ const GOOGLE_SPEECH_WS_URL: string =
   process.env.NEXT_PUBLIC_SPEECH_SERVER_URL || "ws://localhost:3002"
 
 async function isGoogleConfigured(): Promise<boolean> {
+  // Return cached result if available
   if (googleConfigured !== null) return googleConfigured
+
+  // If a check is already in progress, wait for it (prevents race condition)
+  if (googleConfigPending !== null) return googleConfigPending
 
   // Skip check on server-side
   if (typeof window === "undefined") {
     return false
   }
 
-  try {
-    // Try to connect to the WebSocket server
-    const wsUrl = GOOGLE_SPEECH_WS_URL
-    const ws = new WebSocket(wsUrl)
+  // Start the check and store the pending promise
+  googleConfigPending = (async () => {
+    try {
+      // Try to connect to the WebSocket server
+      const wsUrl = GOOGLE_SPEECH_WS_URL
+      const ws = new WebSocket(wsUrl)
 
-    const result = await new Promise<boolean>((resolve) => {
-      const timeout = setTimeout(() => {
-        ws.close()
-        resolve(false)
-      }, 2000)
+      const result = await new Promise<boolean>((resolve) => {
+        const timeout = setTimeout(() => {
+          ws.close()
+          resolve(false)
+        }, 2000)
 
-      ws.onopen = () => {
-        clearTimeout(timeout)
-        ws.close()
-        resolve(true)
-      }
+        ws.onopen = () => {
+          clearTimeout(timeout)
+          ws.close()
+          resolve(true)
+        }
 
-      ws.onerror = () => {
-        clearTimeout(timeout)
-        resolve(false)
-      }
-    })
+        ws.onerror = () => {
+          clearTimeout(timeout)
+          resolve(false)
+        }
+      })
 
-    googleConfigured = result
-    console.log(`[SpeechRecognition] Google Speech server ${result ? "available ✅" : "not available ❌"} at ${wsUrl}`)
-    return result
-  } catch {
-    googleConfigured = false
-    return false
-  }
+      googleConfigured = result
+      console.log(`[SpeechRecognition] Google Speech server ${result ? "available ✅" : "not available ❌"} at ${wsUrl}`)
+      return result
+    } catch {
+      googleConfigured = false
+      return false
+    } finally {
+      googleConfigPending = null
+    }
+  })()
+
+  return googleConfigPending
 }
 
 /**
