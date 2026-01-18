@@ -6,7 +6,6 @@ import {
   getSpeechProviderAsync,
   type SpeechRecognitionSession,
   type SpeechProvider,
-  type WordTimingData,
   SPELLING_KEYWORDS,
 } from "@/lib/speech-recognition-service"
 import { extractLettersFromVoice } from "@/lib/answer-validation"

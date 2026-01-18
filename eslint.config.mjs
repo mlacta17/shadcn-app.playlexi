@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // OpenNext build output (generated, not source code):
+    ".open-next/**",
+    // Speech server build output:
+    "speech-server/dist/**",
   ]),
 ]);
 

@@ -94,11 +94,14 @@ function VoiceWaveform({
 
   // Generate stable random offsets for each bar (only once per mount)
   // This creates consistent "personality" for the waveform
-  if (randomOffsetsRef.current.length !== barCount) {
-    randomOffsetsRef.current = Array.from({ length: barCount }, () =>
-      1 + (Math.random() - 0.5) * 2 * asymmetryFactor
-    )
-  }
+  // Using useEffect to avoid calling Math.random() during render (React purity)
+  React.useEffect(() => {
+    if (randomOffsetsRef.current.length !== barCount) {
+      randomOffsetsRef.current = Array.from({ length: barCount }, () =>
+        1 + (Math.random() - 0.5) * 2 * asymmetryFactor
+      )
+    }
+  }, [barCount, asymmetryFactor])
 
   // Calculate canvas dimensions
   const canvasWidth = barCount * barWidth + (barCount - 1) * barGap
@@ -227,21 +230,35 @@ function VoiceWaveform({
     [analyserNode, barCount, barGap, barWidth, minBarHeight, maxBarHeight, sensitivity, smoothingFactor, canvasWidth, canvasHeight, getBarColor]
   )
 
-  /** Animation loop - runs at 60fps when active */
-  const animate = React.useCallback(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
+  /**
+   * Animation loop - runs at 60fps when active.
+   * Uses a ref-based pattern to avoid the function referencing itself
+   * in its dependency closure (which causes hoisting issues with useCallback).
+   */
+  const animateFnRef = React.useRef<() => void>(() => {})
 
-    const ctx = canvas.getContext("2d")
-    if (!ctx) return
+  // Update the animate function ref when dependencies change
+  React.useEffect(() => {
+    animateFnRef.current = () => {
+      const canvas = canvasRef.current
+      if (!canvas) return
 
-    if (analyserNode && dataArrayRef.current) {
-      drawActive(ctx)
-      animationRef.current = requestAnimationFrame(animate)
-    } else {
-      drawInactive(ctx)
+      const ctx = canvas.getContext("2d")
+      if (!ctx) return
+
+      if (analyserNode && dataArrayRef.current) {
+        drawActive(ctx)
+        animationRef.current = requestAnimationFrame(animateFnRef.current)
+      } else {
+        drawInactive(ctx)
+      }
     }
   }, [analyserNode, drawActive, drawInactive])
+
+  // Stable reference for starting animation
+  const animate = React.useCallback(() => {
+    animateFnRef.current()
+  }, [])
 
   // Initialize/cleanup data array when analyser changes
   React.useEffect(() => {

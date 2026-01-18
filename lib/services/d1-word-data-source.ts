@@ -149,7 +149,7 @@ export function createD1WordDataSource(db: Database): AsyncWordDataSource {
     async getRandomWord(tier: WordTier, excludeIds: string[] = []): Promise<Word | undefined> {
       try {
         // Build query with optional exclusion
-        let query = db
+        const query = db
           .select()
           .from(words)
           .where(

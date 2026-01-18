@@ -341,8 +341,9 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
                     ? wordTimings[wordTimings.length - 1].end - wordTimings[0].start
                     : 0
 
-                  // Average duration per word
-                  const avgWordDuration = wordCount > 0 ? totalDuration / wordCount : 0
+                  // Average duration per word (kept for future debugging/logging)
+                  const _avgWordDuration = wordCount > 0 ? totalDuration / wordCount : 0
+                  void _avgWordDuration // Suppress unused variable warning
 
                   // =================================================================
                   // SIGNAL 1: Multiple words detected (strong signal for spelling)

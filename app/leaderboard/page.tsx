@@ -3,9 +3,7 @@
 import * as React from "react"
 import { FilterIcon } from "@/lib/icons"
 
-import { cn } from "@/lib/utils"
 import { RankBadge, LeaderboardTable, type LeaderboardPlayer } from "@/components/game"
-import { Button } from "@/components/ui/button"
 import { HexPattern } from "@/components/ui/hex-pattern"
 import { Navbar } from "@/components/ui/navbar"
 import { Progress } from "@/components/ui/progress"

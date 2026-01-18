@@ -232,8 +232,9 @@ describe("validateAnswer", () => {
   describe("voice mode with audio timing (anti-cheat)", () => {
     it("rejects when looksLikeSpelling is false", () => {
       // Anti-cheat pre-computes looksLikeSpelling in the speech hook
+      // wordCount=1 means user said whole word, not spelled letters
       const result = validateAnswer("cat", "cat", "voice", {
-        audioTiming: { looksLikeSpelling: false },
+        audioTiming: { looksLikeSpelling: false, wordCount: 1, avgGapSec: 0 },
       })
       expect(result.wasSpelledOut).toBe(false)
       expect(result.rejectionReason).toBe("not_spelled_out")
@@ -241,8 +242,9 @@ describe("validateAnswer", () => {
     })
 
     it("accepts when looksLikeSpelling is true", () => {
+      // wordCount=3 means user spelled "C A T" as 3 separate words
       const result = validateAnswer("C A T", "cat", "voice", {
-        audioTiming: { looksLikeSpelling: true },
+        audioTiming: { looksLikeSpelling: true, wordCount: 3, avgGapSec: 0.3 },
       })
       expect(result.isCorrect).toBe(true)
       expect(result.wasSpelledOut).toBe(true)

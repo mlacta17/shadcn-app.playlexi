@@ -785,7 +785,7 @@ function ComboboxNormalDemo() {
         ))}
         <ComboboxChipsInput placeholder="Select frameworks..." />
       </ComboboxChips>
-      <ComboboxContent anchor={anchor.current}>
+      <ComboboxContent anchorRef={anchor}>
         <ComboboxEmpty>No results found</ComboboxEmpty>
         <ComboboxList>
           {(item) => (
@@ -819,7 +819,7 @@ function ComboboxErrorDemo() {
           ))}
           <ComboboxChipsInput placeholder="Select at least one framework..." />
         </ComboboxChips>
-        <ComboboxContent anchor={anchor.current}>
+        <ComboboxContent anchorRef={anchor}>
           <ComboboxEmpty>No results found</ComboboxEmpty>
           <ComboboxList>
             {(item) => (
@@ -1309,7 +1309,7 @@ function GameFeedbackDemo() {
           Render it at the page/layout level, not inside other game components.
         </p>
         <div className="bg-muted/50 p-4 rounded-lg font-mono text-xs space-y-1">
-          <p>// In your game page/layout</p>
+          <p>{`// In your game page/layout`}</p>
           <p className="text-muted-foreground">&lt;GameFeedbackOverlay type=&#123;feedback.feedbackType&#125; isVisible=&#123;feedback.isShowing&#125; /&gt;</p>
           <p className="text-muted-foreground">&lt;GameTimer ... /&gt;</p>
           <p className="text-muted-foreground">&lt;SpeechInput ... /&gt;</p>

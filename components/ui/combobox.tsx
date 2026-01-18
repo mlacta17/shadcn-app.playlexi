@@ -86,19 +86,44 @@ function ComboboxInput({
   )
 }
 
+/**
+ * ComboboxContent props with support for ref-based anchors.
+ * Uses a callback ref pattern to avoid accessing .current during render.
+ */
+interface ComboboxContentProps extends ComboboxPrimitive.Popup.Props {
+  side?: ComboboxPrimitive.Positioner.Props["side"]
+  align?: ComboboxPrimitive.Positioner.Props["align"]
+  sideOffset?: ComboboxPrimitive.Positioner.Props["sideOffset"]
+  alignOffset?: ComboboxPrimitive.Positioner.Props["alignOffset"]
+  /** Anchor element reference - pass the ref object */
+  anchorRef?: React.RefObject<HTMLElement | null>
+  /** Direct anchor element (alternative to anchorRef) */
+  anchor?: ComboboxPrimitive.Positioner.Props["anchor"]
+}
+
 function ComboboxContent({
   className,
   side = "bottom",
   sideOffset = 6,
   align = "start",
   alignOffset = 0,
+  anchorRef,
   anchor,
   ...props
-}: ComboboxPrimitive.Popup.Props &
-  Pick<
-    ComboboxPrimitive.Positioner.Props,
-    "side" | "align" | "sideOffset" | "alignOffset" | "anchor"
-  >) {
+}: ComboboxContentProps) {
+  // Use state to track the anchor element, updated via useEffect
+  // This avoids reading ref.current during render (React Compiler requirement)
+  const [resolvedAnchor, setResolvedAnchor] = React.useState<HTMLElement | null>(null)
+
+  React.useEffect(() => {
+    if (anchorRef) {
+      setResolvedAnchor(anchorRef.current)
+    }
+  }, [anchorRef])
+
+  // Use either the state-tracked anchor or the direct anchor prop
+  const finalAnchor = resolvedAnchor ?? anchor
+
   return (
     <ComboboxPrimitive.Portal>
       <ComboboxPrimitive.Positioner
@@ -106,12 +131,12 @@ function ComboboxContent({
         sideOffset={sideOffset}
         align={align}
         alignOffset={alignOffset}
-        anchor={anchor}
+        anchor={finalAnchor}
         className="isolate z-50"
       >
         <ComboboxPrimitive.Popup
           data-slot="combobox-content"
-          data-chips={!!anchor}
+          data-chips={!!(anchorRef || anchor)}
           className={cn("bg-popover text-popover-foreground data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ring-foreground/5 *:data-[slot=input-group]:bg-input/30 max-h-72 min-w-36 overflow-hidden rounded-lg shadow-2xl ring-1 duration-100 *:data-[slot=input-group]:m-1 *:data-[slot=input-group]:mb-0 *:data-[slot=input-group]:h-9 *:data-[slot=input-group]:border-none *:data-[slot=input-group]:shadow-none group/combobox-content relative max-h-(--available-height) w-(--anchor-width) max-w-(--available-width) min-w-[calc(var(--anchor-width)+--spacing(7))] origin-(--transform-origin) data-[chips=true]:min-w-(--anchor-width)", className )}
           {...props}
         />
@@ -256,7 +281,6 @@ function ComboboxChip({
 
 function ComboboxChipsInput({
   className,
-  children,
   ...props
 }: ComboboxPrimitive.Input.Props) {
   return (

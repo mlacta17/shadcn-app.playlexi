@@ -7,7 +7,7 @@ import {
   SunIcon as Sun,
 } from "@/lib/icons";
 import { motion } from "motion/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { cn } from "@/lib/utils";
 
 const themes = [
@@ -46,8 +46,6 @@ export const ThemeSwitcher = ({
     prop: value,
     onChange,
   });
-  const [mounted, setMounted] = useState(false);
-
   const handleThemeClick = useCallback(
     (themeKey: "light" | "dark" | "system") => {
       setTheme(themeKey);
@@ -55,10 +53,13 @@ export const ThemeSwitcher = ({
     [setTheme]
   );
 
-  // Prevent hydration mismatch
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // Use useSyncExternalStore to detect client-side hydration (React 18+ pattern)
+  // This avoids the cascading render warning from calling setState in useEffect
+  const mounted = useSyncExternalStore(
+    () => () => {}, // subscribe is a no-op
+    () => true, // client always returns true
+    () => false // server always returns false
+  );
 
   if (!mounted) {
     return null;

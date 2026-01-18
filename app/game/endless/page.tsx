@@ -83,7 +83,6 @@ export default function EndlessGamePage() {
     stopRecording, // Returns duration in ms for anti-cheat
     analyserNode,
     transcript,
-    provider,
   } = useSpeechRecognition({ spellingMode: true })
 
   // ---------------------------------------------------------------------------
@@ -358,7 +357,6 @@ export default function EndlessGamePage() {
   // Derived State
   // ---------------------------------------------------------------------------
 
-  const isPlaying = gameState.phase === "playing"
   const currentWord = gameState.currentWord
 
   // Transform raw transcript to display-friendly letter format
