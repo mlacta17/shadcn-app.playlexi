@@ -65,10 +65,34 @@ const SPEECH_SERVER_URL: string =
   process.env.NEXT_PUBLIC_SPEECH_SERVER_URL || "ws://localhost:3002"
 
 /**
+ * Detect if we're running on Safari/iOS.
+ *
+ * Safari has specific audio requirements:
+ * - Prefers 44100 Hz sample rate (48000 causes stuttering)
+ * - Needs audio "warm-up" from user interaction
+ * - Has audio ducking issues with getUserMedia
+ */
+const isSafari = (): boolean => {
+  if (typeof navigator === "undefined") return false
+  const ua = navigator.userAgent
+  // Safari but not Chrome (Chrome includes "Safari" in UA)
+  return /Safari/.test(ua) && !/Chrome/.test(ua)
+}
+
+/**
  * Audio capture settings for LINEAR16 format.
+ *
+ * IMPORTANT: Safari prefers 44100 Hz. Using 48000 causes stuttering and the
+ * first ~500ms of audio may be lost during hardware reconfiguration.
+ * Google Speech API accepts both 16000 and 44100 Hz audio.
+ *
+ * @see https://github.com/chrisguttandin/standardized-audio-context/issues/489
+ * @see https://github.com/goldfire/howler.js/issues/1141
  */
 const AUDIO_CONFIG = {
-  sampleRate: 16000, // 16kHz as required by Google
+  // Use Safari's preferred sample rate to avoid hardware switching latency.
+  // Google Speech API accepts various sample rates and will resample server-side.
+  sampleRate: isSafari() ? 44100 : 16000,
   channelCount: 1, // Mono
   chunkIntervalMs: 100, // Send audio every 100ms for low latency
 }
@@ -234,6 +258,14 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
     }
 
     try {
+      // SAFARI FIX: Cancel any ongoing speech synthesis before recording.
+      // Safari's audio ducking can get stuck if speechSynthesis is active
+      // when we acquire the microphone, causing volume to stay low.
+      // @see https://bugs.webkit.org/show_bug.cgi?id=218012
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel()
+      }
+
       // Connect to WebSocket server
       ws = new WebSocket(SPEECH_SERVER_URL)
 
@@ -522,8 +554,9 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
         }
       }
 
-      // Send start message with language
-      ws.send(JSON.stringify({ type: "start", language }))
+      // Send start message with language and sample rate
+      // Safari uses 44100 Hz to avoid audio hardware switching latency
+      ws.send(JSON.stringify({ type: "start", language, sampleRate: AUDIO_CONFIG.sampleRate }))
 
       // Get microphone stream
       mediaStream = await navigator.mediaDevices.getUserMedia({

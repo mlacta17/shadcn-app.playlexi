@@ -161,11 +161,14 @@ function startServer(): void {
           }
 
           const language = message.language || "en-US"
+          // Safari sends 44100 Hz to avoid sample rate switching latency.
+          // Others use 16000 Hz (Google's preferred rate for voice).
+          const sampleRate = message.sampleRate || 16000
           if (isDev) {
-            console.log(`[Server] Starting session (language: ${language})`)
+            console.log(`[Server] Starting session (language: ${language}, sampleRate: ${sampleRate}Hz)`)
           }
 
-          // Create new streaming session
+          // Create new streaming session with client's sample rate
           session = createStreamingSession(
             {
               projectId: creds.projectId!,
@@ -204,7 +207,8 @@ function startServer(): void {
                 })
               },
             },
-            language
+            language,
+            sampleRate
           )
           break
         }

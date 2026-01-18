@@ -134,6 +134,7 @@ function parseWordTiming(googleWords: GoogleWordInfo[] | undefined): WordTiming[
  * @param credentials - Google Cloud credentials
  * @param callbacks - Event callbacks for results and errors
  * @param language - BCP-47 language code (default: "en-US")
+ * @param sampleRate - Audio sample rate in Hz (default: 16000, Safari uses 44100)
  * @returns A streaming session controller
  *
  * @example
@@ -144,7 +145,9 @@ function parseWordTiming(googleWords: GoogleWordInfo[] | undefined): WordTiming[
  *     onInterimResult: (transcript) => console.log("Interim:", transcript),
  *     onFinalResult: (transcript, words) => console.log("Final:", transcript, words),
  *     onError: (err) => console.error("Error:", err),
- *   }
+ *   },
+ *   "en-US",
+ *   44100 // Safari sends 44100 Hz
  * )
  *
  * // Send audio chunks
@@ -161,7 +164,8 @@ export function createStreamingSession(
     privateKey: string
   },
   callbacks: StreamingCallbacks,
-  language: string = "en-US"
+  language: string = "en-US",
+  sampleRate: number = 16000
 ): StreamingSession {
   const { projectId, clientEmail, privateKey } = credentials
   const { onInterimResult, onFinalResult, onError } = callbacks
@@ -179,10 +183,12 @@ export function createStreamingSession(
   let isStreamActive = true
   let hasEnded = false
 
-  // Create the streaming request config
+  // Create the streaming request config with client's sample rate
+  // Safari uses 44100 Hz to avoid audio hardware switching latency
   const config: StreamingConfig = {
     ...DEFAULT_CONFIG,
     languageCode: language,
+    sampleRateHertz: sampleRate,
   }
 
   // Create the gRPC stream

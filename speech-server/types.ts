@@ -14,6 +14,7 @@
 export interface StartMessage {
   type: "start"
   language?: string // BCP-47 language code, defaults to "en-US"
+  sampleRate?: number // Audio sample rate in Hz, defaults to 16000
 }
 
 /**
