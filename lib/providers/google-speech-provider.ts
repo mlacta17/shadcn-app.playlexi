@@ -59,22 +59,10 @@ import { cleanTranscript, float32ToInt16 } from "../speech-utils"
  * In production: Uses NEXT_PUBLIC_SPEECH_SERVER_URL environment variable
  *
  * Set NEXT_PUBLIC_SPEECH_SERVER_URL in your deployment environment to point
- * to your deployed speech server (e.g., wss://playlexi-speech.railway.app)
+ * to your deployed speech server (e.g., wss://speech.playlexi.com)
  */
-const SPEECH_SERVER_URL = (() => {
-  // Server-side rendering check
-  if (typeof window === "undefined") {
-    return "ws://localhost:3002"
-  }
-
-  // Use environment variable if set (production)
-  if (process.env.NEXT_PUBLIC_SPEECH_SERVER_URL) {
-    return process.env.NEXT_PUBLIC_SPEECH_SERVER_URL
-  }
-
-  // Default to localhost for development
-  return `ws://${window.location.hostname}:3002`
-})()
+const SPEECH_SERVER_URL: string =
+  process.env.NEXT_PUBLIC_SPEECH_SERVER_URL || "ws://localhost:3002"
 
 /**
  * Audio capture settings for LINEAR16 format.

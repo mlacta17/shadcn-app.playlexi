@@ -303,6 +303,13 @@ let webSpeechProvider: WebSpeechProvider | null = null
  */
 let googleConfigured: boolean | null = null
 
+/**
+ * WebSocket server URL for Google Speech.
+ * Uses environment variable in production, falls back to localhost for development.
+ */
+const GOOGLE_SPEECH_WS_URL: string =
+  process.env.NEXT_PUBLIC_SPEECH_SERVER_URL || "ws://localhost:3002"
+
 async function isGoogleConfigured(): Promise<boolean> {
   if (googleConfigured !== null) return googleConfigured
 
@@ -313,7 +320,7 @@ async function isGoogleConfigured(): Promise<boolean> {
 
   try {
     // Try to connect to the WebSocket server
-    const wsUrl = `ws://${window.location.hostname}:3002`
+    const wsUrl = GOOGLE_SPEECH_WS_URL
     const ws = new WebSocket(wsUrl)
 
     const result = await new Promise<boolean>((resolve) => {
