@@ -46,7 +46,7 @@
 | **Auth** | Auth.js (NextAuth v5) | OAuth providers, session management |
 | **Real-time** | Cloudflare Durable Objects | Native WebSocket support, stateful game sessions |
 | **Voice** | Google Cloud Speech-to-Text (via WebSocket server) | Best letter recognition, word-level timing for anti-cheat |
-| **Hosting** | Cloudflare Pages + Workers | Edge deployment, cost-effective, integrated stack |
+| **Hosting** | Cloudflare Workers (via OpenNext) | Edge deployment, cost-effective, integrated stack |
 | **Storage** | Cloudflare R2 | S3-compatible, zero egress fees |
 | **Analytics** | PostHog | Privacy-focused, self-hostable |
 | **Error Tracking** | Sentry | Real-time error monitoring |
@@ -71,7 +71,7 @@
 **Integrated Stack:**
 - One platform for compute, storage, database, and real-time
 - Simpler deployment and monitoring
-- `@cloudflare/next-on-pages` for Next.js compatibility
+- OpenNext adapter (`@opennextjs/cloudflare`) for Next.js compatibility
 
 ### 1.3 Hybrid Cloud Architecture
 
@@ -85,11 +85,11 @@ PlayLexi uses a **hybrid cloud architecture** with Cloudflare as the primary pla
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │                        CLOUDFLARE EDGE                                │    │
 │  │                                                                       │    │
-│  │   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐              │    │
-│  │   │ Cloudflare  │    │  Workers    │    │     R2      │              │    │
-│  │   │   Pages     │    │  (Auth +    │    │  (Assets +  │              │    │
-│  │   │ (Next.js)   │    │  API Logic) │    │   Audio)    │              │    │
-│  │   └─────────────┘    └─────────────┘    └─────────────┘              │    │
+│  │   ┌─────────────────────────────┐    ┌─────────────┐              │    │
+│  │   │    Cloudflare Workers       │    │     R2      │              │    │
+│  │   │    (Next.js via OpenNext)   │    │  (Assets +  │              │    │
+│  │   │                             │    │   Audio)    │              │    │
+│  │   └─────────────────────────────┘    └─────────────┘              │    │
 │  │         │                   │                  │                      │    │
 │  │         └───────────────────┼──────────────────┘                      │    │
 │  │                             │                                         │    │
@@ -127,7 +127,7 @@ PlayLexi uses a **hybrid cloud architecture** with Cloudflare as the primary pla
 
 | Component | Platform | Rationale |
 |-----------|----------|-----------|
-| Frontend (Next.js) | Cloudflare Pages | Edge deployment, global CDN |
+| Frontend (Next.js) | Cloudflare Workers | Edge deployment, global CDN |
 | Database | Cloudflare D1 | Serverless SQL, integrated |
 | Multiplayer | Cloudflare Durable Objects | Native WebSocket support |
 | Static Assets | Cloudflare R2 | Zero egress fees |
@@ -162,7 +162,7 @@ See [speech-server/DEPLOYMENT.md](../speech-server/DEPLOYMENT.md) for detailed d
 - Server components reduce client bundle
 - API routes keep backend in same repo (monolith-first)
 - Great caching and ISR for leaderboards
-- Works on Cloudflare via `@cloudflare/next-on-pages`
+- Works on Cloudflare via OpenNext (`@opennextjs/cloudflare`)
 
 **D1 over PostgreSQL:**
 - SQLite syntax is familiar and battle-tested
@@ -1738,7 +1738,7 @@ The project uses **OKLCH color space** for perceptually uniform colors. All toke
 
 | Service | Cloudflare Product | Purpose |
 |---------|-------------------|---------|
-| Frontend/API | Pages + Workers | Next.js hosting via `@cloudflare/next-on-pages` |
+| Frontend/API | Workers | Next.js hosting via OpenNext (`@opennextjs/cloudflare`) |
 | Database | D1 | SQLite-based serverless database |
 | Real-time | Durable Objects | WebSocket connections, game state |
 | File Storage | R2 | Audio files, avatars (S3-compatible) |
@@ -1749,45 +1749,51 @@ The project uses **OKLCH color space** for perceptually uniform colors. All toke
 
 ### 12.3 Cloudflare Configuration
 
-```toml
-# wrangler.toml
+```jsonc
+// wrangler.jsonc
 
-name = "playlexi"
-compatibility_date = "2024-01-01"
-pages_build_output_dir = ".vercel/output/static"
+{
+  "name": "playlexi",
+  "compatibility_date": "2024-01-01",
 
-# D1 Database
-[[d1_databases]]
-binding = "DB"
-database_name = "playlexi-db"
-database_id = "xxx-xxx-xxx"
+  // D1 Database
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "playlexi-db",
+      "database_id": "xxx-xxx-xxx"
+    }
+  ],
 
-# R2 Bucket
-[[r2_buckets]]
-binding = "STORAGE"
-bucket_name = "playlexi-assets"
+  // R2 Bucket
+  "r2_buckets": [
+    {
+      "binding": "R2_ASSETS",
+      "bucket_name": "playlexi-assets"
+    }
+  ],
 
-# Durable Objects
-[[durable_objects.bindings]]
-name = "GAME_ROOMS"
-class_name = "GameRoom"
+  // Durable Objects (for multiplayer)
+  "durable_objects": {
+    "bindings": [
+      { "name": "GAME_ROOMS", "class_name": "GameRoom" },
+      { "name": "MATCHMAKING", "class_name": "MatchmakingQueue" }
+    ]
+  },
 
-[[durable_objects.bindings]]
-name = "MATCHMAKING"
-class_name = "MatchmakingQueue"
+  // KV Namespace
+  "kv_namespaces": [
+    {
+      "binding": "SESSIONS",
+      "id": "xxx-xxx-xxx"
+    }
+  ],
 
-# Workers AI
-[ai]
-binding = "AI"
-
-# KV Namespace
-[[kv_namespaces]]
-binding = "SESSIONS"
-id = "xxx-xxx-xxx"
-
-# Environment variables
-[vars]
-ENVIRONMENT = "production"
+  // Environment variables
+  "vars": {
+    "ENVIRONMENT": "production"
+  }
+}
 ```
 
 ### 12.4 Environment Variables
@@ -1845,12 +1851,12 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Deploy to Cloudflare Pages
+      - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy .vercel/output/static --project-name=playlexi
+          command: deploy
 ```
 
 ### 12.6 Database Migrations
@@ -2505,7 +2511,7 @@ chore: update dependencies
 | Issue | Solution |
 |-------|----------|
 | Wrangler not connecting to D1 | Run `wrangler login` and check `.dev.vars` |
-| WebSocket not connecting locally | Ensure Durable Objects are enabled in `wrangler.toml` |
+| WebSocket not connecting locally | Ensure Durable Objects are enabled in `wrangler.jsonc` |
 | Type errors after DB change | Run `npm run db:generate` to update Drizzle types |
 | Tests failing on CI | Check if migrations were applied to test database |
 | Build fails on Cloudflare | Ensure all imports are edge-compatible |
@@ -3538,8 +3544,8 @@ After Phase 2 is working locally, complete these before Phase 3:
 - [ ] Set up Apple OAuth (Apple Developer account required)
 - [ ] Get Merriam-Webster API key (dictionaryapi.com)
 - [ ] Seed production database with real word data
-- [ ] Configure `wrangler.toml` with D1 binding
-- [ ] Deploy to Cloudflare Pages for testing
+- [ ] Configure `wrangler.jsonc` with D1 binding
+- [ ] Deploy to Cloudflare Workers for testing
 
 ---
 

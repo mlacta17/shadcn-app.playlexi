@@ -50,7 +50,7 @@ import * as schema from "./schema"
  *
  * @example
  * ```typescript
- * // In a Cloudflare Pages function
+ * // In a Cloudflare Workers route handler
  * import { createDb } from "@/db"
  *
  * export async function onRequest(context) {

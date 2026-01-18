@@ -1,7 +1,7 @@
 # PlayLexi — Component Inventory
 
-> **Version:** 1.1
-> **Last Updated:** December 21, 2025
+> **Version:** 1.2
+> **Last Updated:** January 17, 2026
 > **Purpose:** Track all UI components and hooks needed for PlayLexi, their design status, and implementation status.
 
 ---

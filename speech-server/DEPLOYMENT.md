@@ -91,7 +91,7 @@ The migration from Railway to Cloud Run requires:
 5. **Get your deployment URL** (e.g., `playlexi-speech.up.railway.app`)
 
 6. **Update your Next.js app** with the speech server URL:
-   - In Cloudflare Pages environment variables:
+   - In Cloudflare Workers environment variables:
    ```
    NEXT_PUBLIC_SPEECH_SERVER_URL=wss://playlexi-speech.up.railway.app
    ```
@@ -150,7 +150,7 @@ The migration from Railway to Cloud Run requires:
 
 3. **Get your URL** from the deployment output (e.g., `playlexi-speech-xxxxx.run.app`)
 
-4. **Update Cloudflare Pages** environment variable:
+4. **Update Cloudflare Workers** environment variable:
    ```
    NEXT_PUBLIC_SPEECH_SERVER_URL=wss://playlexi-speech-xxxxx.run.app
    ```
@@ -231,7 +231,7 @@ MIIEvg...
 NEXT_PUBLIC_SPEECH_SERVER_URL=ws://localhost:3002
 ```
 
-### Production (Cloudflare Pages Environment Variables)
+### Production (Cloudflare Workers Environment Variables)
 
 ```bash
 # Railway (Phase 1)

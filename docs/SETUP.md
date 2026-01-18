@@ -1,6 +1,8 @@
 # PlayLexi Setup Guide
 
-This guide walks you through setting up PlayLexi for local development and production deployment.
+> **Last Updated:** January 17, 2026
+
+This guide walks you through setting up PlayLexi for local development, testing, and production deployment.
 
 ## Required Accounts
 
@@ -13,7 +15,7 @@ You'll need accounts with the following services:
 **Create account**: https://dash.cloudflare.com/sign-up
 
 **What you'll use**:
-- **Cloudflare Pages** — Hosts the Next.js application
+- **Cloudflare Workers** — Hosts the Next.js application (via OpenNext adapter)
 - **D1** — Serverless SQLite database at the edge
 - **R2** — Object storage for audio files (Merriam-Webster pronunciations)
 
@@ -97,23 +99,28 @@ npx wrangler login
 npx wrangler d1 create playlexi-db
 ```
 
-Copy the `database_id` from the output and update `wrangler.toml`:
+Copy the `database_id` from the output and update `wrangler.jsonc`:
 
-```toml
-[[d1_databases]]
-binding = "DB"
-database_name = "playlexi-db"
-database_id = "YOUR_DATABASE_ID_HERE"  # <- Paste here
+```jsonc
+{
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "playlexi-db",
+      "database_id": "YOUR_DATABASE_ID_HERE"  // <- Paste here
+    }
+  ]
+}
 ```
 
 ### 4. Run Database Migrations
 
 ```bash
-# Generate migrations from schema
-npx drizzle-kit generate:sqlite
+# Generate migrations from schema (if schema changed)
+npm run db:generate
 
 # Apply migrations to local D1
-npx wrangler d1 migrations apply playlexi-db --local
+npm run db:migrate
 ```
 
 ### 5. Create R2 Bucket (Optional for Local)
@@ -124,7 +131,12 @@ npx wrangler r2 bucket create playlexi-assets
 
 ### 6. Start Development Servers
 
-You need two terminals:
+**Option 1 — Both servers together** (recommended):
+```bash
+npm run dev:all
+```
+
+**Option 2 — Separate terminals**:
 
 **Terminal 1 — Next.js app**:
 ```bash
@@ -140,68 +152,135 @@ Open http://localhost:3000 to see the app.
 
 ---
 
+## Testing
+
+### Run Tests
+
+```bash
+# Watch mode (re-runs on file changes)
+npm test
+
+# Single run (for CI/CD)
+npm run test:run
+
+# With coverage report
+npm run test:coverage
+```
+
+### Test Structure
+
+Tests are co-located with source files using the `.test.ts` suffix:
+
+```
+lib/
+├── answer-validation.ts      # Source file
+├── answer-validation.test.ts # Tests for this file
+└── ...
+```
+
+### Writing Tests
+
+We use [Vitest](https://vitest.dev/) with React Testing Library. Example:
+
+```typescript
+import { describe, it, expect } from "vitest"
+import { normalizeAnswer } from "./answer-validation"
+
+describe("normalizeAnswer", () => {
+  it("converts to lowercase", () => {
+    expect(normalizeAnswer("CAT")).toBe("cat")
+  })
+
+  it("removes spaces between letters", () => {
+    expect(normalizeAnswer("C A T")).toBe("cat")
+  })
+})
+```
+
+### Current Test Coverage
+
+| Module | Tests | Coverage |
+|--------|-------|----------|
+| `lib/answer-validation.ts` | 43 tests | Core game logic |
+
+### What to Test
+
+Priority areas for new tests:
+1. **Answer validation** — Ensures correct/incorrect detection works
+2. **Anti-cheat logic** — Spelled vs spoken word detection
+3. **Game state management** — State transitions in hooks
+4. **API routes** — Input validation, error handling
+
+---
+
 ## Production Deployment
 
-### 1. Setup Cloudflare Pages
+### 1. Deploy via Wrangler CLI
 
-1. Go to Cloudflare Dashboard → Pages
-2. Connect your GitHub repository
-3. Configure build settings:
-   - **Build command**: `npm run build`
-   - **Build output directory**: `.vercel/output/static` (for next-on-pages)
-   - **Root directory**: `/` (leave default)
+The app uses [OpenNext](https://opennext.js.org/) to deploy Next.js to Cloudflare Workers.
+
+```bash
+# Build and deploy in one command
+npm run deploy
+```
+
+This will:
+1. Build the Next.js app with OpenNext
+2. Upload assets to Cloudflare
+3. Deploy the Worker
 
 ### 2. Configure Environment Variables
 
-In Cloudflare Pages settings, add these environment variables:
+Set these as secrets in Cloudflare:
+
+```bash
+# Set secrets via Wrangler
+npx wrangler secret put MERRIAM_WEBSTER_API_KEY
+```
+
+Or in Cloudflare Dashboard → Workers → Your Worker → Settings → Variables.
 
 | Variable | Value |
 |----------|-------|
-| `GOOGLE_CLOUD_PROJECT_ID` | Your GCP project ID |
-| `GOOGLE_CLOUD_CLIENT_EMAIL` | Service account email |
-| `GOOGLE_CLOUD_PRIVATE_KEY` | Private key (with newlines) |
 | `MERRIAM_WEBSTER_API_KEY` | Your MW API key |
-| `NEXT_PUBLIC_SPEECH_SERVER_URL` | Your deployed speech server URL |
 
-### 3. Bind D1 Database
+**Note:** `NEXT_PUBLIC_SPEECH_SERVER_URL` is set in `.env.production` and embedded at build time.
 
-In Cloudflare Pages settings → Functions → D1 database bindings:
+### 3. D1 and R2 Bindings
 
-| Variable name | D1 database |
-|---------------|-------------|
-| `DB` | playlexi-db |
+Bindings are configured in `wrangler.jsonc` and automatically applied during deployment:
 
-### 4. Bind R2 Bucket
+```jsonc
+{
+  "d1_databases": [{ "binding": "DB", "database_name": "playlexi-db", ... }],
+  "r2_buckets": [{ "binding": "R2_ASSETS", "bucket_name": "playlexi-assets" }]
+}
+```
 
-In Cloudflare Pages settings → Functions → R2 bucket bindings:
+### 4. Deploy Speech Server
 
-| Variable name | R2 bucket |
-|---------------|-----------|
-| `ASSETS` | playlexi-assets |
+The speech server runs on Railway (or Cloud Run for scale).
 
-### 5. Deploy Speech Server
-
-The speech server needs to run separately (Cloudflare Workers can't make gRPC calls).
-
-> **Scaling Strategy:** Start with Railway, migrate to Cloud Run when needed.
 > See [speech-server/DEPLOYMENT.md](../speech-server/DEPLOYMENT.md) for detailed instructions.
 
-**Phase 1: Railway** (Recommended for start)
+**Phase 1: Railway** (Current)
+- URL: `wss://speech.playlexi.com`
+- Cost: $5-50/month
+- Capacity: ~3,000 concurrent connections
 
-1. Create account at https://railway.app
-2. Deploy from GitHub, set root directory to `speech-server`
-3. Add environment variables (Google Cloud credentials)
-4. Get URL and set `NEXT_PUBLIC_SPEECH_SERVER_URL=wss://your-app.up.railway.app`
+**Phase 2: Cloud Run** (When needed)
+- Migrate when Railway hits limits or you need lower latency
 
-**Phase 2: Cloud Run** (When scaling requires it)
-
-Migrate when Railway hits limits (~3,000 concurrent connections) or you need lower latency.
-See [speech-server/DEPLOYMENT.md](../speech-server/DEPLOYMENT.md) for Cloud Run setup.
-
-### 6. Apply Production Migrations
+### 5. Apply Production Migrations
 
 ```bash
-npx wrangler d1 migrations apply playlexi-db
+npm run db:migrate:prod
+```
+
+### 6. Seed Production Database
+
+```bash
+npm run db:seed:prod
 ```
 
 ---
@@ -211,8 +290,14 @@ npx wrangler d1 migrations apply playlexi-db
 Once the database is set up, seed it with Merriam-Webster words:
 
 ```bash
-# Run the seeding script (creates words in D1)
+# Local development
 npm run db:seed
+
+# Production
+npm run db:seed:prod
+
+# Dry run (shows what would be inserted)
+npm run db:seed:dry
 ```
 
 This script:
@@ -231,8 +316,8 @@ This script:
 
 Make sure you've:
 1. Created the database with `wrangler d1 create`
-2. Updated `wrangler.toml` with the correct `database_id`
-3. Run migrations with `wrangler d1 migrations apply`
+2. Updated `wrangler.jsonc` with the correct `database_id`
+3. Run migrations with `npm run db:migrate`
 
 ### "Google Speech API error"
 
@@ -266,10 +351,18 @@ For development:
 |--------|-------------|
 | `npm run dev` | Start Next.js development server |
 | `npm run dev:speech` | Start speech recognition WebSocket server |
+| `npm run dev:all` | Start both Next.js and speech server |
 | `npm run build` | Build for production |
+| `npm run deploy` | Build and deploy to Cloudflare Workers |
+| `npm run preview` | Preview production build locally |
+| `npm test` | Run tests in watch mode |
+| `npm run test:run` | Run tests once |
+| `npm run test:coverage` | Run tests with coverage report |
 | `npm run db:generate` | Generate Drizzle migrations |
 | `npm run db:migrate` | Apply migrations to local D1 |
-| `npm run db:seed` | Seed database with Merriam-Webster words |
+| `npm run db:migrate:prod` | Apply migrations to production D1 |
+| `npm run db:seed` | Seed database with words (local) |
+| `npm run db:seed:prod` | Seed database with words (production) |
 | `npm run db:studio` | Open Drizzle Studio (database GUI) |
 
 ---
@@ -286,8 +379,8 @@ For development:
            ▼                  ▼                  ▼
 ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
 │  Cloudflare      │ │  Speech Server   │ │  Cloudflare R2   │
-│  Pages (Next.js) │ │  (Railway/       │ │  (Audio Files)   │
-│                  │ │   Cloud Run)     │ │                  │
+│  Workers         │ │  (Railway)       │ │  (Audio Files)   │
+│  (Next.js)       │ │                  │ │                  │
 └────────┬─────────┘ └────────┬─────────┘ └──────────────────┘
          │                    │
          │                    │
@@ -297,6 +390,10 @@ For development:
 │  (SQLite Edge)   │ │  API (gRPC)      │
 └──────────────────┘ └──────────────────┘
 ```
+
+**Current Production URLs:**
+- Web App: https://app.playlexi.com
+- Speech Server: wss://speech.playlexi.com
 
 **Speech Server Platform Strategy:**
 - **Phase 1 (0-1K DAU):** Railway ($5-50/month) - simple, no cold starts
@@ -310,7 +407,7 @@ For development:
 
 | Service | Monthly Cost |
 |---------|-------------|
-| Cloudflare Pages | Free |
+| Cloudflare Workers | Free |
 | Cloudflare D1 | Free (under 5GB) |
 | Cloudflare R2 | ~$0.50 (10GB storage) |
 | Google Speech-to-Text | ~$20-50 (depending on usage) |
@@ -323,7 +420,7 @@ For development:
 
 | Service | Monthly Cost |
 |---------|-------------|
-| Cloudflare Pages | Free |
+| Cloudflare Workers | Free |
 | Cloudflare D1 | ~$5-20 |
 | Cloudflare R2 | ~$1-5 |
 | Google Speech-to-Text | ~$50-400 |
