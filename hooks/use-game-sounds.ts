@@ -99,21 +99,33 @@ function useGameSounds(options: UseGameSoundsOptions = {}): UseGameSoundsReturn 
   const [volume, setVolumeState] = React.useState(initialVolume)
 
   /**
-   * Initialize AudioContext lazily (Safari requires user gesture)
+   * Initialize AudioContext lazily (Safari requires user gesture).
+   *
+   * Note: We use initialVolume from the closure rather than dynamic volume
+   * because this function only runs once when AudioContext is first created.
+   * Subsequent volume changes are handled by the separate useEffect.
    */
   const getAudioContext = React.useCallback(() => {
     if (!audioContextRef.current) {
-      // Create AudioContext (with webkit prefix for older Safari)
-      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+      // Create AudioContext (with webkit prefix for older Safari versions)
+      // Safari 14.1+ supports unprefixed AudioContext, but older versions need webkit prefix
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+
+      if (!AudioContextClass) {
+        throw new Error("Web Audio API is not supported in this browser")
+      }
+
       audioContextRef.current = new AudioContextClass()
 
       // Create master gain node for volume control
       gainNodeRef.current = audioContextRef.current.createGain()
-      gainNodeRef.current.gain.value = volume
+      gainNodeRef.current.gain.value = initialVolume
       gainNodeRef.current.connect(audioContextRef.current.destination)
     }
     return audioContextRef.current
-  }, [volume])
+  }, [initialVolume])
 
   /**
    * Resume AudioContext if suspended (required by Safari after user gesture)
@@ -149,17 +161,21 @@ function useGameSounds(options: UseGameSoundsOptions = {}): UseGameSoundsReturn 
 
     const preloadSounds = async () => {
       const soundNames = Object.keys(SOUND_PATHS) as SoundName[]
+      let loadedCount = 0
 
       await Promise.all(
         soundNames.map(async (name) => {
           const buffer = await loadSound(name)
           if (buffer && isMounted) {
             bufferCache.current.set(name, buffer)
+            loadedCount++
           }
         })
       )
 
-      if (isMounted) {
+      // Only mark as ready if at least one sound loaded successfully
+      // This ensures isReady reflects actual usability
+      if (isMounted && loadedCount > 0) {
         setIsReady(true)
       }
     }
