@@ -137,8 +137,8 @@ Safari's WebKit engine handles Web Audio API differently than Chrome's Blink:
 
 ### Phase 4: Adaptive Phonetic Learning System
 
-> **Branch:** `feature/phonetic-calibration`
-> **Status:** In Development
+> **Branch:** `feature/google-speech-api`
+> **Status:** Phase 4.1 Complete, Phase 4.2 Ready for Testing
 > **Last Updated:** January 18, 2026
 
 **Goal:** Automatically improve speech recognition accuracy for users with accents or non-standard pronunciation by learning from their gameplay.
@@ -226,22 +226,39 @@ Step 4: Next time this user says "ohs"
 
 #### Implementation Phases
 
-**Phase 4.1: Data Collection (Logging)**
+**Phase 4.1: Data Collection (Logging)** ✅ COMPLETE
 
-Add recognition event logging to capture:
+Recognition event logging is now integrated into the game:
+
+- **Database migration**: `migrations/0001_add_phonetic_learning.sql`
+- **Hooks created**:
+  - `hooks/use-user-id.ts` - Anonymous device ID for pre-auth logging
+  - `hooks/use-phonetic-learning.ts` - Fire-and-forget logging integration
+- **Game integration**: `app/game/endless/page.tsx` now logs all voice answers
+- **Learning trigger**: `triggerLearning()` called when game ends
+
+What gets logged:
 - What word the user was trying to spell
-- What Google transcribed
+- What Google transcribed (raw)
 - What letters we extracted
 - Whether the answer was correct
+- Rejection reason (if any)
 
-This data enables pattern detection and validates the approach.
+**Anonymous Logging Design Decision:**
 
-**Phase 4.2: Auto-Learning Engine**
+The `recognition_logs` table intentionally has NO foreign key constraint on `user_id`. This allows:
+- Logging from anonymous users (device-based ID stored in localStorage)
+- Seamless transition when auth is integrated later
+- No data loss - anonymous logs can be linked to authenticated users post-auth
 
-Implement the inference algorithm:
-- Analyze failed attempts to find learnable patterns
-- Store learned mappings in database
-- Apply learned mappings during future validation
+The `user_phonetic_mappings` table DOES have a FK constraint - mappings require authenticated users.
+
+**Phase 4.2: Auto-Learning Engine** ✅ IMPLEMENTED (Ready for Testing)
+
+The learning engine is implemented and ready:
+- `lib/phonetic-learning/learning-engine.ts` - Inference algorithm
+- `lib/phonetic-learning/mapping-store.ts` - Database operations
+- **Safety mechanism**: Protected mappings prevent learning incorrect patterns
 - **CRITICAL: Protect against learning incorrect mappings**
 
 **Safety Mechanism (Implemented)**
@@ -310,11 +327,21 @@ lib/
 ├── phonetic-learning/
 │   ├── index.ts              # Public exports
 │   ├── types.ts              # TypeScript interfaces
-│   ├── recognition-logger.ts # Phase 4.1: Event logging
-│   ├── learning-engine.ts    # Phase 4.2: Inference algorithm
-│   └── mapping-store.ts      # Database operations
+│   ├── recognition-logger.ts # Phase 4.1: Event logging ✅
+│   ├── learning-engine.ts    # Phase 4.2: Inference algorithm ✅
+│   └── mapping-store.ts      # Database operations ✅
 │
-├── answer-validation.ts      # Modified to use learned mappings
+├── answer-validation.ts      # Will be modified to use learned mappings (Phase 4.2b)
+
+hooks/
+├── use-user-id.ts            # Anonymous device ID hook ✅
+├── use-phonetic-learning.ts  # Learning integration hook ✅
+
+app/
+├── game/endless/page.tsx     # Integrated with phonetic learning ✅
+
+migrations/
+├── 0001_add_phonetic_learning.sql  # Database tables ✅
 ```
 
 ---
@@ -322,8 +349,59 @@ lib/
 #### Integration Points
 
 1. **answer-validation.ts** - Merge user mappings with global defaults
-2. **use-game-session.ts** - Log recognition events after each answer
-3. **API routes** - Endpoints for reading/writing phonetic data
+2. **app/game/endless/page.tsx** - Logs recognition events during feedback phase
+3. **hooks/use-phonetic-learning.ts** - Hook that manages logging and learning triggers
+4. **API routes** - Endpoints for reading/writing phonetic data:
+   - `POST /api/phonetic-learning/log` - Log recognition events
+   - `GET /api/phonetic-learning/mappings` - Fetch user mappings
+   - `POST /api/phonetic-learning/learn` - Trigger learning analysis
+
+#### Speech Server Architecture
+
+The phonetic learning system integrates with the existing speech server architecture:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  LOCAL DEVELOPMENT                                               │
+│                                                                  │
+│  ┌─────────────┐    WebSocket     ┌──────────────────┐          │
+│  │  Next.js    │ ◄──────────────► │  speech-server/  │          │
+│  │  (port 3000)│  ws://localhost  │  (port 3002)     │          │
+│  └─────────────┘       :3002      └────────┬─────────┘          │
+│        │                                   │                     │
+│        │                                   │ gRPC                │
+│        ▼                                   ▼                     │
+│  ┌─────────────┐              ┌──────────────────────┐          │
+│  │ Phonetic    │              │ Google Cloud Speech  │          │
+│  │ Learning    │              │ (streaming API)      │          │
+│  │ (logs to DB)│              └──────────────────────┘          │
+│  └─────────────┘                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│  PRODUCTION                                                      │
+│                                                                  │
+│  ┌─────────────┐    WebSocket     ┌──────────────────┐          │
+│  │  Vercel     │ ◄──────────────► │ speech.playlexi  │          │
+│  │  (Next.js)  │  wss://speech    │    .com          │          │
+│  └─────────────┘   .playlexi.com  └────────┬─────────┘          │
+│        │                                   │                     │
+│        │                                   │ gRPC                │
+│        ▼                                   ▼                     │
+│  ┌─────────────┐              ┌──────────────────────┐          │
+│  │ Phonetic    │              │ Google Cloud Speech  │          │
+│  │ Learning    │              │ (streaming API)      │          │
+│  │ (logs to DB)│              └──────────────────────┘          │
+│  └─────────────┘                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Key points:**
+- Speech transcription flows through the WebSocket server (speech-server/)
+- Phonetic learning logs the RESULTS of transcription (not the audio)
+- Learning analysis runs async, doesn't block gameplay
+- Local dev: `npm run dev:speech` starts the WebSocket server
+- Production: `speech.playlexi.com` handles WebSocket connections
 
 ---
 

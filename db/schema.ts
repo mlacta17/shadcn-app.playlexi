@@ -690,9 +690,16 @@ export const recognitionLogs = sqliteTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+
+    // User identifier - can be either:
+    // 1. Authenticated user ID (references users table)
+    // 2. Anonymous device ID (UUID stored in localStorage)
+    //
+    // We don't enforce a FK here because:
+    // - Logs are ephemeral (30-day retention)
+    // - We want to collect data before auth is integrated
+    // - The learning engine only creates mappings for authenticated users
+    userId: text("user_id").notNull(),
 
     // What the user was trying to spell
     wordToSpell: text("word_to_spell").notNull(),

@@ -123,6 +123,20 @@ npm run db:generate
 npm run db:migrate
 ```
 
+> **How Local D1 Works**
+>
+> The local D1 database is stored in `.wrangler/state/v3/d1/`. Both `npm run dev` (via
+> `initOpenNextCloudflareForDev()` in `next.config.ts`) and wrangler CLI commands
+> (like `npm run db:migrate`) use the **same** local SQLite file, identified by the
+> `database_id` in `wrangler.jsonc`.
+>
+> This means you can:
+> - Run migrations with `npm run db:migrate`
+> - Seed data with `npm run db:seed`
+> - Then immediately use that data in `npm run dev`
+>
+> All commands share the same local database.
+
 ### 5. Create R2 Bucket (Optional for Local)
 
 ```bash
@@ -312,12 +326,35 @@ This script:
 
 ## Troubleshooting
 
-### "D1 database not found"
+### "D1 database not found" or "no such table"
 
 Make sure you've:
 1. Created the database with `wrangler d1 create`
 2. Updated `wrangler.jsonc` with the correct `database_id`
 3. Run migrations with `npm run db:migrate`
+4. Seed the database with `npm run db:seed`
+
+**If you still get errors after migrations:**
+
+The local D1 database files are stored in `.wrangler/state/v3/d1/miniflare-D1DatabaseObject/`.
+If you see multiple `.sqlite` files there, you may have orphan databases from older setups.
+
+To fix:
+```bash
+# Check what files exist
+ls -la .wrangler/state/v3/d1/miniflare-D1DatabaseObject/
+
+# Remove ALL local D1 state (will need to re-run migrations)
+rm -rf .wrangler/state/v3/d1
+
+# Re-apply migrations
+npm run db:migrate
+
+# Re-seed the database
+npm run db:seed
+```
+
+This ensures a clean slate with a single database file.
 
 ### "Google Speech API error"
 

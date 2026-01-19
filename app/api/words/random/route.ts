@@ -135,6 +135,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<ApiRespons
     }
 
     // Get D1 database binding from Cloudflare context via OpenNext
+    // This works in both production AND local development thanks to
+    // initOpenNextCloudflareForDev() in next.config.ts
     const { env } = await getCloudflareContext({ async: true })
 
     // Create database connection and data source

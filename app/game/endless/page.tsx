@@ -15,7 +15,8 @@ import { useGameTimer } from "@/hooks/use-game-timer"
 import { useGameFeedback } from "@/hooks/use-game-feedback"
 import { useGameSounds } from "@/hooks/use-game-sounds"
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition"
-import { formatTranscriptForDisplay } from "@/lib/answer-validation"
+import { usePhoneticLearning } from "@/hooks/use-phonetic-learning"
+import { formatTranscriptForDisplay, extractLettersFromVoice } from "@/lib/answer-validation"
 
 /**
  * Endless Mode Game Screen
@@ -86,6 +87,13 @@ export default function EndlessGamePage() {
   } = useSpeechRecognition({ spellingMode: true })
 
   // ---------------------------------------------------------------------------
+  // Phonetic Learning Integration
+  // ---------------------------------------------------------------------------
+  // Logs voice recognition events for the adaptive learning system.
+  // This is fire-and-forget — errors don't affect gameplay.
+  const { logAnswer, triggerLearning } = usePhoneticLearning()
+
+  // ---------------------------------------------------------------------------
   // Answer Submission Logic
   // ---------------------------------------------------------------------------
   // Two ways to submit:
@@ -103,6 +111,9 @@ export default function EndlessGamePage() {
 
   /** Ref to track if we've already submitted (prevents double-submit) */
   const hasSubmittedRef = React.useRef(false)
+
+  /** Ref to track the last submitted transcript (for logging) */
+  const lastSubmittedTranscriptRef = React.useRef<string | null>(null)
 
   /**
    * Submit the current answer.
@@ -132,6 +143,9 @@ export default function EndlessGamePage() {
     // This is critical for anti-cheat: we MUST wait for the final result
     // because word timing data only arrives with the final recognition result
     const metrics = await stopRecording()
+
+    // Store transcript for logging after validation
+    lastSubmittedTranscriptRef.current = transcript
 
     // Submit answer with timing data for anti-cheat validation
     // Priority: audio timing (from Google word timestamps) > letter timing (fallback)
@@ -266,6 +280,55 @@ export default function EndlessGamePage() {
       hasPlayedFeedbackRef.current = false
     }
   }, [gameState.phase, gameState.lastAnswerCorrect])
+
+  // ---------------------------------------------------------------------------
+  // Phonetic Learning: Log Recognition Event
+  // ---------------------------------------------------------------------------
+  // Tracks the last logged word ID to prevent double-logging
+  const lastLoggedWordIdRef = React.useRef<string | null>(null)
+
+  // Log voice answers for phonetic learning (fire-and-forget)
+  React.useEffect(() => {
+    // Only log during feedback phase with voice input
+    if (gameState.phase !== "feedback") return
+    if (gameState.inputMethod !== "voice") return
+    if (gameState.lastAnswerCorrect === null) return
+    if (!gameState.currentWord) return
+
+    // Prevent double-logging
+    if (lastLoggedWordIdRef.current === gameState.currentWord.id) return
+    lastLoggedWordIdRef.current = gameState.currentWord.id
+
+    const rawTranscript = lastSubmittedTranscriptRef.current
+    if (!rawTranscript) return
+
+    // Extract letters to log what we extracted
+    const extractedLetters = extractLettersFromVoice(rawTranscript)
+
+    // Fire-and-forget logging
+    logAnswer({
+      wordToSpell: gameState.currentWord.word,
+      googleTranscript: rawTranscript,
+      extractedLetters,
+      wasCorrect: gameState.lastAnswerCorrect,
+    })
+  }, [
+    gameState.phase,
+    gameState.inputMethod,
+    gameState.lastAnswerCorrect,
+    gameState.currentWord,
+    logAnswer,
+  ])
+
+  // ---------------------------------------------------------------------------
+  // Phonetic Learning: Trigger Learning on Game End
+  // ---------------------------------------------------------------------------
+  React.useEffect(() => {
+    if (gameState.phase === "result") {
+      // Trigger learning analysis (fire-and-forget)
+      triggerLearning()
+    }
+  }, [gameState.phase, triggerLearning])
 
   // Navigate to results when game is over
   React.useEffect(() => {
