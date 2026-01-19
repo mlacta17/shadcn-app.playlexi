@@ -166,8 +166,16 @@ const NATO_PHONETIC: Record<string, string> = {
  * NOTE: This mapping is intentionally aggressive to handle common
  * speech recognition errors. Some mappings may seem unusual but
  * are based on real-world testing with Web Speech API.
+ *
+ * This is TIER 1 of the three-tier mapping system:
+ * - TIER 1: Global defaults (this dictionary) - works for ~80% of users
+ * - TIER 2: Auto-learned mappings (per user) - learned from gameplay
+ * - TIER 3: Manual calibration (per user) - explicitly configured
+ *
+ * @see lib/phonetic-learning/learning-engine.ts
+ * @see docs/ROADMAP.md Phase 4: Adaptive Phonetic Learning System
  */
-const SPOKEN_LETTER_NAMES: Record<string, string> = {
+export const SPOKEN_LETTER_NAMES: Record<string, string> = {
   // === A ===
   ay: "a",
   eh: "a",

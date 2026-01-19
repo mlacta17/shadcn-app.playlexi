@@ -654,3 +654,137 @@ export const notifications = sqliteTable(
     ),
   })
 )
+
+// =============================================================================
+// 8. PHONETIC LEARNING (Adaptive Speech Recognition)
+// =============================================================================
+
+/**
+ * Sources for phonetic mappings.
+ * - "auto_learned": System inferred from gameplay patterns
+ * - "manual": User explicitly configured
+ * - "support_added": Added by support team for a specific user
+ */
+export const phoneticMappingSources = [
+  "auto_learned",
+  "manual",
+  "support_added",
+] as const
+export type PhoneticMappingSource = (typeof phoneticMappingSources)[number]
+
+/**
+ * Recognition logs — records of speech recognition attempts.
+ *
+ * Used for:
+ * 1. Pattern detection (finding learnable phonetic variations)
+ * 2. Analytics (understanding where recognition fails)
+ * 3. Debugging (investigating user-reported issues)
+ *
+ * Retention: Logs older than 30 days should be purged to prevent bloat.
+ *
+ * @see docs/ROADMAP.md Phase 4: Adaptive Phonetic Learning System
+ */
+export const recognitionLogs = sqliteTable(
+  "recognition_logs",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    // What the user was trying to spell
+    wordToSpell: text("word_to_spell").notNull(),
+
+    // Raw transcript from Google Speech (e.g., "tee ohs")
+    googleTranscript: text("google_transcript").notNull(),
+
+    // Letters we extracted from the transcript (e.g., "tos")
+    extractedLetters: text("extracted_letters").notNull(),
+
+    // Whether the answer was marked correct
+    wasCorrect: integer("was_correct", { mode: "boolean" }).notNull(),
+
+    // Optional: rejection reason if answer was rejected
+    rejectionReason: text("rejection_reason"),
+
+    // Optional: input method used
+    inputMethod: text("input_method", { enum: inputMethods }),
+
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    userIdIdx: index("idx_recognition_logs_user_id").on(table.userId),
+    userCreatedIdx: index("idx_recognition_logs_user_created").on(
+      table.userId,
+      table.createdAt
+    ),
+    // For cleanup queries (delete logs older than X days)
+    createdAtIdx: index("idx_recognition_logs_created_at").on(table.createdAt),
+  })
+)
+
+/**
+ * User phonetic mappings — learned or manually configured mappings per user.
+ *
+ * These mappings supplement the global SPOKEN_LETTER_NAMES dictionary.
+ * When validating answers, user-specific mappings take priority.
+ *
+ * Example:
+ * - heard: "ohs"
+ * - intended: "o"
+ * - Meaning: When this user says something that Google transcribes as "ohs",
+ *            treat it as the letter "O".
+ *
+ * @see docs/ROADMAP.md Phase 4: Adaptive Phonetic Learning System
+ * @see lib/answer-validation.ts SPOKEN_LETTER_NAMES
+ */
+export const userPhoneticMappings = sqliteTable(
+  "user_phonetic_mappings",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    // What Google transcribed (e.g., "ohs", "tio", "double-you")
+    heard: text("heard").notNull(),
+
+    // What it should map to (single letter, e.g., "o", "t", "w")
+    intended: text("intended").notNull(),
+
+    // How this mapping was created
+    source: text("source", { enum: phoneticMappingSources })
+      .notNull()
+      .default("auto_learned"),
+
+    // Confidence score (0.0 - 1.0) for auto-learned mappings
+    // Higher = more certain this mapping is correct
+    confidence: real("confidence").notNull().default(1.0),
+
+    // How many times this pattern was observed before creating the mapping
+    occurrenceCount: integer("occurrence_count").notNull().default(1),
+
+    // How many times this mapping has been applied during validation
+    timesApplied: integer("times_applied").notNull().default(0),
+
+    // Timestamps
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    // Each user can only have one mapping per "heard" value
+    userHeardUnique: unique().on(table.userId, table.heard),
+    // Fast lookup of all mappings for a user
+    userIdIdx: index("idx_phonetic_mappings_user_id").on(table.userId),
+  })
+)

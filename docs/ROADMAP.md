@@ -135,39 +135,207 @@ Safari's WebKit engine handles Web Audio API differently than Chrome's Blink:
 
 ---
 
-### Phase 4: Phonetic Calibration (Future)
+### Phase 4: Adaptive Phonetic Learning System
 
-**Goal:** Improve accuracy for users with accents or non-standard pronunciation.
+> **Branch:** `feature/phonetic-calibration`
+> **Status:** In Development
+> **Last Updated:** January 18, 2026
 
-**Concept:** During onboarding, have users spell A-Z. Capture how Google transcribes their pronunciation of each letter. Store a mapping per user.
+**Goal:** Automatically improve speech recognition accuracy for users with accents or non-standard pronunciation by learning from their gameplay.
 
-**Example:**
-```json
-{
-  "userId": "abc123",
-  "phoneticMap": {
-    "are": "R",
-    "double you": "W",
-    "zed": "Z",
-    "aitch": "H"
-  }
-}
+---
+
+#### The Problem
+
+The current system uses 366 hardcoded phonetic mappings (e.g., "tee" → "T", "oh" → "O"). This works for ~80% of users but fails for:
+
+1. **Regional accents** - British "zed" vs American "zee"
+2. **Non-native speakers** - Different vowel sounds
+3. **Google Speech artifacts** - "ohs" instead of "oh", extra "s" added
+4. **Unpredictable mishearings** - We can't anticipate every variation
+
+**Example failure:**
+```
+User spells: "T-O"
+User says: "tee oh"
+Google hears: "tee ohs"  ← Unexpected artifact
+System extracts: "tos"   ← Wrong!
+Correct answer: "to"
+Result: WRONG ❌ (frustrating for user)
 ```
 
-**Benefits:**
-- Dramatically better accuracy for accented users
-- Natural fit in onboarding flow
-- Could be made fun ("Teach the bee your voice!")
+---
 
-**Technical Considerations:**
-- Database storage for user phonetic profiles
-- Integration with answer-validation.ts
-- Google Speech's [speech adaptation](https://cloud.google.com/speech-to-text/docs/adaptation) API
+#### The Solution: Three-Tier Mapping System
 
-**Definition of Done:**
-- Users can calibrate their pronunciation
-- System uses calibration data to improve recognition
-- Measurably better accuracy for non-standard accents
+```
+┌─────────────────────────────────────────────────────────────┐
+│  TIER 1: Global Defaults (SPOKEN_LETTER_NAMES)              │
+│  - 366 hardcoded mappings in answer-validation.ts           │
+│  - Works for ~80% of users                                  │
+│  - Maintained in code                                       │
+├─────────────────────────────────────────────────────────────┤
+│  TIER 2: Auto-Learned Mappings (per user)                   │
+│  - System learns from user's gameplay patterns              │
+│  - Stored in database                                       │
+│  - No user action required                                  │
+├─────────────────────────────────────────────────────────────┤
+│  TIER 3: Manual Calibration (optional, future)              │
+│  - User explicitly corrects mappings                        │
+│  - "When I say O, you hear 'ohs' - fix that"               │
+│  - Only if auto-learning isn't enough                       │
+└─────────────────────────────────────────────────────────────┘
+
+Lookup order: Tier 3 → Tier 2 → Tier 1
+```
+
+---
+
+#### How Auto-Learning Works
+
+**Key insight:** We know the correct answer beforehand, so we can deduce unknown mappings.
+
+```
+Word to spell: "TO"
+Google hears: ["tee", "ohs"]
+
+Step 1: Look up known mappings
+  - "tee" → "t" (known ✅)
+  - "ohs" → ??? (unknown ❓)
+
+Step 2: Deduce the unknown
+  - Correct word = "to" (2 letters: t, o)
+  - Known so far = "t" (1 letter)
+  - Remaining = "o"
+  - Therefore: "ohs" must equal "o"
+
+Step 3: Store learned mapping (after 2+ occurrences)
+  - { userId, heard: "ohs", intended: "o", confidence: 0.8 }
+
+Step 4: Next time this user says "ohs"
+  - System maps it to "o" automatically
+  - User's answer is now correct ✅
+```
+
+**Constraints for learning:**
+- Only learn when exactly ONE unknown exists (can't deduce multiple)
+- Require 2+ occurrences before creating a mapping (prevents one-off errors)
+- Per-user mappings only (Maria's "ohs" → "o" doesn't affect other users)
+
+---
+
+#### Implementation Phases
+
+**Phase 4.1: Data Collection (Logging)**
+
+Add recognition event logging to capture:
+- What word the user was trying to spell
+- What Google transcribed
+- What letters we extracted
+- Whether the answer was correct
+
+This data enables pattern detection and validates the approach.
+
+**Phase 4.2: Auto-Learning Engine**
+
+Implement the inference algorithm:
+- Analyze failed attempts to find learnable patterns
+- Store learned mappings in database
+- Apply learned mappings during future validation
+
+**Phase 4.3: Manual Calibration (Future, if needed)**
+
+Only build if auto-learning proves insufficient:
+- Settings page: "Train your voice"
+- User explicitly corrects problematic mappings
+
+---
+
+#### Database Schema
+
+```sql
+-- Recognition event logs (for pattern detection)
+CREATE TABLE recognition_logs (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  word_to_spell TEXT NOT NULL,
+  google_transcript TEXT NOT NULL,
+  extracted_letters TEXT NOT NULL,
+  was_correct INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+-- Learned phonetic mappings (per user)
+CREATE TABLE user_phonetic_mappings (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  heard TEXT NOT NULL,           -- What Google heard (e.g., "ohs")
+  intended TEXT NOT NULL,        -- What it should map to (e.g., "o")
+  source TEXT NOT NULL,          -- "auto_learned" or "manual"
+  confidence REAL DEFAULT 1.0,   -- For auto-learned mappings
+  occurrence_count INTEGER DEFAULT 1,
+  times_applied INTEGER DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  UNIQUE(user_id, heard)
+);
+```
+
+---
+
+#### File Structure
+
+```
+lib/
+├── phonetic-learning/
+│   ├── index.ts              # Public exports
+│   ├── types.ts              # TypeScript interfaces
+│   ├── recognition-logger.ts # Phase 4.1: Event logging
+│   ├── learning-engine.ts    # Phase 4.2: Inference algorithm
+│   └── mapping-store.ts      # Database operations
+│
+├── answer-validation.ts      # Modified to use learned mappings
+```
+
+---
+
+#### Integration Points
+
+1. **answer-validation.ts** - Merge user mappings with global defaults
+2. **use-game-session.ts** - Log recognition events after each answer
+3. **API routes** - Endpoints for reading/writing phonetic data
+
+---
+
+#### Success Metrics
+
+| Metric | Before | Target |
+|--------|--------|--------|
+| First-attempt accuracy (all users) | ~80% | ~90% |
+| Accuracy after 10 games (with learning) | ~80% | ~95% |
+| User-reported phonetic issues | Common | Rare |
+
+---
+
+#### Decisions Made
+
+| Decision | Rationale |
+|----------|-----------|
+| Auto-learn first, manual calibration later | Simpler UX, no user effort required |
+| Per-user mappings (not global) | Accents vary; one user's fix might break another |
+| Require 2+ occurrences to learn | Prevents learning from one-off Google errors |
+| Database storage (not localStorage) | Syncs across devices, enables analytics |
+| Keep existing 366 mappings as fallback | Don't break what works for 80% of users |
+
+---
+
+#### Risks and Mitigations
+
+| Risk | Mitigation |
+|------|------------|
+| Learning wrong mappings | Require multiple occurrences, confidence scoring |
+| Database bloat from logs | Retention policy (delete logs older than 30 days) |
+| Performance impact | Index on user_id, lazy-load mappings |
+| Cheating via learned mappings | Anti-cheat runs BEFORE phonetic mapping |
 
 ---
 
@@ -178,6 +346,12 @@ Safari's WebKit engine handles Web Audio API differently than Chrome's Blink:
 | 2026-01-18 | Reverted Web Audio API game sounds to HTMLAudioElement | Web Audio API caused freezing in Chrome |
 | 2026-01-18 | Reverted Safari-specific audio fixes | Fixes made Chrome unstable |
 | 2026-01-18 | Safari voice mode deprioritized vs typing mode | Pragmatic approach: ship working game first |
+| 2026-01-18 | Chose adaptive learning over static phonetic mapping | Can't predict all accent variations; system should learn |
+| 2026-01-18 | Auto-learning first, manual calibration optional | Simpler UX; users shouldn't need to train the system manually |
+| 2026-01-18 | Per-user mappings stored in database | Syncs across devices; enables analytics; isolates user-specific patterns |
+| 2026-01-18 | Require 2+ occurrences before learning a mapping | Prevents learning from one-off Google Speech errors |
+| 2026-01-18 | Keep existing 366 hardcoded mappings as Tier 1 | Works for ~80% of users; don't break what works |
+| 2026-01-18 | Created feature/phonetic-calibration branch | Isolate experimental work from main branch |
 
 ---
 
