@@ -5,6 +5,7 @@
  * 1. Analyzes failed recognition attempts
  * 2. Deduces what unknown sounds should map to
  * 3. Creates personalized phonetic mappings
+ * 4. PROTECTS against learning incorrect mappings
  *
  * ## How It Works
  *
@@ -25,7 +26,22 @@
  *   Therefore: "ohs" must equal "o"
  * ```
  *
- * ## Constraints
+ * ## Safety Constraints (CRITICAL)
+ *
+ * The system includes safeguards to prevent learning WRONG mappings:
+ *
+ * **Problem scenario:**
+ * - User says "B" but Google mishears as "vee"
+ * - Without safeguards: system learns "vee" → "b" (WRONG!)
+ * - This corrupts legitimate "V" inputs
+ *
+ * **Safeguards implemented:**
+ * 1. NEVER override existing global mappings (e.g., "vee" already → "v")
+ * 2. Only learn truly novel sounds not in the global dictionary
+ * 3. Require consistent patterns across multiple different words
+ * 4. All 366 global mappings are "protected" - can't be remapped
+ *
+ * ## Other Constraints
  *
  * - Only learn when exactly ONE unknown exists (can't deduce multiple)
  * - Require 2+ occurrences before creating a mapping
@@ -39,12 +55,120 @@ import type {
   LearningAnalysisResult,
   LearningEngineConfig,
   PhoneticMapping,
-  DEFAULT_LEARNING_CONFIG,
 } from "./types"
 
 // Import the global phonetic mappings from answer-validation
 // We need this to know which words are already mapped
 import { SPOKEN_LETTER_NAMES } from "../answer-validation"
+
+// =============================================================================
+// PROTECTED MAPPINGS — NEVER OVERRIDE THESE
+// =============================================================================
+
+/**
+ * Build a Set of all "heard" values that already exist in global mappings.
+ * These are PROTECTED — the learning system will NEVER create user mappings
+ * that would override these.
+ *
+ * ## Why This Exists
+ *
+ * If Google mishears "B" as "vee", we don't want to learn "vee" → "b"
+ * because "vee" is already correctly mapped to "v" in our global dictionary.
+ *
+ * This Set allows O(1) lookup to check if a word is protected.
+ */
+const PROTECTED_HEARD_VALUES: Set<string> = new Set(Object.keys(SPOKEN_LETTER_NAMES))
+
+/**
+ * Check if a "heard" value is protected (exists in global mappings).
+ *
+ * @param heard - The word Google transcribed
+ * @returns True if this word is already mapped globally and should not be overridden
+ *
+ * @example
+ * ```typescript
+ * isProtectedMapping("vee")  // true — "vee" → "v" exists globally
+ * isProtectedMapping("ohs")  // false — novel sound, can be learned
+ * ```
+ */
+export function isProtectedMapping(heard: string): boolean {
+  return PROTECTED_HEARD_VALUES.has(heard.toLowerCase().trim())
+}
+
+/**
+ * Validation result for a potential mapping.
+ */
+export interface MappingValidationResult {
+  /** Whether the mapping is safe to create */
+  isValid: boolean
+  /** Why the mapping was accepted or rejected */
+  reason:
+    | "valid_novel_mapping"
+    | "protected_global_mapping"
+    | "conflicts_with_existing_user_mapping"
+    | "intended_mismatch"
+}
+
+/**
+ * Validate whether a potential mapping is safe to create.
+ *
+ * This is the CRITICAL safety check that prevents learning incorrect mappings.
+ *
+ * ## Validation Rules
+ *
+ * 1. If "heard" exists in global mappings → REJECT (protected)
+ * 2. If user already has a mapping for "heard" with different "intended" → REJECT (conflict)
+ * 3. Otherwise → ACCEPT
+ *
+ * @param heard - What Google transcribed
+ * @param intended - What we think it should map to
+ * @param userMappings - User's existing learned mappings
+ * @returns Validation result with reason
+ *
+ * @example
+ * ```typescript
+ * // This would be REJECTED — "vee" is protected
+ * validatePotentialMapping("vee", "b", new Map())
+ * // → { isValid: false, reason: "protected_global_mapping" }
+ *
+ * // This would be ACCEPTED — "ohs" is novel
+ * validatePotentialMapping("ohs", "o", new Map())
+ * // → { isValid: true, reason: "valid_novel_mapping" }
+ * ```
+ */
+export function validatePotentialMapping(
+  heard: string,
+  intended: string,
+  userMappings: Map<string, string> = new Map()
+): MappingValidationResult {
+  const normalizedHeard = heard.toLowerCase().trim()
+  const normalizedIntended = intended.toLowerCase().trim()
+
+  // Rule 1: Check if this is a protected global mapping
+  if (isProtectedMapping(normalizedHeard)) {
+    return {
+      isValid: false,
+      reason: "protected_global_mapping",
+    }
+  }
+
+  // Rule 2: Check if user already has a different mapping for this "heard"
+  if (userMappings.has(normalizedHeard)) {
+    const existingIntended = userMappings.get(normalizedHeard)!
+    if (existingIntended !== normalizedIntended) {
+      return {
+        isValid: false,
+        reason: "conflicts_with_existing_user_mapping",
+      }
+    }
+  }
+
+  // All checks passed — this is a safe, novel mapping
+  return {
+    isValid: true,
+    reason: "valid_novel_mapping",
+  }
+}
 
 // =============================================================================
 // LEARNING ANALYSIS
@@ -175,7 +299,16 @@ export function analyzeForLearning(
     if (correctWord.startsWith(knownPart)) {
       const remaining = correctWord.slice(knownPart.length)
       if (remaining.length > 0 && remaining.length <= 2) {
-        // Reasonable length for a single sound mapping to 1-2 letters
+        // SAFETY CHECK: Validate this mapping before returning
+        const validation = validatePotentialMapping(unknown.word, remaining, userMappings)
+        if (!validation.isValid) {
+          return {
+            canLearn: false,
+            potentialMapping: null,
+            reason: "word_mismatch",
+          }
+        }
+
         return {
           canLearn: true,
           potentialMapping: {
@@ -193,6 +326,16 @@ export function analyzeForLearning(
     if (correctWord.endsWith(knownPart)) {
       const remaining = correctWord.slice(0, correctWord.length - knownPart.length)
       if (remaining.length > 0 && remaining.length <= 2) {
+        // SAFETY CHECK: Validate this mapping before returning
+        const validation = validatePotentialMapping(unknown.word, remaining, userMappings)
+        if (!validation.isValid) {
+          return {
+            canLearn: false,
+            potentialMapping: null,
+            reason: "word_mismatch",
+          }
+        }
+
         return {
           canLearn: true,
           potentialMapping: {
@@ -213,6 +356,18 @@ export function analyzeForLearning(
     if (correctWord.startsWith(prefix) && correctWord.endsWith(suffix)) {
       const middle = correctWord.slice(prefix.length, correctWord.length - suffix.length)
       if (middle.length > 0 && middle.length <= 2) {
+        // SAFETY CHECK: Validate this mapping before returning
+        const validation = validatePotentialMapping(unknown.word, middle, userMappings)
+        if (!validation.isValid) {
+          return {
+            canLearn: false,
+            potentialMapping: null,
+            reason: validation.reason === "protected_global_mapping"
+              ? "word_mismatch" // Use existing reason type
+              : "word_mismatch",
+          }
+        }
+
         return {
           canLearn: true,
           potentialMapping: {
@@ -256,7 +411,12 @@ export interface PatternCandidate {
  * Aggregate recognition events to find learnable patterns.
  *
  * Groups failed attempts by (heard, intended) and returns patterns
- * that meet the minimum occurrence threshold.
+ * that meet the minimum occurrence threshold AND pass safety validation.
+ *
+ * ## Safety
+ *
+ * Patterns are validated before being returned to ensure they don't
+ * override protected global mappings. See `validatePotentialMapping()`.
  *
  * @param events - List of recognition events to analyze
  * @param globalMappings - The global SPOKEN_LETTER_NAMES dictionary
@@ -301,10 +461,28 @@ export function findLearnablePatterns(
     }
   }
 
-  // Filter by minimum occurrences
-  return Array.from(patternMap.values()).filter(
-    (p) => p.occurrenceCount >= config.minOccurrencesToLearn
-  )
+  // Filter by minimum occurrences AND safety validation
+  return Array.from(patternMap.values()).filter((p) => {
+    // Check minimum occurrence threshold
+    if (p.occurrenceCount < config.minOccurrencesToLearn) {
+      return false
+    }
+
+    // Final safety check — ensure this pattern is still valid
+    // (This is a belt-and-suspenders check since analyzeForLearning also validates)
+    const validation = validatePotentialMapping(p.heard, p.intended, userMappings)
+    if (!validation.isValid) {
+      // Log for debugging in development
+      if (process.env.NODE_ENV === "development") {
+        console.log(
+          `[PhoneticLearning] Rejected pattern "${p.heard}" → "${p.intended}": ${validation.reason}`
+        )
+      }
+      return false
+    }
+
+    return true
+  })
 }
 
 // =============================================================================

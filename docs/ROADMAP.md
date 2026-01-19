@@ -242,6 +242,27 @@ Implement the inference algorithm:
 - Analyze failed attempts to find learnable patterns
 - Store learned mappings in database
 - Apply learned mappings during future validation
+- **CRITICAL: Protect against learning incorrect mappings**
+
+**Safety Mechanism (Implemented)**
+
+The system includes safeguards to prevent learning WRONG mappings:
+
+```
+Problem scenario:
+- User says "B" but Google mishears as "vee"
+- Without safeguards: system learns "vee" → "b" (WRONG!)
+- This would corrupt legitimate "V" inputs
+
+Solution:
+- All 366 global mappings are "protected"
+- If a "heard" value exists in SPOKEN_LETTER_NAMES, it can NEVER be overridden
+- Example: "vee" → "v" is protected, so we can't learn "vee" → "b"
+```
+
+See `lib/phonetic-learning/learning-engine.ts`:
+- `isProtectedMapping()` - Checks if a "heard" value is protected
+- `validatePotentialMapping()` - Full validation before creating mappings
 
 **Phase 4.3: Manual Calibration (Future, if needed)**
 

@@ -133,4 +133,8 @@ export {
   createMappingFromPattern,
   // Mapping application
   applyMappingsToTranscript,
+  // Safety validation (prevents learning incorrect mappings)
+  isProtectedMapping,
+  validatePotentialMapping,
+  type MappingValidationResult,
 } from "./learning-engine"

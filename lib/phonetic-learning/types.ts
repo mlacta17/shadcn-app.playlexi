@@ -171,8 +171,16 @@ export interface LearningAnalysisResult {
    * - "single_unknown_deduced": Exactly one unknown, successfully deduced
    * - "all_known": All words in transcript already have mappings
    * - "multiple_unknowns": Can't deduce when 2+ words are unknown
-   * - "word_mismatch": Extracted letters don't align with correct word
+   * - "word_mismatch": Extracted letters don't align with correct word, OR
+   *                     the mapping would override a protected global mapping
    * - "already_correct": Answer was correct, nothing to learn
+   *
+   * ## Safety Note
+   *
+   * "word_mismatch" is also returned when a potential mapping would override
+   * an existing global mapping. For example, if Google hears "vee" and we
+   * deduce it should be "b", we reject this because "vee" → "v" is protected.
+   * This prevents learning incorrect mappings when Google mishears letters.
    */
   reason:
     | "single_unknown_deduced"
