@@ -85,7 +85,7 @@ export default function LoginPage() {
       {/* Footer */}
       <footer className="flex h-16 items-center justify-center border-t border-border bg-background px-6 shadow-sm">
         <p className="text-xs text-muted-foreground">
-          All rights reserved © 2025 Spectrum
+          All rights reserved © 2026 PlayLexi
         </p>
       </footer>
     </div>
