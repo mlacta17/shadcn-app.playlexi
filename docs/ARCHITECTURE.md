@@ -43,7 +43,7 @@
 | **UI Components** | shadcn/ui | Already in project, accessible, customizable |
 | **Database** | Cloudflare D1 (SQLite) | Serverless SQL, globally distributed, cost-effective |
 | **ORM** | Drizzle ORM | Type-safe, lightweight, D1-compatible |
-| **Auth** | Auth.js (NextAuth v5) | OAuth providers, session management |
+| **Auth** | Better Auth | OAuth providers (Google), session management, D1-compatible |
 | **Real-time** | Cloudflare Durable Objects | Native WebSocket support, stateful game sessions |
 | **Voice** | Google Cloud Speech-to-Text (via WebSocket server) | Best letter recognition, word-level timing for anti-cheat |
 | **Hosting** | Cloudflare Workers (via OpenNext) | Edge deployment, cost-effective, integrated stack |
@@ -186,25 +186,100 @@ See [speech-server/DEPLOYMENT.md](../speech-server/DEPLOYMENT.md) for detailed d
 
 ## 2. Project Structure
 
+### 2.0 Route Group Architecture
+
+The app uses **two route groups** based on navigation pattern, not feature domain:
+
+| Route Group | Layout | Navigation | Use Case |
+|-------------|--------|------------|----------|
+| `(shell)` | `ShellNavbar` | Full nav (Play, Leaderboard, Learn) + user menu | Dashboard, lists, settings |
+| `(focused)` | None (pages own nav) | `TopNavbar` with X button | Games, onboarding, wizards |
+
+**Why this pattern?**
+- Clear mental model: "Does this page need full navigation or focused experience?"
+- Scalable: New pages go in the appropriate group based on UX needs
+- No confusion: Naming describes the navigation pattern, not the feature
+
+### 2.1 Current Implementation
+
 ```
 playlexi/
 ├── app/                          # Next.js App Router
-│   ├── (auth)/                   # Auth-related pages (grouped, no layout impact)
-│   │   ├── login/
-│   │   │   └── page.tsx
-│   │   ├── signup/
-│   │   │   └── page.tsx
-│   │   └── onboarding/           # New user flow
-│   │       ├── tutorial/
-│   │       │   └── page.tsx
-│   │       ├── placement/
-│   │       │   └── page.tsx
-│   │       ├── rank-result/
-│   │       │   └── page.tsx
-│   │       └── complete-profile/
-│   │           └── page.tsx
+│   ├── (shell)/                  # Full navigation shell (requires auth)
+│   │   ├── layout.tsx            # Renders ShellNavbar
+│   │   ├── shell-navbar.tsx      # Session-aware navbar component
+│   │   ├── page.tsx              # Dashboard (/)
+│   │   └── leaderboard/
+│   │       └── page.tsx
 │   │
-│   ├── (main)/                   # Main app (requires auth)
+│   ├── (focused)/                # Focused experiences (requires auth)
+│   │   ├── layout.tsx            # Minimal — pages own their TopNavbar
+│   │   ├── game/
+│   │   │   ├── endless/
+│   │   │   │   └── page.tsx      # Endless mode gameplay
+│   │   │   └── result/
+│   │   │       └── page.tsx      # Game results screen
+│   │   └── onboarding/
+│   │       └── rank-result/
+│   │           └── page.tsx      # Post-placement rank display
+│   │
+│   ├── login/                    # Public (no auth required)
+│   │   ├── page.tsx              # OAuth login page
+│   │   └── login-navbar.tsx      # Login-specific navbar
+│   │
+│   ├── showcase/                 # Public (dev/demo)
+│   │   └── page.tsx              # Component showcase
+│   │
+│   ├── api/                      # API Routes (current)
+│   │   ├── auth/[...all]/        # Better Auth handler
+│   │   ├── words/random/         # GET random word
+│   │   └── phonetic-learning/    # Voice recognition learning
+│   │
+│   └── layout.tsx                # Root layout (fonts, providers)
+```
+
+### 2.2 Planned Structure (Future Phases)
+
+> **Note**: The structure below shows the full vision. Items marked with `[PLANNED]` are not yet implemented.
+
+```
+playlexi/
+├── app/
+│   ├── (shell)/                  # [PLANNED additions]
+│   │   ├── profile/              # User profile
+│   │   ├── settings/             # Account settings
+│   │   ├── notifications/        # Notification center
+│   │   └── learn/                # PRO learning feature
+│   │
+│   ├── (focused)/                # [PLANNED additions]
+│   │   ├── game/blitz/           # Blitz mode
+│   │   ├── onboarding/           # Full onboarding flow
+│   │   │   ├── tutorial/
+│   │   │   ├── placement/
+│   │   │   └── complete-profile/
+│   │   └── multiplayer/          # Real-time multiplayer
+│   │       ├── lobby/[roomCode]/
+│   │       └── game/[gameId]/
+│   │
+│   └── api/                      # [PLANNED additions]
+│       ├── users/
+│       ├── games/
+│       ├── matchmaking/
+│       ├── friends/
+│       └── leaderboard/
+```
+
+---
+
+> **LEGACY REFERENCE**: The detailed structure below shows the original vision document.
+> Refer to Section 2.1 for current implementation and Section 2.2 for planned work.
+
+### 2.3 Full Vision Structure (Reference Only)
+
+```
+playlexi/
+├── app/                          # Next.js App Router
+│   ├── (shell)/                  # Full navigation (replaces old (main))
 │   │   ├── layout.tsx            # Main nav: Play, Leaderboard, Profile
 │   │   ├── play/
 │   │   │   ├── page.tsx          # Mode selection (Single/Multi)
@@ -415,8 +490,10 @@ playlexi/
 
 ### 2.1 Folder Rationale
 
-**`app/(auth)/` and `app/(main)/`:**
-Route groups separate auth flow from main app. Different layouts, different auth requirements.
+**`app/(shell)/` and `app/(focused)/`:**
+Route groups separate pages by navigation pattern. `(shell)` pages get the full navbar with
+Play/Leaderboard/Learn links and user menu. `(focused)` pages render their own TopNavbar
+for immersive experiences like gameplay and onboarding wizards. Both require authentication.
 
 **`components/` structure:**
 - `ui/` — shadcn primitives, never modified directly
@@ -3481,7 +3558,7 @@ The following PRD sections have been updated to reflect this decision:
 1. `lib/placement/placement-engine.ts` — Adaptive placement algorithm
 2. `lib/placement/irt-model.ts` — Item Response Theory calculations
 3. `components/placement/placement-progress.tsx` — Progress UI (no hearts)
-4. Update `app/(auth)/onboarding/placement/page.tsx` — Use new engine
+4. Update `app/(focused)/onboarding/placement/page.tsx` — Use new engine
 
 ---
 

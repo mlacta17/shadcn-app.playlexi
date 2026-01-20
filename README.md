@@ -55,13 +55,18 @@ npm run preview              # Preview production build locally
 
 - **Frontend**: Next.js 16, React, Tailwind CSS, shadcn/ui
 - **Backend**: Cloudflare Workers, D1 Database, R2 Storage
+- **Auth**: Better Auth (Google OAuth)
 - **Speech**: Google Cloud Speech-to-Text via WebSocket streaming
 - **ORM**: Drizzle ORM with D1 adapter
 
 ## Project Structure
 
 ```
-├── app/                    # Next.js App Router pages
+├── app/                    # Next.js App Router
+│   ├── (shell)/            # Pages with full navbar (dashboard, leaderboard)
+│   ├── (focused)/          # Focused experiences (game, onboarding)
+│   ├── login/              # Public login page
+│   └── api/                # API routes
 ├── components/             # React components (UI + game)
 ├── lib/                    # Business logic and services
 ├── hooks/                  # React custom hooks
