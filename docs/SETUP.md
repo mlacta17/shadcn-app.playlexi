@@ -438,6 +438,35 @@ For development:
 
 ---
 
+## Optional: Developer Tooling
+
+### Figma MCP Integration (for Claude Code users)
+
+If you use [Claude Code](https://claude.ai/code) and want to fetch designs directly from Figma during development:
+
+#### Setup
+
+1. **Get a Figma Personal Access Token**
+   - Go to https://www.figma.com/settings
+   - Scroll to **Personal access tokens**
+   - Click **Generate new token**
+   - Name it (e.g., "Claude Code") and copy the token
+
+2. **Add the Figma MCP server**
+   ```bash
+   claude mcp add figma --scope project -- npx -y figma-developer-mcp --figma-api-key="YOUR_TOKEN"
+   ```
+
+3. **Restart Claude Code** for the MCP to take effect
+
+#### Notes
+
+- `.mcp.json` is gitignored — each developer needs their own token
+- Tokens expire after 90 days; regenerate when needed
+- This is optional tooling; the app runs fine without it
+
+---
+
 ## Cost Estimates
 
 ### Phase 1: 0-1,000 DAU (Railway)

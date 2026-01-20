@@ -50,3 +50,6 @@ speech-server/node_modules/
 
 # Wrangler
 .wrangler/
+
+# MCP server config (contains personal API tokens)
+.mcp.json

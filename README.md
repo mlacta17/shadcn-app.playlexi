@@ -28,7 +28,7 @@ npm run dev:speech   # Speech server on ws://localhost:3002
 
 - **[Product Requirements](docs/PRD.md)** — Game mechanics, features, roadmap
 - **[Architecture](docs/ARCHITECTURE.md)** — Technical design, data flow, patterns
-- **[Setup Guide](docs/SETUP.md)** — Development and deployment instructions
+- **[Setup Guide](docs/SETUP.md)** — Development, deployment, and optional tooling (Figma MCP)
 - **[Component Inventory](docs/COMPONENT_INVENTORY.md)** — UI components and their status
 
 ## Key Commands

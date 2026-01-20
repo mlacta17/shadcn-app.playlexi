@@ -5,7 +5,6 @@ import { FilterIcon } from "@/lib/icons"
 
 import { RankBadge, LeaderboardTable, type LeaderboardPlayer } from "@/components/game"
 import { HexPattern } from "@/components/ui/hex-pattern"
-import { Navbar } from "@/components/ui/navbar"
 import { Progress } from "@/components/ui/progress"
 import { SearchInput } from "@/components/ui/search-input"
 import {
@@ -82,14 +81,11 @@ export default function LeaderboardPage() {
   const maxRating = 100
 
   return (
-    <div className="bg-background relative min-h-screen">
+    <div className="relative flex-1">
       {/* Decorative background */}
       <HexPattern className="fixed inset-0 -z-10" />
 
-      {/* Navigation */}
-      <Navbar />
-
-      {/* Main content */}
+      {/* Main content — Navbar is provided by (app)/layout.tsx */}
       <main className="container mx-auto max-w-4xl px-6 py-8">
         {/* League header */}
         <div className="mb-8 flex flex-col items-center gap-4">
