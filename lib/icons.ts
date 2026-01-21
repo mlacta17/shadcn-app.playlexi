@@ -39,6 +39,10 @@ export { IconChevronDownOutline24 as ChevronDownIcon } from "nucleo-core-outline
 export { IconChevronUpOutline24 as ChevronUpIcon } from "nucleo-core-outline-24"
 export { IconChevronRightOutline24 as ChevronRightIcon } from "nucleo-core-outline-24"
 
+// Navigation/Arrows (Tutorial navigation, pagination)
+export { IconArrowLeftOutline24 as ArrowLeftIcon } from "nucleo-core-outline-24"
+export { IconArrowRightOutline24 as ArrowRightIcon } from "nucleo-core-outline-24"
+
 // Menu icons
 export { IconMenuOutline24 as MenuIcon } from "nucleo-core-outline-24"
 export { IconDotsVerticalOutline24 as MoreVerticalIcon } from "nucleo-core-outline-24"

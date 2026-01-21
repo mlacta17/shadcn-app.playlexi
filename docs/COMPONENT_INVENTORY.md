@@ -133,8 +133,8 @@ For new user flow.
 
 | Component | Description | Design Status | Implementation Status | Notes |
 |-----------|-------------|---------------|----------------------|-------|
-| **TutorialCard** | Step card with illustration | Not Started | Not Started | Progress bar, skip link |
-| **TutorialStep** | Individual step content | Not Started | Not Started | Title, description, illustration |
+| ~~**TutorialCard**~~ | ~~Step card with illustration~~ | N/A | N/A | **Not needed.** Use `Card` + `Badge size="number"` + content. See Architecture Decision #5 below. |
+| ~~**TutorialStep**~~ | ~~Individual step content~~ | N/A | N/A | **Not needed.** Just content inside Card — title, image, description. |
 | **ProfileCompletionForm** | Username, age, avatar form | Not Started | Not Started | Validation, unique username check |
 
 ---
@@ -182,7 +182,7 @@ Components that already exist and can be used directly or with minor customizati
 | Card | shadcn/ui | None |
 | Input | shadcn/ui | None |
 | Avatar | shadcn/ui | None |
-| Badge | shadcn/ui | Add rank-specific variants |
+| Badge | shadcn/ui | Done. Added `size="number"` for circular step indicators, placement variants (gold/silver/bronze). |
 | Progress | shadcn/ui | Add timer styling variants |
 | Tabs | shadcn/ui | None |
 | Table | shadcn/ui | None |
@@ -374,6 +374,52 @@ const { isRecording, startRecording, stopRecording, analyserNode, transcript } =
 - Junior developers can read JSX directly instead of jumping between files
 - Reduces indirection in the codebase
 - Keeps the component inventory focused on meaningful abstractions
+
+### 5. Don't Create Components for Content Arrangements
+
+**Decision:** Don't create components that are just primitives with specific content inside.
+
+**Example:** Tutorial "card" is just a Card with a step badge, title, image, and description — NOT a component.
+
+```tsx
+// GOOD: Use existing primitives with content
+<Card>
+  <CardContent className="flex flex-col gap-3">
+    <Badge variant="secondary" size="number">1</Badge>
+    <p className="text-base font-semibold">
+      Press Start, then listen carefully to the word
+    </p>
+  </CardContent>
+  <CardFooter className="flex flex-col gap-2">
+    <img src="/images/tutorial-step-1.png" className="rounded-lg w-full" alt="..." />
+    <p className="text-sm text-muted-foreground">
+      You can replay the word as many times as you'd like...
+    </p>
+  </CardFooter>
+</Card>
+
+// BAD: Component that just wraps Card with content
+<TutorialCard
+  step={1}
+  title="Press Start..."
+  image="/images/tutorial-step-1.png"
+  description="You can replay..."
+/>
+```
+
+**This applies to:**
+- `TutorialCard` → Use `Card` + content
+- `LoginCard` → Use `Card` + content
+- `ProfileCard` → Use `Card` + content
+- Any "Card" variant that just has different content
+
+**When to create a component instead:**
+- The arrangement has complex logic (conditional rendering, animations)
+- It needs its own state or hooks
+- The same exact arrangement is used in 3+ different files
+- It requires significant accessibility handling
+
+**Key insight:** In Figma, designers use the Card component and swap content. Code should mirror this — use the primitive, change the content.
 
 ---
 

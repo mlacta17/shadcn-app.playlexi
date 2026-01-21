@@ -1699,7 +1699,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   pages: {
     signIn: '/login',
-    newUser: '/onboarding/complete-profile',
+    newUser: '/onboarding/profile',
   },
 });
 ```
@@ -2763,7 +2763,7 @@ After Phase 2 is working locally, complete these before Phase 3:
 | 3.6 | Page | `/onboarding/tutorial/page.tsx` — 4-step tutorial | Not Started |
 | 3.7 | Page | `/onboarding/placement/page.tsx` — adaptive placement test (no hearts) | Not Started |
 | 3.8 | Page | `/onboarding/rank-result/page.tsx` — rank assignment | Not Started |
-| 3.9 | Page | `/onboarding/complete-profile/page.tsx` — profile form | Not Started |
+| 3.9 | Page | `/onboarding/profile/page.tsx` — profile form | Not Started |
 | 3.10 | Logic | Placement algorithm (Bayesian tier estimation) | Not Started |
 | 3.11 | API | `/api/users/check-username` — availability check | Not Started |
 | 3.12 | API | Update user profile after OAuth | Not Started |

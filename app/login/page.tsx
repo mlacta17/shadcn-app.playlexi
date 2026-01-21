@@ -52,18 +52,13 @@ export default function LoginPage() {
           {/* Sign-in Buttons */}
           <div data-slot="sign-in-buttons" className="mt-6 space-y-2">
             {/*
-              OAuth callback goes to dashboard (/).
+              OAuth callback routes to /auth/callback which checks:
+              - If user has PlayLexi profile → Dashboard (/)
+              - If no profile → Profile completion (/onboarding/profile)
 
-              TODO: When onboarding is fully built, add logic to:
-              1. Check if user has completed profile setup
-              2. If not, redirect to /onboarding/tutorial
-
-              This can be done via:
-              - A `hasCompletedOnboarding` flag in the users table
-              - Middleware check after OAuth callback
-              - Or a server-side redirect in the dashboard page
+              @see app/(focused)/auth/callback/page.tsx
             */}
-            <GoogleSignInButton callbackURL="/">
+            <GoogleSignInButton callbackURL="/auth/callback">
               Sign in with Google
             </GoogleSignInButton>
             {/*

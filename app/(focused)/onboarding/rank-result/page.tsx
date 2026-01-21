@@ -1,50 +1,101 @@
 "use client"
 
-import { useRouter } from "next/navigation"
+import * as React from "react"
+import { Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 
 import { RankBadge, RANK_LABELS, type RankTier } from "@/components/game/rank-badge"
+import { GoogleSignInButton } from "@/components/auth"
 import { Button } from "@/components/ui/button"
 import { TopNavbar } from "@/components/ui/top-navbar"
 
-/**
- * Rank Result Page — Shown after placement game completion.
- *
- * Displays the user's earned rank and prompts them to create an account
- * to save their progress. This is the final step before OAuth sign-up
- * in the new user onboarding flow.
- *
- * Flow: Tutorial → Placement Game → **Rank Result** → OAuth Sign Up
- *
- * @see PRD.md Section 2.2.3 — Rank Assignment Screen
- * @see Figma node 2610:6076
- */
-export default function RankResultPage() {
-  const router = useRouter()
+// =============================================================================
+// CONSTANTS
+// =============================================================================
 
-  // TODO: Get actual rank from placement game result (context/params)
-  // For now, defaulting to "new-bee" as the starting rank
-  const earnedRank: RankTier = "new-bee"
+/**
+ * SessionStorage key for placement test results.
+ * Used to persist data between OAuth redirect.
+ */
+const PLACEMENT_STORAGE_KEY = "playlexi_placement_result"
+
+/**
+ * Map numeric tier (1-7) to RankTier name.
+ */
+const TIER_TO_RANK: Record<number, RankTier> = {
+  1: "new-bee",
+  2: "bumble-bee",
+  3: "busy-bee",
+  4: "honey-bee",
+  5: "worker-bee",
+  6: "royal-bee",
+  7: "bee-keeper",
+}
+
+// =============================================================================
+// INNER COMPONENT (uses useSearchParams)
+// =============================================================================
+
+/**
+ * Inner content component that uses useSearchParams.
+ * Must be wrapped in Suspense.
+ */
+function RankResultContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  // Get tier from URL params or sessionStorage
+  const [earnedRank, setEarnedRank] = React.useState<RankTier>("new-bee")
+
+  React.useEffect(() => {
+    // Try to get tier from URL params first (e.g., ?tier=3)
+    const tierParam = searchParams.get("tier")
+    if (tierParam) {
+      const tier = parseInt(tierParam, 10)
+      if (tier >= 1 && tier <= 7) {
+        setEarnedRank(TIER_TO_RANK[tier])
+        // Also store in sessionStorage for persistence through OAuth
+        try {
+          sessionStorage.setItem(
+            PLACEMENT_STORAGE_KEY,
+            JSON.stringify({
+              derivedTier: tier,
+              rating: 1000 + (tier - 1) * 150, // Rough estimate
+              ratingDeviation: 200,
+              timestamp: Date.now(),
+            })
+          )
+        } catch {
+          // sessionStorage not available
+        }
+        return
+      }
+    }
+
+    // Fall back to sessionStorage
+    try {
+      const stored = sessionStorage.getItem(PLACEMENT_STORAGE_KEY)
+      if (stored) {
+        const data = JSON.parse(stored)
+        if (data.derivedTier >= 1 && data.derivedTier <= 7) {
+          setEarnedRank(TIER_TO_RANK[data.derivedTier])
+        }
+      }
+    } catch {
+      // sessionStorage not available or invalid data
+    }
+  }, [searchParams])
+
   const rankLabel = RANK_LABELS[earnedRank]
 
   const handleClose = () => {
-    // TODO: Decide where close should navigate
-    // Options: back to home, back to placement, or show confirmation dialog
+    // Return to home (will prompt to sign up again if they return)
     router.push("/")
   }
 
-  const handleGoogleSignUp = () => {
-    // TODO: Implement Google OAuth
-    console.log("Google sign up clicked")
-  }
-
-  const handleAppleSignUp = () => {
-    // TODO: Implement Apple OAuth
-    console.log("Apple sign up clicked")
-  }
-
   const handleSignIn = () => {
-    // TODO: Navigate to sign in page
-    router.push("/signin")
+    // Existing users can sign in
+    router.push("/login")
   }
 
   return (
@@ -72,22 +123,29 @@ export default function RankResultPage() {
 
           {/* Sign up buttons */}
           <div className="flex w-full max-w-sm flex-col gap-3">
-            <Button
-              variant="outline"
-              className="h-9 w-full gap-2"
-              onClick={handleGoogleSignUp}
+            {/*
+              OAuth callback goes to /auth/callback which:
+              1. Checks if user already exists → dashboard
+              2. New user → /onboarding/profile (reads placement from sessionStorage)
+            */}
+            <GoogleSignInButton
+              callbackURL="/auth/callback"
+              className="h-9"
             >
-              <GoogleIcon />
               Sign up with Google
-            </Button>
+            </GoogleSignInButton>
 
+            {/*
+              Apple Sign-In: Coming soon
+              Requires Apple Developer account setup
+            */}
             <Button
               variant="outline"
               className="h-9 w-full gap-2"
-              onClick={handleAppleSignUp}
+              disabled
             >
               <AppleIcon />
-              Sign up with Apple
+              Sign up with Apple (Coming Soon)
             </Button>
 
             {/* Sign in link */}
@@ -108,40 +166,45 @@ export default function RankResultPage() {
   )
 }
 
+// =============================================================================
+// PAGE COMPONENT
+// =============================================================================
+
 /**
- * Google "G" logo icon.
- * Original brand colors preserved for brand recognition.
+ * Rank Result Page — Shown after placement game completion.
+ *
+ * Displays the user's earned rank and prompts them to create an account
+ * to save their progress. This is the final step before OAuth sign-up
+ * in the new user onboarding flow.
+ *
+ * ## Data Flow
+ * 1. Placement test stores results in sessionStorage
+ * 2. This page reads the tier to display
+ * 3. OAuth redirects to /auth/callback
+ * 4. Profile page reads sessionStorage to initialize user
+ *
+ * Flow: Tutorial → Placement Game → **Rank Result** → OAuth → Profile
+ *
+ * @see PRD.md Section 2.2.3 — Rank Assignment Screen
+ * @see Figma node 2610:6076
  */
-function GoogleIcon({ className }: { className?: string }) {
+export default function RankResultPage() {
   return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      aria-hidden="true"
+    <Suspense
+      fallback={
+        <div className="bg-background flex min-h-screen items-center justify-center">
+          <div className="text-muted-foreground">Loading...</div>
+        </div>
+      }
     >
-      <path
-        d="M15.68 8.18c0-.57-.05-1.12-.15-1.64H8v3.1h4.31a3.68 3.68 0 0 1-1.6 2.42v2h2.59c1.51-1.4 2.38-3.45 2.38-5.88z"
-        fill="#4285F4"
-      />
-      <path
-        d="M8 16c2.16 0 3.97-.72 5.3-1.94l-2.59-2a4.78 4.78 0 0 1-7.13-2.51H.93v2.06A8 8 0 0 0 8 16z"
-        fill="#34A853"
-      />
-      <path
-        d="M3.58 9.55a4.8 4.8 0 0 1 0-3.1V4.39H.93a8 8 0 0 0 0 7.22l2.65-2.06z"
-        fill="#FBBC05"
-      />
-      <path
-        d="M8 3.18c1.18 0 2.24.41 3.08 1.21l2.3-2.3A7.96 7.96 0 0 0 8 0 8 8 0 0 0 .93 4.39l2.65 2.06A4.77 4.77 0 0 1 8 3.18z"
-        fill="#EA4335"
-      />
-    </svg>
+      <RankResultContent />
+    </Suspense>
   )
 }
+
+// =============================================================================
+// ICONS
+// =============================================================================
 
 /**
  * Apple logo icon.

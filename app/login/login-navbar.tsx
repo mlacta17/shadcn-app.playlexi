@@ -3,14 +3,21 @@
  *
  * Wrapper for Navbar that handles the onSignUp callback.
  * Separated to keep the main login page as a server component.
+ *
+ * The "Sign up" button serves as the "Get Started" entry point for new users,
+ * navigating them to the onboarding tutorial flow.
  */
 
 "use client"
+
+import { useRouter } from "next/navigation"
 
 import { Logo } from "@/components/ui/logo"
 import { Navbar } from "@/components/ui/navbar"
 
 export function LoginNavbar() {
+  const router = useRouter()
+
   return (
     <Navbar
       logo={<Logo />}
@@ -21,9 +28,8 @@ export function LoginNavbar() {
       ]}
       isLoggedIn={false}
       onSignUp={() => {
-        // Already on login page - scroll to sign-in buttons
-        const signInSection = document.querySelector("[data-slot='sign-in-buttons']")
-        signInSection?.scrollIntoView({ behavior: "smooth" })
+        // Navigate new users to onboarding tutorial
+        router.push("/onboarding/tutorial")
       }}
     />
   )

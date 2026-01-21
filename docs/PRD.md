@@ -50,14 +50,30 @@ PlayLexi is a competitive spelling bee game where players spell words by voice o
 
 ### 2.1 Entry Points
 
-The external marketing website (separate repo) has two buttons:
-1. **"Get Started"** → New user flow
-2. **"An Account I Already Have"** → Existing user flow
+Users can enter PlayLexi from two places, each with two options:
+
+**Marketing Site (playlexi.com):**
+| Button | Destination | Flow |
+|--------|-------------|------|
+| "Get Started" | `app.playlexi.com/onboarding/tutorial` | New user flow |
+| "I Have an Account" | `app.playlexi.com/login` | Existing user flow |
+
+**App (app.playlexi.com):**
+| Element | Destination | Flow |
+|---------|-------------|------|
+| "Get Started" link on `/login` | `/onboarding/tutorial` | New user flow |
+| OAuth buttons on `/login` | OAuth → Dashboard | Existing user flow |
+| "Sign in" link on onboarding pages | `/login` | Switch to existing user flow |
+
+**Why both places have both options:**
+- Marketing site visitors may be new or returning — both need clear paths
+- Direct app visitors (bookmarks, shared links) need the same options
+- Cross-linking between flows allows users to self-correct if they chose wrong
 
 ### 2.2 New User Flow
 
 ```
-Marketing Site → "Get Started" → PlayLexi App
+Entry: Marketing "Get Started" OR App /onboarding/tutorial
                                       ↓
                                Tutorial (4 steps)
                                       ↓
@@ -69,8 +85,10 @@ Marketing Site → "Get Started" → PlayLexi App
                                       ↓
                                Complete Profile
                                       ↓
-                               Main App
+                               Dashboard (Main App)
 ```
+
+**Cross-linking:** Each onboarding page has "Already have an account? Sign in" link.
 
 #### 2.2.1 Tutorial (4 Steps)
 
@@ -97,7 +115,7 @@ This prevents confusion when players encounter hearts for the first time after p
 
 #### 2.2.2 Placement Test
 
-> **Note:** This section was updated per ADR-013 (Adaptive Placement Test) in ARCHITECTURE.md.
+> **Note:** This section was updated per ADR-013 (Adaptive Placement Test) in ADR.md.
 
 **Format:** Adaptive placement test (not Endless mode)
 
@@ -125,7 +143,20 @@ This prevents confusion when players encounter hearts for the first time after p
 - Encouraging message: "Don't worry about mistakes — we're finding your level!"
 - No "game over" — test simply concludes when calibration completes
 
-**Technical:** See ADR-013 in ARCHITECTURE.md for Bayesian algorithm details.
+**Technical:** See ADR-013 in ADR.md for Bayesian algorithm details.
+
+**Temporary Data Storage:**
+
+The placement test happens BEFORE OAuth, so we can't persist results to the database yet. Solution:
+- Store placement result in `sessionStorage` (key: `playlexi_placement`)
+- Data includes: `{ tier: number, wordsAttempted: number, correctCount: number, timestamp: number }`
+- After OAuth + profile completion, read from sessionStorage and persist to `user_ranks` table
+- Clear sessionStorage after successful persistence
+
+Why sessionStorage (not localStorage):
+- Clears automatically when tab closes (no stale data)
+- Survives page navigation within the session
+- No server-side storage needed for unauthenticated users
 
 **Why No Hearts in Placement (Design Decision):**
 
@@ -181,16 +212,22 @@ After OAuth:
 ### 2.3 Existing User Flow
 
 ```
-Marketing Site → "I Have an Account" → PlayLexi App
+Entry: Marketing "I Have an Account" OR App /login
                                             ↓
                                       OAuth Login
                                             ↓
-                                       Main App
+                                      Dashboard
 ```
 
 - Direct to OAuth (Google/Apple)
 - No tutorial, no placement test
-- Straight to main app dashboard
+- Straight to dashboard
+
+**Cross-linking:** Login page has "New here? Get Started" link.
+
+**Detection Logic:** After OAuth, check if `users` record exists for `auth_user.id`:
+- If exists → redirect to `/dashboard`
+- If not exists → redirect to `/onboarding/profile` (they came from new user flow)
 
 ---
 
@@ -1115,7 +1152,7 @@ When a player says the whole word instead of spelling it:
 | XP + Tier (3.3) | Yes | Progression rewards, leaderboards, bragging rights |
 | Glicko-2 Rating | No | Difficulty matching, matchmaking, adaptive learning |
 
-> **Technical Details:** See ADR-012 (Hidden Skill Rating System) and ADR-013 (Adaptive Placement Test) in ARCHITECTURE.md.
+> **Technical Details:** See ADR-012 (Hidden Skill Rating System) and ADR-013 (Adaptive Placement Test) in ADR.md.
 
 **Why Hidden Rating?**
 - Players focus on XP progression (motivating)
@@ -1371,7 +1408,7 @@ When a player says the whole word instead of spelling it:
 | **Crown Points** | Points earned by Royal Bees competing for Bee Keeper title |
 | **Track** | A specific combination of game mode + input method (4 total) |
 | **Placement Test** | Adaptive one-time assessment (~10-15 words) for new users to determine starting skill rating using Bayesian inference. See Section 2.2.2. |
-| **Skill Rating (Hidden)** | Glicko-2 rating (1000-1900) used internally for word difficulty selection and matchmaking. Not visible to players. See ADR-012 in ARCHITECTURE.md. |
+| **Skill Rating (Hidden)** | Glicko-2 rating (1000-1900) used internally for word difficulty selection and matchmaking. Not visible to players. See ADR-012 in ADR.md. |
 | **Rating Deviation (RD)** | Glicko-2 uncertainty measure (30-350). High RD = uncertain skill, ratings change more. |
 | **Skeleton UI** | Shimmering placeholder shown while data is loading |
 | **Hybrid Matchmaking** | System that expands tier range over time to reduce queue wait |
