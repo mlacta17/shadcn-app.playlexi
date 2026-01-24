@@ -24,7 +24,7 @@
 
 import type { D1Database } from "@cloudflare/workers-types"
 import { drizzle } from "drizzle-orm/d1"
-import { eq } from "drizzle-orm"
+import { eq, sql } from "drizzle-orm"
 import * as schema from "@/db/schema"
 import type { AuthProvider, RankTrack } from "@/db/schema"
 
@@ -43,8 +43,12 @@ export interface CreateUserInput {
   email: string
   /** User-chosen display name */
   username: string
-  /** User's age (required for demographics) */
-  age: number
+  /**
+   * User's birth year for age demographics (optional).
+   * Stored as year (e.g., 2010) for flexibility in age range calculations.
+   * @see lib/age-utils.ts for conversion from age range selection
+   */
+  birthYear?: number
   /** OAuth provider used */
   authProvider: AuthProvider
   /** Selected avatar preset (1-3) */
@@ -156,7 +160,7 @@ export async function createUser(
       id: userId,
       email: input.email,
       username: input.username,
-      age: input.age,
+      birthYear: input.birthYear,
       authProvider: input.authProvider,
       avatarId: input.avatarId ?? 1,
     })
@@ -232,6 +236,9 @@ export async function getUserById(
 /**
  * Check if a username is available.
  *
+ * Performs case-insensitive check to prevent confusing duplicates
+ * (e.g., "SpellingBee" and "spellingbee" cannot both exist).
+ *
  * @param d1 - D1 database binding
  * @param username - Username to check
  * @returns true if available, false if taken
@@ -242,8 +249,10 @@ export async function isUsernameAvailable(
 ): Promise<boolean> {
   const db = drizzle(d1, { schema })
 
+  // Case-insensitive check using SQLite's LOWER function
+  const normalizedUsername = username.toLowerCase()
   const existing = await db.query.users.findFirst({
-    where: eq(schema.users.username, username),
+    where: sql`LOWER(${schema.users.username}) = ${normalizedUsername}`,
     columns: { id: true },
   })
 

@@ -162,7 +162,19 @@ export const users = sqliteTable(
     username: text("username").notNull().unique(),
     bio: text("bio"),
     avatarId: integer("avatar_id").notNull().default(1), // 1, 2, or 3
-    age: integer("age").notNull(),
+    /**
+     * User's birth year (e.g., 2010, 1995).
+     * Optional field for age demographics.
+     *
+     * ## Why birth year instead of age or age range?
+     * 1. **Flexibility**: Age ranges can be computed dynamically without migrations
+     * 2. **COPPA compliance**: Precisely identify users under 13
+     * 3. **Auto-updating**: User's computed age updates each year
+     * 4. **Analytics**: Can create any age grouping in queries
+     *
+     * @see lib/age-utils.ts for conversion helpers
+     */
+    birthYear: integer("birth_year"),
     authProvider: text("auth_provider", { enum: authProviders }).notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
