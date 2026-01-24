@@ -117,7 +117,7 @@ For user profile and settings.
 | Component | Description | Design Status | Implementation Status | Notes |
 |-----------|-------------|---------------|----------------------|-------|
 | **ProfileHeader** | Avatar, username, bio, stats | Not Started | Not Started | Edit button for own profile |
-| **AvatarSelector** | 3-preset avatar picker | Not Started | Not Started | Radio group with images |
+| **AvatarSelector** | 3-preset avatar picker | Done | Done | **Presentational.** `AvatarOption` (small selectable) + `AvatarPreview` (large display). Hover/selected states with colored backgrounds. Located at `components/ui/avatar-selector.tsx`. Configuration in `lib/avatar-utils.ts`, shared SVGs in `lib/avatar-icons.tsx`. |
 | **MatchHistoryTable** | Table of past games | Not Started | Not Started | Placement, mode, XP, accuracy |
 | **SettingsSection** | Grouped settings with header | Not Started | Not Started | Collapsible sections |
 | **ThemeToggle** | Light/Dark mode switch | Not Started | Not Started | May already exist |
@@ -135,7 +135,7 @@ For new user flow.
 |-----------|-------------|---------------|----------------------|-------|
 | ~~**TutorialCard**~~ | ~~Step card with illustration~~ | N/A | N/A | **Not needed.** Use `Card` + `Badge size="number"` + content. See Architecture Decision #5 below. |
 | ~~**TutorialStep**~~ | ~~Individual step content~~ | N/A | N/A | **Not needed.** Just content inside Card — title, image, description. |
-| **ProfileCompletionForm** | Username, age, avatar form | Not Started | Not Started | Validation, unique username check |
+| **ProfileCompletionForm** | Username, birth year, avatar form | Done | Done | **Implemented as page.** Two-step form: Step 1 (username + optional age range), Step 2 (avatar selection). Debounced username validation, age stored as birth year. Located at `app/(focused)/onboarding/profile/page.tsx`. Uses `useUsernameCheck` hook. |
 
 ---
 
@@ -260,6 +260,7 @@ Hooks that manage state and side effects for components.
 | **useGameTimer** | Countdown timer with state management | Done | Single source of truth for timer. Returns `totalSeconds`, `remainingSeconds`, `state`, `isRunning`, `isExpired`, `start`, `pause`, `reset`, `restart`. Located at `hooks/use-game-timer.ts`. Supports callbacks for `onTimeUp` and `onTick`. |
 | **useGameFeedback** | Feedback overlay state management | Done | Owns overlay state and timing. Returns `feedbackType`, `isShowing`, `showCorrect`, `showWrong`, `clear`. Auto-clears after animation (400ms). Located at `hooks/use-game-feedback.ts`. |
 | **useGameSounds** | Audio playback for game sounds | Done | Preloads and plays game sounds. Returns `playCorrect`, `playWrong`, `play`, `isReady`, `setEnabled`, `setVolume`. Graceful fallback if files missing. Located at `hooks/use-game-sounds.ts`. Expects MP3 files in `public/sounds/`. |
+| **useUsernameCheck** | Debounced username validation | Done | Checks username availability with debounce (500ms). Returns `status`, `error`, `checkUsername`. Uses AbortController for cleanup. Located at `hooks/use-username-check.ts`. Calls `/api/users/check-username`. |
 | **useGameState** | WebSocket connection and game state | Not Started | Connects to Durable Object, syncs player state. |
 | **useMatchmaking** | Matchmaking queue state | Not Started | Handles queue join/leave, tier expansion. |
 

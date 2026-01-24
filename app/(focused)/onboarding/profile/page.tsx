@@ -15,11 +15,10 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-import { useUsernameCheck } from "@/hooks/use-username-check"
+import { useUsernameCheck, type UsernameStatus } from "@/hooks/use-username-check"
 import { AGE_RANGES, birthYearFromAgeRange, type AgeRangeValue } from "@/lib/age-utils"
-import { sanitizeUsername } from "@/lib/username-utils"
+import { sanitizeUsername, USERNAME_MAX_LENGTH } from "@/lib/username-utils"
 import { CheckIcon } from "@/lib/icons"
-import { cn } from "@/lib/utils"
 import { AVATARS, getAvatarById } from "@/lib/avatar-utils"
 import { AvatarOption, AvatarPreview } from "@/components/ui/avatar-selector"
 
@@ -73,6 +72,7 @@ export default function ProfilePage() {
     ageRange: null,
     avatarId: 1,
   })
+  const [isSubmitting, setIsSubmitting] = React.useState(false)
 
   // ---------------------------------------------------------------------------
   // Username Validation
@@ -127,22 +127,30 @@ export default function ProfilePage() {
   }
 
   const handleFinish = async () => {
-    // Sanitize username before submission
-    const username = sanitizeUsername(formData.username)
-    const birthYear = formData.ageRange
-      ? birthYearFromAgeRange(formData.ageRange)
-      : null
+    if (isSubmitting) return
+    setIsSubmitting(true)
 
-    // TODO: Call API to create user record
-    // For now, just navigate to dashboard
-    console.log("Creating user with:", {
-      username,
-      birthYear,
-      avatarId: formData.avatarId,
-    })
+    try {
+      // Sanitize username before submission
+      const username = sanitizeUsername(formData.username)
+      const birthYear = formData.ageRange
+        ? birthYearFromAgeRange(formData.ageRange)
+        : null
 
-    // Navigate to dashboard after profile completion
-    router.push("/")
+      // TODO: Call API to create user record
+      // For now, just navigate to dashboard
+      console.log("Creating user with:", {
+        username,
+        birthYear,
+        avatarId: formData.avatarId,
+      })
+
+      // Navigate to dashboard after profile completion
+      router.push("/")
+    } catch (error) {
+      console.error("[ProfilePage] Error creating user:", error)
+      setIsSubmitting(false)
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -177,6 +185,7 @@ export default function ProfilePage() {
               onAvatarSelect={handleAvatarSelect}
               onBack={handleBackToStep1}
               onFinish={handleFinish}
+              isSubmitting={isSubmitting}
             />
           )}
         </div>
@@ -192,7 +201,7 @@ export default function ProfilePage() {
 interface UsernameAgeStepProps {
   username: string
   ageRange: AgeRangeValue | null
-  usernameStatus: ReturnType<typeof useUsernameCheck>["status"]
+  usernameStatus: UsernameStatus
   usernameError: string | null
   onUsernameChange: (e: React.ChangeEvent<HTMLInputElement>) => void
   onAgeRangeChange: (value: string) => void
@@ -231,6 +240,11 @@ function UsernameAgeStep({
               placeholder="Username"
               value={username}
               onChange={onUsernameChange}
+              maxLength={USERNAME_MAX_LENGTH}
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               aria-invalid={isUsernameError}
               aria-describedby={usernameError ? "username-error" : undefined}
               className="pr-10"
@@ -301,6 +315,7 @@ interface AvatarStepProps {
   onAvatarSelect: (id: number) => void
   onBack: () => void
   onFinish: () => void
+  isSubmitting: boolean
 }
 
 /**
@@ -321,6 +336,7 @@ function AvatarStep({
   onAvatarSelect,
   onBack,
   onFinish,
+  isSubmitting,
 }: AvatarStepProps) {
   const selectedAvatar = getAvatarById(selectedAvatarId) ?? AVATARS[0]
 
@@ -364,12 +380,17 @@ function AvatarStep({
 
       {/* Action Buttons */}
       <div className="flex w-full flex-col gap-2">
-        <Button onClick={onFinish} className="w-full">
-          Finish
+        <Button
+          onClick={onFinish}
+          disabled={isSubmitting}
+          className="w-full"
+        >
+          {isSubmitting ? "Creating profile..." : "Finish"}
         </Button>
         <Button
           variant="ghost"
           onClick={onBack}
+          disabled={isSubmitting}
           className="w-full"
         >
           Go back

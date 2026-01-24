@@ -203,11 +203,14 @@ After placement test:
 #### 2.2.5 Complete Profile
 
 After OAuth:
-- Fields:
-  - Username (must be unique)
-  - Age (required)
-  - Avatar (choose from 3 presets)
-- Button: "Create" → Enters main app
+- **Step 1: Username & Age**
+  - Username (required, must be unique, debounced validation)
+  - Age range (optional, stored as birth year for COPPA compliance)
+  - Button: "Next"
+- **Step 2: Avatar Selection**
+  - Avatar (choose from 3 presets: Dog, Person, Cat)
+  - Large preview with hover/selected states
+  - Button: "Finish" → Enters main app
 
 ### 2.3 Existing User Flow
 

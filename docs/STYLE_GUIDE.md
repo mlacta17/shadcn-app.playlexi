@@ -772,6 +772,120 @@ SVG files in `public/badges/`:
 | `BADGE_PATHS` | `Record<RankTier, {light, dark}>` | Asset paths for each tier |
 | `BADGE_SIZES` | `Record<BadgeSize, number>` | Pixel dimensions for each size |
 
+### Avatar System
+
+The avatar system consists of three layers with clear separation of concerns:
+
+```
+lib/avatar-utils.ts          (Configuration data)
+lib/avatar-icons.tsx         (Shared SVG components)
+components/ui/avatar-selector.tsx  (Profile creation picker)
+components/ui/player-avatar.tsx    (Display anywhere in app)
+```
+
+#### 1. Configuration — `lib/avatar-utils.ts`
+- **Location:** [lib/avatar-utils.ts](lib/avatar-utils.ts)
+- **Purpose:** Single source of truth for avatar configuration
+
+```typescript
+type AvatarType = "dog" | "person" | "cat"
+
+interface AvatarConfig {
+  id: number           // 1, 2, or 3
+  type: AvatarType
+  name: string         // Human-readable name
+  defaultBg: string    // Gray background (unselected)
+  activeBg: string     // Colored background (hover/selected)
+}
+```
+
+**Exports:**
+| Export | Type | Description |
+|--------|------|-------------|
+| `AVATARS` | `AvatarConfig[]` | Array of 3 avatar configurations |
+| `getAvatarById` | `(id: number) => AvatarConfig \| undefined` | Lookup by ID |
+
+#### 2. Icons — `lib/avatar-icons.tsx`
+- **Location:** [lib/avatar-icons.tsx](lib/avatar-icons.tsx)
+- **Purpose:** Shared SVG components for avatar icons
+
+```tsx
+import { AvatarIcon } from "@/lib/avatar-icons"
+
+// Dynamic rendering based on type
+<AvatarIcon type="dog" className="size-10" />
+<AvatarIcon type="person" className="size-10" />
+<AvatarIcon type="cat" className="size-10" />
+```
+
+**Exports:**
+| Export | Type | Description |
+|--------|------|-------------|
+| `DogIcon` | `React.FC` | Dog avatar SVG |
+| `PersonIcon` | `React.FC` | Person avatar SVG |
+| `CatIcon` | `React.FC` | Cat avatar SVG |
+| `AvatarIcon` | `React.FC<{type: AvatarType}>` | Dynamic icon component |
+
+#### 3. Avatar Selector — `components/ui/avatar-selector.tsx`
+- **Location:** [components/ui/avatar-selector.tsx](components/ui/avatar-selector.tsx)
+- **Purpose:** Profile creation picker with 3 preset avatars
+- **Use case:** Onboarding profile completion step
+
+**Components:**
+| Component | Props | Description |
+|-----------|-------|-------------|
+| `AvatarOption` | `avatar, isSelected, onSelect` | Small selectable button (62px) |
+| `AvatarPreview` | `avatar, size?, className?` | Large preview (204px default) |
+
+**States:**
+| State | Visual | Description |
+|-------|--------|-------------|
+| Default | Gray background | Unselected, not hovered |
+| Hover | Colored background | Mouse over |
+| Selected | Colored background + blue ring | Currently selected |
+
+#### 4. Player Avatar — `components/ui/player-avatar.tsx`
+- **Location:** [components/ui/player-avatar.tsx](components/ui/player-avatar.tsx)
+- **Purpose:** Display user avatar anywhere in the app (navbar, leaderboard, etc.)
+- **Pattern:** Bridge component connecting `avatarId` to visual display
+
+```tsx
+import { PlayerAvatar } from "@/components/ui/player-avatar"
+
+// From database avatarId (1, 2, or 3)
+<PlayerAvatar avatarId={user.avatarId} size="default" />
+
+// Fallback to image URL
+<PlayerAvatar avatarUrl={user.avatarUrl} />
+
+// Fallback to initials
+<PlayerAvatar fallbackInitials="JD" />
+```
+
+**Props:**
+| Prop | Type | Description |
+|------|------|-------------|
+| `avatarId` | `number` | Database avatar ID (1, 2, or 3) |
+| `avatarUrl` | `string` | Custom image URL (future) |
+| `fallbackInitials` | `string` | 1-2 letter initials |
+| `size` | `"sm" \| "default" \| "lg"` | Size preset (default: "default") |
+| `className` | `string` | Additional classes |
+
+**Design System Compliance:**
+- Wraps shadcn `Avatar` component for consistent sizing/styling
+- Uses colored backgrounds from `AvatarConfig.activeBg`
+- SVG icons sized at 75% of container via `AvatarIcon`
+
+#### Architecture Decision: Why Two Avatar Components?
+
+| Component | Shadcn Avatar | PlayLexi Avatar Components |
+|-----------|---------------|---------------------------|
+| **Purpose** | Generic UI primitive | Domain-specific implementation |
+| **Knows about** | Sizing, fallback images | Avatar presets, colored backgrounds |
+| **Used for** | Any circular image with fallback | Specifically user avatars |
+
+The `PlayerAvatar` component bridges the gap — it takes a database `avatarId` and renders the appropriate visual using shadcn's Avatar as the base.
+
 ---
 
 ## Navigation Components
@@ -1123,6 +1237,14 @@ When adding a new shadcn component:
 - **Background patterns:** [components/ui/hex-pattern.tsx](components/ui/hex-pattern.tsx)
 - **Data table:** [components/ui/data-table.tsx](components/ui/data-table.tsx)
 - **Leaderboard:** [components/game/leaderboard-table.tsx](components/game/leaderboard-table.tsx)
+- **Avatar system:**
+  - Configuration: [lib/avatar-utils.ts](lib/avatar-utils.ts)
+  - Shared icons: [lib/avatar-icons.tsx](lib/avatar-icons.tsx)
+  - Selector: [components/ui/avatar-selector.tsx](components/ui/avatar-selector.tsx)
+  - Display: [components/ui/player-avatar.tsx](components/ui/player-avatar.tsx)
+- **Profile completion:** [app/(focused)/onboarding/profile/page.tsx](app/(focused)/onboarding/profile/page.tsx)
+- **Username validation:** [hooks/use-username-check.ts](hooks/use-username-check.ts)
+- **Age utilities:** [lib/age-utils.ts](lib/age-utils.ts)
 
 ## Design Philosophy
 

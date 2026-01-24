@@ -622,7 +622,7 @@ export const users = sqliteTable('users', {
   username: text('username').notNull().unique(),
   bio: text('bio'),
   avatarId: integer('avatar_id').notNull().default(1), // 1, 2, or 3
-  age: integer('age').notNull(),
+  birthYear: integer('birth_year'), // Optional, for age demographics (see lib/age-utils.ts)
   authProvider: text('auth_provider', { enum: authProviders }).notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
   lastOnline: integer('last_online', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
@@ -2759,13 +2759,13 @@ After Phase 2 is working locally, complete these before Phase 3:
 | 3.2 | Component | `TutorialStep` — individual step content | Not Started |
 | 3.3 | Component | `RankBadge` — tier badge (7 variants × 2 modes) | ✅ Done |
 | 3.4 | Component | `RankReveal` — animation showing earned rank | Not Started |
-| 3.5 | Component | `ProfileCompletionForm` — username, age, avatar | Not Started |
+| 3.5 | Component | `AvatarSelector` — 3-preset avatar picker | ✅ Done |
 | 3.6 | Page | `/onboarding/tutorial/page.tsx` — 4-step tutorial | Not Started |
 | 3.7 | Page | `/onboarding/placement/page.tsx` — adaptive placement test (no hearts) | Not Started |
 | 3.8 | Page | `/onboarding/rank-result/page.tsx` — rank assignment | Not Started |
-| 3.9 | Page | `/onboarding/profile/page.tsx` — profile form | Not Started |
+| 3.9 | Page | `/onboarding/profile/page.tsx` — 2-step profile form (username/age → avatar) | ✅ Done |
 | 3.10 | Logic | Placement algorithm (Bayesian tier estimation) | Not Started |
-| 3.11 | API | `/api/users/check-username` — availability check | Not Started |
+| 3.11 | API | `/api/users/check-username` — availability check | ✅ Done |
 | 3.12 | API | Update user profile after OAuth | Not Started |
 
 **Exit Criteria:**
@@ -2774,7 +2774,8 @@ After Phase 2 is working locally, complete these before Phase 3:
 - [ ] Can skip or complete tutorial
 - [ ] Placement test (no hearts) determines starting rank via Bayesian inference
 - [ ] Rank reveal shows appropriate tier badge
-- [ ] Profile completion validates unique username
+- [x] Profile completion validates unique username (debounced, real-time feedback)
+- [x] Avatar selection with 3 presets (Dog, Person, Cat)
 - [ ] User lands on main app after completion
 
 ---

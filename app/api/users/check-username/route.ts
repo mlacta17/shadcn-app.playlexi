@@ -126,7 +126,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<ApiRespons
           available: false,
           username,
           reason: "invalid",
-          error: formatValidation.error!,
+          error: formatValidation.error ?? "Invalid username format",
         },
         { status: 400 }
       )
