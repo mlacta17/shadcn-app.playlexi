@@ -46,8 +46,10 @@ export default async function AuthCallbackPage() {
   const status = await getUserStatus(env.DB, session.user.id)
 
   if (status.exists) {
-    // Returning user - go to dashboard
-    redirect("/")
+    // Returning user - go to dashboard with welcome back indicator
+    // This allows the dashboard to show a "Welcome back!" message
+    const username = status.user?.username || ""
+    redirect(`/?welcome=back&user=${encodeURIComponent(username)}`)
   } else {
     // New user - needs profile completion
     // Note: Placement data should already be in sessionStorage from onboarding

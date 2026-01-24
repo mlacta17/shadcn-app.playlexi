@@ -34,17 +34,52 @@ import type {
 /**
  * Speech context for letter recognition.
  * Boosts recognition of individual letters and their phonetic names.
+ *
+ * ## Confusable Letter Groups
+ * These letters are acoustically similar and often confused by speech recognition:
+ * - B/D/P/V: Plosive consonants with similar mouth positions
+ * - M/N: Nasal consonants
+ * - S/F: Fricatives
+ * - C/G: Velar consonants
+ *
+ * We include explicit phrases to help Google distinguish between them.
  */
 const SPEECH_CONTEXT = {
   phrases: [
-    // Individual letters
+    // Individual letters (all 26)
     "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
     "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+
     // Phonetic names (how letters sound when spoken)
     "ay", "bee", "cee", "dee", "ee", "eff", "gee", "aitch",
     "eye", "jay", "kay", "ell", "em", "en", "oh", "pee",
     "cue", "are", "ess", "tee", "you", "vee",
     "double you", "double-u", "ex", "why", "zee", "zed",
+
+    // === CONFUSABLE LETTER DISAMBIGUATION ===
+    // Repeat commonly confused letters with higher frequency to boost recognition
+    // B/D/P/V group (most commonly confused)
+    "B", "bee", "D", "dee", "P", "pee", "V", "vee",
+    "B", "bee", "D", "dee", "P", "pee", "V", "vee",
+
+    // Explicit disambiguation phrases
+    "letter B", "letter D", "letter P", "letter V",
+    "B as in boy", "D as in dog", "P as in Paul", "V as in Victor",
+
+    // M/N confusion
+    "M", "em", "N", "en",
+    "letter M", "letter N",
+
+    // C/S/G confusion
+    "C", "cee", "S", "ess", "G", "gee",
+    "letter C", "letter S", "letter G",
+
+    // F/S confusion
+    "F", "eff", "S", "ess",
+
+    // Single letter utterances (helps when user says just one letter)
+    "just B", "just D", "just P", "just V",
+    "the letter B", "the letter D", "the letter P", "the letter V",
   ],
   boost: 20,
 }

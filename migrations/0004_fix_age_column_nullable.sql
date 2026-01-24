@@ -1,0 +1,22 @@
+-- Migration: Make 'age' column nullable
+--
+-- Problem: The 'age' column was defined as NOT NULL with no default value,
+-- but our Drizzle schema doesn't include 'age' (only 'birth_year').
+-- This caused user profile creation to fail with a database error.
+--
+-- Solution: Make 'age' nullable so the INSERT doesn't fail when no value
+-- is provided. SQLite doesn't support ALTER COLUMN, so we recreate the table.
+--
+-- Applied manually via wrangler d1 execute on 2026-01-24
+--
+-- Note: This migration is documented here but was applied directly to fix
+-- the immediate issue. Future migrations should use proper migration tooling.
+--
+-- The table was recreated with:
+-- 1. CREATE TABLE users_new (... age INTEGER ...) -- nullable
+-- 2. INSERT INTO users_new SELECT * FROM users
+-- 3. DROP TABLE users
+-- 4. ALTER TABLE users_new RENAME TO users
+-- 5. Recreate indexes
+--
+-- This is a no-op if run again (the table already exists with correct schema).

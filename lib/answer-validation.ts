@@ -537,7 +537,17 @@ export function isSpelledOut(input: string, correctWord: string): boolean {
  * - Spoken names: "dee" → "d"
  * - Multi-word phrases: "are you in" → "run"
  *
+ * ## User Mappings Priority
+ *
+ * When `userMappings` is provided, user-specific mappings take PRIORITY over
+ * global defaults. This enables personalized phonetic recognition:
+ *
+ * - TIER 1: User mappings (learned from gameplay)
+ * - TIER 2: Global SPOKEN_LETTER_NAMES (works for ~80% of users)
+ * - TIER 3: NATO phonetic alphabet
+ *
  * @param input - Raw voice transcript
+ * @param userMappings - Optional user-specific phonetic mappings (heard → letter)
  * @returns Extracted letters as a string
  *
  * @example
@@ -546,9 +556,16 @@ export function isSpelledOut(input: string, correctWord: string): boolean {
  * extractLettersFromVoice("dee oh gee")      // "dog"
  * extractLettersFromVoice("delta oscar golf") // "dog"
  * extractLettersFromVoice("are you in")      // "run"
+ *
+ * // With user mappings:
+ * const userMappings = new Map([["ah", "a"], ["buh", "b"]])
+ * extractLettersFromVoice("ah buh", userMappings) // "ab"
  * ```
  */
-export function extractLettersFromVoice(input: string): string {
+export function extractLettersFromVoice(
+  input: string,
+  userMappings?: Map<string, string>
+): string {
   let processed = input.toLowerCase().trim()
 
   // First, check for multi-word phrase mappings (longer phrases first)
@@ -577,14 +594,23 @@ export function extractLettersFromVoice(input: string): string {
       if (part.length === 1 && /^[a-z]$/.test(part)) {
         return part
       }
-      // NATO phonetic
-      if (NATO_PHONETIC[part]) {
-        return NATO_PHONETIC[part]
+
+      // TIER 1: User-specific mappings (highest priority)
+      // These are learned from the user's actual speech patterns
+      if (userMappings?.has(part)) {
+        return userMappings.get(part)!
       }
-      // Spoken letter name
+
+      // TIER 2: Global spoken letter names
       if (SPOKEN_LETTER_NAMES[part]) {
         return SPOKEN_LETTER_NAMES[part]
       }
+
+      // TIER 3: NATO phonetic alphabet
+      if (NATO_PHONETIC[part]) {
+        return NATO_PHONETIC[part]
+      }
+
       // Unknown - return as-is (will likely cause mismatch)
       return part
     })
@@ -653,6 +679,12 @@ export interface VoiceValidationOptions {
    * Based on actual audio timestamps, not transcript arrival patterns.
    */
   audioTiming?: AudioTimingData
+  /**
+   * User-specific phonetic mappings learned from gameplay.
+   * Takes priority over global SPOKEN_LETTER_NAMES.
+   * Map format: heard → intended (e.g., "ah" → "a")
+   */
+  userMappings?: Map<string, string>
 }
 
 /**
@@ -702,7 +734,11 @@ export function validateAnswer(
   // For voice mode, extract letters and compare
   if (inputMode === "voice") {
     // Extract letters from voice input (handles phonetic alphabet, etc.)
-    const extractedLetters = extractLettersFromVoice(playerAnswer)
+    // Pass user mappings if available for personalized recognition
+    const extractedLetters = extractLettersFromVoice(
+      playerAnswer,
+      _voiceOptions?.userMappings
+    )
     const lettersMatch = extractedLetters === normalizedCorrect
     const similarity = calculateSimilarity(extractedLetters, normalizedCorrect)
 
@@ -923,6 +959,7 @@ export function analyzeAnswer(
  * - "d o g" → "D-O-G"
  *
  * @param transcript - Raw voice transcript
+ * @param userMappings - Optional user-specific phonetic mappings
  * @returns Formatted letter display (uppercase, hyphen-separated)
  *
  * @example
@@ -933,14 +970,17 @@ export function analyzeAnswer(
  * formatTranscriptForDisplay("")            // ""
  * ```
  */
-export function formatTranscriptForDisplay(transcript: string): string {
+export function formatTranscriptForDisplay(
+  transcript: string,
+  userMappings?: Map<string, string>
+): string {
   // Fast path: empty input
   if (!transcript || transcript.length === 0) {
     return ""
   }
 
-  // Extract letters using optimized function
-  const letters = extractLettersFromVoice(transcript)
+  // Extract letters using optimized function with user mappings
+  const letters = extractLettersFromVoice(transcript, userMappings)
 
   // Fast path: no letters extracted
   if (letters.length === 0) {

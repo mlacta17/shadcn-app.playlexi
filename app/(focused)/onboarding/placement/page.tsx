@@ -14,7 +14,8 @@ import { useGameTimer } from "@/hooks/use-game-timer"
 import { useGameFeedback } from "@/hooks/use-game-feedback"
 import { useGameSounds } from "@/hooks/use-game-sounds"
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition"
-import { formatTranscriptForDisplay } from "@/lib/answer-validation"
+import { usePhoneticLearning } from "@/hooks/use-phonetic-learning"
+import { formatTranscriptForDisplay, extractLettersFromVoice } from "@/lib/answer-validation"
 
 /**
  * Placement Test Page
@@ -58,7 +59,7 @@ export default function PlacementPage() {
   // ---------------------------------------------------------------------------
   // Sound Effects
   // ---------------------------------------------------------------------------
-  const { playCorrect, playWrong } = useGameSounds()
+  const { playCorrect, playWrong, unlock: unlockSounds } = useGameSounds()
 
   // ---------------------------------------------------------------------------
   // Voice Recording
@@ -72,11 +73,22 @@ export default function PlacementPage() {
   } = useSpeechRecognition({ spellingMode: true })
 
   // ---------------------------------------------------------------------------
+  // Phonetic Learning Integration
+  // ---------------------------------------------------------------------------
+  // Logs voice recognition events for the adaptive learning system.
+  // This is fire-and-forget — errors don't affect gameplay.
+  // Also provides userMappings for personalized phonetic recognition.
+  const { logAnswer, triggerLearning, fetchMappings, userMappings } = usePhoneticLearning()
+
+  // ---------------------------------------------------------------------------
   // Answer Submission Logic
   // ---------------------------------------------------------------------------
   const AUTO_SUBMIT_DELAY_MS = 1200
   const autoSubmitTimeoutRef = React.useRef<NodeJS.Timeout | null>(null)
   const hasSubmittedRef = React.useRef(false)
+
+  /** Ref to track the last submitted transcript (for logging) */
+  const lastSubmittedTranscriptRef = React.useRef<string | null>(null)
 
   const submitCurrentAnswer = React.useCallback(async () => {
     if (hasSubmittedRef.current) return
@@ -92,6 +104,11 @@ export default function PlacementPage() {
 
     const metrics = await stopRecording()
 
+    // Store transcript for logging after validation
+    lastSubmittedTranscriptRef.current = transcript
+
+    // Submit answer with timing data for anti-cheat validation
+    // Also pass user-specific phonetic mappings for personalized recognition
     placementActions.submitAnswer(transcript, {
       audioTiming: {
         wordCount: metrics.audioWordCount,
@@ -103,8 +120,9 @@ export default function PlacementPage() {
         looksLikeSpelling: metrics.looksLikeSpelling,
         letterCount: metrics.letterTimings.length,
       },
+      userMappings,
     })
-  }, [transcript, placementState.phase, stopRecording, placementActions])
+  }, [transcript, placementState.phase, stopRecording, placementActions, userMappings])
 
   React.useEffect(() => {
     if (isRecording) {
@@ -145,12 +163,15 @@ export default function PlacementPage() {
   // ---------------------------------------------------------------------------
 
   // Auto-start placement on mount
+  // Also fetch user's phonetic mappings for personalized recognition
   React.useEffect(() => {
     if (!hasStartedRef.current) {
       hasStartedRef.current = true
+      // Fetch user mappings in parallel with placement start
+      fetchMappings()
       placementActions.startPlacement()
     }
-  }, [placementActions])
+  }, [placementActions, fetchMappings])
 
   // Timer refs for stability
   const timerRestartRef = React.useRef(timer.restart)
@@ -197,6 +218,54 @@ export default function PlacementPage() {
     }
   }, [placementState.phase, placementState.lastAnswerCorrect])
 
+  // ---------------------------------------------------------------------------
+  // Phonetic Learning: Log Recognition Event
+  // ---------------------------------------------------------------------------
+  // Tracks the last logged word ID to prevent double-logging
+  const lastLoggedWordIdRef = React.useRef<string | null>(null)
+
+  // Log voice answers for phonetic learning (fire-and-forget)
+  React.useEffect(() => {
+    // Only log during feedback phase
+    if (placementState.phase !== "feedback") return
+    if (placementState.lastAnswerCorrect === null) return
+    if (!placementState.currentWord) return
+
+    // Prevent double-logging
+    if (lastLoggedWordIdRef.current === placementState.currentWord.id) return
+    lastLoggedWordIdRef.current = placementState.currentWord.id
+
+    const rawTranscript = lastSubmittedTranscriptRef.current
+    if (!rawTranscript) return
+
+    // Extract letters to log what we extracted (use userMappings for consistency)
+    const extractedLetters = extractLettersFromVoice(rawTranscript, userMappings)
+
+    // Fire-and-forget logging
+    logAnswer({
+      wordToSpell: placementState.currentWord.word,
+      googleTranscript: rawTranscript,
+      extractedLetters,
+      wasCorrect: placementState.lastAnswerCorrect,
+    })
+  }, [
+    placementState.phase,
+    placementState.lastAnswerCorrect,
+    placementState.currentWord,
+    logAnswer,
+    userMappings,
+  ])
+
+  // ---------------------------------------------------------------------------
+  // Phonetic Learning: Trigger Learning on Placement Complete
+  // ---------------------------------------------------------------------------
+  React.useEffect(() => {
+    if (placementState.phase === "complete") {
+      // Trigger learning analysis (fire-and-forget)
+      triggerLearning()
+    }
+  }, [placementState.phase, triggerLearning])
+
   // Navigate to rank result when placement is complete
   React.useEffect(() => {
     if (placementState.phase === "complete") {
@@ -222,6 +291,8 @@ export default function PlacementPage() {
 
   const handleRecordStart = async () => {
     if (placementState.phase !== "playing") return
+    // Unlock sounds on first user interaction (required by browser autoplay policy)
+    unlockSounds()
     await startRecording()
   }
 
@@ -267,9 +338,11 @@ export default function PlacementPage() {
   // ---------------------------------------------------------------------------
 
   const currentWord = placementState.currentWord
+  // Transform raw transcript to display-friendly letter format
+  // Uses user-specific phonetic mappings for personalized display
   const displayTranscript = React.useMemo(
-    () => formatTranscriptForDisplay(transcript),
-    [transcript]
+    () => formatTranscriptForDisplay(transcript, userMappings),
+    [transcript, userMappings]
   )
 
   // Progress percentage for the timer bar (shows round progress, not time)

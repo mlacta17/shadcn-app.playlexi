@@ -114,6 +114,9 @@ export async function fetchRandomWord(
       params.set("excludeIds", excludeIds.join(","))
     }
 
+    // Debug: Log what we're sending to the API
+    console.log(`[WordFetcher] Fetching tier=${tier}, excluding ${excludeIds.length} words:`, excludeIds)
+
     const response = await fetch(`/api/words/random?${params.toString()}`)
     const data: ApiResponse = await response.json()
 
@@ -123,6 +126,9 @@ export async function fetchRandomWord(
         error: data.error || "Failed to fetch word",
       }
     }
+
+    // Debug: Log the word we received
+    console.log(`[WordFetcher] Received word: "${data.word.word}" (id=${data.word.id})`)
 
     return {
       success: true,

@@ -6,19 +6,25 @@
  * 2. Redirects authenticated users away from /login
  * 3. Routes new users through onboarding flow
  *
+ * ## Onboarding Flow (New Users)
+ *
+ * New users go through this flow:
+ * 1. Tutorial → Placement → Rank Result (PUBLIC - before OAuth)
+ * 2. OAuth Sign Up (creates Better Auth session)
+ * 3. Profile Completion (PROTECTED - after OAuth)
+ * 4. Dashboard
+ *
  * ## Route Groups & Protection
  *
- * The app uses two route groups based on navigation pattern:
- *
- * | Route Group | Nav Pattern | Auth | Examples |
- * |-------------|-------------|------|----------|
- * | (shell) | Full navbar | Yes | /, /leaderboard, /profile |
- * | (focused) | TopNavbar only | Yes | /game/*, /onboarding/* |
- *
- * Public routes (no auth required):
- * - /login — Redirects to / if already logged in
- * - /showcase — Dev/demo page
- * - /api/* — API routes handle their own auth
+ * | Route | Auth Required | Purpose |
+ * |-------|---------------|---------|
+ * | /login | No | Sign in page |
+ * | /onboarding/tutorial | No | Pre-auth onboarding |
+ * | /onboarding/placement | No | Pre-auth onboarding |
+ * | /onboarding/rank-result | No | Pre-auth onboarding (has OAuth buttons) |
+ * | /onboarding/profile | Yes | Post-auth profile completion |
+ * | /game/* | Yes | Gameplay |
+ * | / | Yes | Dashboard |
  *
  * ## Session Detection
  *
@@ -50,14 +56,21 @@ const PUBLIC_ROUTES = [
   "/_next/",
   "/favicon.ico",
   "/showcase",
+  // Pre-auth onboarding (before OAuth)
+  "/onboarding/tutorial",
+  "/onboarding/placement",
+  "/onboarding/rank-result",
 ]
 
 /**
  * Routes that require authentication but are part of onboarding.
  * Users must be logged in but may not have completed profile setup.
+ *
+ * Note: Tutorial, placement, and rank-result are PUBLIC (in PUBLIC_ROUTES above)
+ * because users complete those BEFORE signing in with OAuth.
  */
 const ONBOARDING_ROUTES = [
-  "/onboarding/",
+  "/onboarding/profile",  // Only profile requires auth (post-OAuth)
 ]
 
 /**
@@ -134,8 +147,8 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - public folder files (images, etc.)
+     * - public folder files (images, audio, etc.)
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp3|wav|ogg|m4a)$).*)",
   ],
 }

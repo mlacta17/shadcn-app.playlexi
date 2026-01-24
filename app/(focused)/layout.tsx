@@ -35,8 +35,9 @@
  *
  * ## Authentication
  *
- * All routes in (focused) require authentication.
- * Middleware redirects unauthenticated users to /login.
+ * Most routes in (focused) require authentication, but onboarding
+ * pages before OAuth (tutorial, placement, rank-result) are public.
+ * See middleware.ts for the full routing logic.
  *
  * @see app/(shell)/layout.tsx for full navigation shell
  * @see components/ui/top-navbar.tsx for TopNavbar component

@@ -138,6 +138,12 @@ export interface SubmitAnswerOptions {
     avgGapSec: number
     looksLikeSpelling: boolean
   }
+  /**
+   * User-specific phonetic mappings learned from gameplay.
+   * Takes priority over global SPOKEN_LETTER_NAMES for personalized recognition.
+   * Map format: heard → intended (e.g., "ah" → "a")
+   */
+  userMappings?: Map<string, string>
 }
 
 /**
@@ -310,6 +316,11 @@ export function useGameSession(
   // Track time when word was presented (for time tracking)
   const wordStartTimeRef = React.useRef<number>(0)
 
+  // Track used word IDs in a ref for immediate (synchronous) updates.
+  // This prevents race conditions when loadNextWord is called multiple times
+  // before state updates propagate.
+  const usedWordIdsRef = React.useRef<Set<string>>(new Set())
+
   // ==========================================================================
   // ACTIONS
   // ==========================================================================
@@ -325,19 +336,36 @@ export function useGameSession(
    *
    * @see lib/word-fetcher.ts for the data source abstraction
    */
-  const loadNextWord = React.useCallback(async () => {
-    // First, transition to loading state
-    let currentTier: WordTier = INITIAL_TIER
-    let usedWordIds: string[] = []
-    let inputMethod: InputMethod = "voice"
+  /**
+   * Load the next word and transition to ready phase.
+   *
+   * @param tierOverride - Optional tier to use instead of reading from state.
+   *                       Use this when the tier was just updated in setState
+   *                       but the update hasn't been applied yet due to batching.
+   */
+  const loadNextWord = React.useCallback(async (tierOverride?: WordTier) => {
+    // Capture current values for the async fetch
+    // Use ref for usedWordIds to prevent race conditions when this function
+    // is called multiple times before state updates propagate
+    let currentTier: WordTier = tierOverride ?? INITIAL_TIER
+    let currentInputMethod: InputMethod = "voice"
 
+    // IMPORTANT: setState callback runs synchronously, but we need to capture
+    // the values BEFORE the await, so this pattern works correctly
     setState((prev) => {
-      // Capture current values for the async fetch
-      currentTier = prev.currentTier
-      usedWordIds = prev.usedWordIds
-      inputMethod = prev.inputMethod
+      // Only read tier from state if not overridden
+      if (tierOverride === undefined) {
+        currentTier = prev.currentTier
+      }
+      currentInputMethod = prev.inputMethod
       return { ...prev, phase: "loading" as const }
     })
+
+    // Get used word IDs from the ref (synchronously updated, race-condition safe)
+    const usedWordIds = Array.from(usedWordIdsRef.current)
+
+    // Debug: Log what we're fetching
+    console.log(`[GameSession] loadNextWord - tier=${currentTier}, usedWordIds.length=${usedWordIds.length}`)
 
     // Fetch word asynchronously
     const result = await fetchRandomWord(currentTier, usedWordIds)
@@ -352,7 +380,19 @@ export function useGameSession(
     }
 
     const word = result.word
-    const timerDuration = getTimerDuration(word.tier, inputMethod)
+    const timerDuration = getTimerDuration(word.tier, currentInputMethod)
+
+    // DEFENSIVE CHECK: Warn if we received a duplicate word
+    if (usedWordIdsRef.current.has(word.id)) {
+      console.warn(`[GameSession] ⚠️ DUPLICATE WORD DETECTED: "${word.word}" (id=${word.id}) was already used!`)
+      console.warn(`[GameSession] Current usedWordIds:`, Array.from(usedWordIdsRef.current))
+    }
+
+    // Add word ID to ref IMMEDIATELY (prevents duplicates on concurrent calls)
+    usedWordIdsRef.current.add(word.id)
+
+    // Debug: Log the word we received and current ref state
+    console.log(`[GameSession] Received word: "${word.word}" (id=${word.id}), usedWordIdsRef now has ${usedWordIdsRef.current.size} entries`)
 
     // Update state with the loaded word
     setState((prev) => ({
@@ -369,6 +409,9 @@ export function useGameSession(
    * Start a new game.
    */
   const startGame = React.useCallback(async () => {
+    // Clear used word IDs ref for the new game
+    usedWordIdsRef.current.clear()
+
     setState((prev) => ({
       ...createInitialState(prev.mode, prev.inputMethod),
       phase: "idle",
@@ -439,10 +482,12 @@ export function useGameSession(
 
         // Validate the answer with timing data for anti-cheat
         // Priority: audio timing (more reliable) > letter timing (fallback)
+        // Also pass user-specific phonetic mappings for personalized recognition
         const inputMode: InputMode = prev.inputMethod
         const result = validateAnswer(answer, prev.currentWord.word, inputMode, {
           letterTiming: options?.letterTiming,
           audioTiming: options?.audioTiming,
+          userMappings: options?.userMappings,
         })
         const isCorrect = result.isCorrect
 
@@ -515,6 +560,8 @@ export function useGameSession(
    * Move to the next word after feedback.
    */
   const nextWord = React.useCallback(async () => {
+    let newTierForFetch: WordTier = INITIAL_TIER
+
     setState((prev) => {
       if (prev.phase !== "feedback") return prev
 
@@ -525,8 +572,13 @@ export function useGameSession(
         const correctCount = prev.answers.filter((a) => a.isCorrect).length
         if (correctCount > 0 && correctCount % 3 === 0 && newTier < 7) {
           newTier = (newTier + 1) as WordTier
+          console.log(`[GameSession] Tier increasing from ${prev.currentTier} to ${newTier} (correctCount=${correctCount})`)
         }
       }
+
+      // Capture the new tier for the fetch (due to state batching,
+      // loadNextWord needs this passed explicitly)
+      newTierForFetch = newTier
 
       return {
         ...prev,
@@ -536,14 +588,15 @@ export function useGameSession(
       }
     })
 
-    // Load next word (async)
-    await loadNextWord()
+    // Load next word with the new tier (pass explicitly to avoid state batching issues)
+    await loadNextWord(newTierForFetch)
   }, [loadNextWord])
 
   /**
    * Reset the game.
    */
   const resetGame = React.useCallback(() => {
+    usedWordIdsRef.current.clear()
     setState(createInitialState(mode, inputMethod))
   }, [mode, inputMethod])
 

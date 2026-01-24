@@ -137,18 +137,28 @@ export default function ProfilePage() {
         ? birthYearFromAgeRange(formData.ageRange)
         : null
 
-      // TODO: Call API to create user record
-      // For now, just navigate to dashboard
-      console.log("Creating user with:", {
-        username,
-        birthYear,
-        avatarId: formData.avatarId,
+      // Call API to create PlayLexi user record
+      const response = await fetch("/api/users/complete-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username,
+          birthYear,
+          avatarId: formData.avatarId,
+          // TODO: Include placement data from sessionStorage when placement test is implemented
+        }),
       })
+
+      if (!response.ok) {
+        const data = await response.json() as { error?: string }
+        throw new Error(data.error || "Failed to create profile")
+      }
 
       // Navigate to dashboard after profile completion
       router.push("/")
     } catch (error) {
       console.error("[ProfilePage] Error creating user:", error)
+      // TODO: Show error toast to user
       setIsSubmitting(false)
     }
   }

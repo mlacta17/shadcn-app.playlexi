@@ -148,6 +148,9 @@ export function createD1WordDataSource(db: Database): AsyncWordDataSource {
 
     async getRandomWord(tier: WordTier, excludeIds: string[] = []): Promise<Word | undefined> {
       try {
+        // Debug: Log the query parameters
+        console.log(`[D1] getRandomWord - tier=${tier}, excludeIds.length=${excludeIds.length}`)
+
         // Build query with optional exclusion
         const query = db
           .select()
@@ -164,6 +167,13 @@ export function createD1WordDataSource(db: Database): AsyncWordDataSource {
           .limit(1)
 
         const [row] = await query
+
+        // Debug: Log what we found
+        if (row) {
+          console.log(`[D1] Found word: "${row.word}" (id=${row.id})`)
+        } else {
+          console.log(`[D1] No word found for tier ${tier} with ${excludeIds.length} exclusions`)
+        }
 
         // If no word found (all excluded), try again without exclusions
         if (!row && excludeIds.length > 0) {

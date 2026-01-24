@@ -71,6 +71,11 @@ export interface PlacementSubmitOptions {
     avgGapSec: number
     looksLikeSpelling: boolean
   }
+  /**
+   * User-specific phonetic mappings learned from gameplay.
+   * Takes priority over global SPOKEN_LETTER_NAMES for personalized recognition.
+   */
+  userMappings?: Map<string, string>
 }
 
 /**
@@ -175,22 +180,38 @@ export function usePlacementSession(): UsePlacementSessionReturn {
 
   const wordStartTimeRef = React.useRef<number>(0)
 
+  // Track used word IDs in a ref for immediate (synchronous) updates.
+  // This prevents race conditions when loadNextWord is called multiple times
+  // before state updates propagate.
+  const usedWordIdsRef = React.useRef<Set<string>>(new Set())
+
   // ---------------------------------------------------------------------------
   // ACTIONS
   // ---------------------------------------------------------------------------
 
   /**
    * Load the next word.
+   *
+   * @param tierOverride - Optional tier to use instead of reading from state.
+   *                       Use this when the tier was just updated in setState
+   *                       but the update hasn't been applied yet due to batching.
    */
-  const loadNextWord = React.useCallback(async () => {
-    let currentTier: WordTier = INITIAL_TIER
-    let usedWordIds: string[] = []
+  const loadNextWord = React.useCallback(async (tierOverride?: WordTier) => {
+    let currentTier: WordTier = tierOverride ?? INITIAL_TIER
 
     setState((prev) => {
-      currentTier = prev.currentTier
-      usedWordIds = prev.usedWordIds
+      // Only read tier from state if not overridden
+      if (tierOverride === undefined) {
+        currentTier = prev.currentTier
+      }
       return { ...prev, phase: "loading" as const }
     })
+
+    // Get used word IDs from the ref (synchronously updated, race-condition safe)
+    const usedWordIds = Array.from(usedWordIdsRef.current)
+
+    // Debug: Log what we're fetching
+    console.log(`[PlacementSession] loadNextWord - tier=${currentTier}, usedWordIds.length=${usedWordIds.length}`)
 
     const result = await fetchRandomWord(currentTier, usedWordIds)
 
@@ -206,6 +227,18 @@ export function usePlacementSession(): UsePlacementSessionReturn {
     const word = result.word
     const timerDuration = getTimerDuration(word.tier, "voice")
 
+    // DEFENSIVE CHECK: Warn if we received a duplicate word
+    if (usedWordIdsRef.current.has(word.id)) {
+      console.warn(`[PlacementSession] ⚠️ DUPLICATE WORD DETECTED: "${word.word}" (id=${word.id}) was already used!`)
+      console.warn(`[PlacementSession] Current usedWordIds:`, Array.from(usedWordIdsRef.current))
+    }
+
+    // Add word ID to ref IMMEDIATELY (prevents duplicates on concurrent calls)
+    usedWordIdsRef.current.add(word.id)
+
+    // Debug: Log the word we received
+    console.log(`[PlacementSession] Received word: "${word.word}" (id=${word.id}), usedWordIdsRef now has ${usedWordIdsRef.current.size} entries`)
+
     setState((prev) => ({
       ...prev,
       currentWord: word,
@@ -220,6 +253,9 @@ export function usePlacementSession(): UsePlacementSessionReturn {
    * Start the placement test.
    */
   const startPlacement = React.useCallback(async () => {
+    // Clear used word IDs ref for the new placement test
+    usedWordIdsRef.current.clear()
+
     setState(createInitialState())
     await new Promise((resolve) => setTimeout(resolve, 100))
     await loadNextWord()
@@ -269,6 +305,7 @@ export function usePlacementSession(): UsePlacementSessionReturn {
         const result = validateAnswer(answer, prev.currentWord.word, "voice", {
           letterTiming: options?.letterTiming,
           audioTiming: options?.audioTiming,
+          userMappings: options?.userMappings,
         })
         const isCorrect = result.isCorrect
 
@@ -372,18 +409,22 @@ export function usePlacementSession(): UsePlacementSessionReturn {
    */
   React.useEffect(() => {
     if (state.phase === "feedback") {
+      // Capture the current tier NOW (it was updated in the checking phase)
+      const tierForNextWord = state.currentTier
+
       const timeout = setTimeout(async () => {
         setState((prev) => ({
           ...prev,
           currentWord: null,
           lastAnswerCorrect: null,
         }))
-        await loadNextWord()
+        // Pass the tier explicitly to avoid state batching issues
+        await loadNextWord(tierForNextWord)
       }, FEEDBACK_DURATION + 200)
 
       return () => clearTimeout(timeout)
     }
-  }, [state.phase, loadNextWord])
+  }, [state.phase, state.currentTier, loadNextWord])
 
   /**
    * Store results in sessionStorage when complete.

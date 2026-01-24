@@ -134,6 +134,12 @@ export async function GET(request: NextRequest): Promise<NextResponse<ApiRespons
       )
     }
 
+    // Debug: Log incoming request
+    console.log(`[API] /api/words/random - tier=${tier}, excludeIds count=${excludeIds.length}`)
+    if (excludeIds.length > 0) {
+      console.log(`[API] Excluding IDs:`, excludeIds)
+    }
+
     // Get D1 database binding from Cloudflare context via OpenNext
     // This works in both production AND local development thanks to
     // initOpenNextCloudflareForDev() in next.config.ts
@@ -155,6 +161,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<ApiRespons
         { status: 404 }
       )
     }
+
+    // Debug: Log returned word
+    console.log(`[API] Returning word: "${word.word}" (id=${word.id})`)
 
     return NextResponse.json({
       success: true,

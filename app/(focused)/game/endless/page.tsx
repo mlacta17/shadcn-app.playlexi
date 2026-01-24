@@ -71,7 +71,7 @@ export default function EndlessGamePage() {
   // ---------------------------------------------------------------------------
   // Sound Effects
   // ---------------------------------------------------------------------------
-  const { playCorrect, playWrong } = useGameSounds()
+  const { playCorrect, playWrong, unlock: unlockSounds } = useGameSounds()
 
   // ---------------------------------------------------------------------------
   // Voice Recording
@@ -91,7 +91,8 @@ export default function EndlessGamePage() {
   // ---------------------------------------------------------------------------
   // Logs voice recognition events for the adaptive learning system.
   // This is fire-and-forget — errors don't affect gameplay.
-  const { logAnswer, triggerLearning } = usePhoneticLearning()
+  // Also provides userMappings for personalized phonetic recognition.
+  const { logAnswer, triggerLearning, fetchMappings, userMappings } = usePhoneticLearning()
 
   // ---------------------------------------------------------------------------
   // Answer Submission Logic
@@ -149,6 +150,7 @@ export default function EndlessGamePage() {
 
     // Submit answer with timing data for anti-cheat validation
     // Priority: audio timing (from Google word timestamps) > letter timing (fallback)
+    // Also pass user-specific phonetic mappings for personalized recognition
     gameActions.submitAnswer(transcript, {
       // PRIMARY: Audio-level timing from speech provider (more reliable)
       audioTiming: {
@@ -162,8 +164,10 @@ export default function EndlessGamePage() {
         looksLikeSpelling: metrics.looksLikeSpelling,
         letterCount: metrics.letterTimings.length,
       },
+      // User-specific phonetic mappings for personalized recognition
+      userMappings,
     })
-  }, [transcript, gameState.phase, stopRecording, gameActions])
+  }, [transcript, gameState.phase, stopRecording, gameActions, userMappings])
 
   /**
    * Reset submission state when starting a new recording.
@@ -225,12 +229,15 @@ export default function EndlessGamePage() {
   // ---------------------------------------------------------------------------
 
   // Auto-start game on mount (only once)
+  // Also fetch user's phonetic mappings for personalized recognition
   React.useEffect(() => {
     if (!hasStartedRef.current) {
       hasStartedRef.current = true
+      // Fetch user mappings in parallel with game start
+      fetchMappings()
       gameActions.startGame()
     }
-  }, [gameActions])
+  }, [gameActions, fetchMappings])
 
   // Store timer methods in refs to avoid dependency array issues during HMR
   const timerRestartRef = React.useRef(timer.restart)
@@ -302,8 +309,8 @@ export default function EndlessGamePage() {
     const rawTranscript = lastSubmittedTranscriptRef.current
     if (!rawTranscript) return
 
-    // Extract letters to log what we extracted
-    const extractedLetters = extractLettersFromVoice(rawTranscript)
+    // Extract letters to log what we extracted (use userMappings for consistency)
+    const extractedLetters = extractLettersFromVoice(rawTranscript, userMappings)
 
     // Fire-and-forget logging
     logAnswer({
@@ -318,6 +325,7 @@ export default function EndlessGamePage() {
     gameState.lastAnswerCorrect,
     gameState.currentWord,
     logAnswer,
+    userMappings,
   ])
 
   // ---------------------------------------------------------------------------
@@ -357,6 +365,8 @@ export default function EndlessGamePage() {
 
   const handleRecordStart = async () => {
     if (gameState.phase !== "playing") return
+    // Unlock sounds on first user interaction (required by browser autoplay policy)
+    unlockSounds()
     await startRecording()
   }
 
@@ -424,9 +434,10 @@ export default function EndlessGamePage() {
 
   // Transform raw transcript to display-friendly letter format
   // Shows "R-U-N" instead of "are you in" for better UX
+  // Uses user-specific phonetic mappings for personalized display
   const displayTranscript = React.useMemo(
-    () => formatTranscriptForDisplay(transcript),
-    [transcript]
+    () => formatTranscriptForDisplay(transcript, userMappings),
+    [transcript, userMappings]
   )
 
   // ---------------------------------------------------------------------------

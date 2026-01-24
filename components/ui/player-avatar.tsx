@@ -33,22 +33,21 @@
  * ```
  *
  * ## Priority Order
- * 1. avatarId → Renders PlayLexi character SVG
+ * 1. avatarId → Renders PlayLexi character image
  * 2. avatarUrl → Renders image via AvatarImage
  * 3. fallbackInitials → Renders text fallback
  *
  * @see lib/avatar-utils.ts for avatar configurations
- * @see lib/avatar-icons.tsx for shared SVG components
  * @see components/ui/avatar.tsx for base Avatar component
  * @see components/ui/avatar-selector.tsx for selection mode
+ * @see Figma node 2753:35494 (Avatar states)
  */
 
 "use client"
 
+import Image from "next/image"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import { getAvatarById } from "@/lib/avatar-utils"
-import { AvatarIcon } from "@/lib/avatar-icons"
-import { cn } from "@/lib/utils"
+import { getAvatarById, getAvatarSrc } from "@/lib/avatar-utils"
 
 // =============================================================================
 // PLAYER AVATAR COMPONENT
@@ -71,7 +70,7 @@ export interface PlayerAvatarProps {
  * Display a user's avatar in the PlayLexi system.
  *
  * Combines Shadcn Avatar with PlayLexi's character system.
- * Shows the character SVG on a colored background when avatarId is provided.
+ * Shows the character image when avatarId is provided.
  */
 function PlayerAvatar({
   avatarId,
@@ -83,25 +82,22 @@ function PlayerAvatar({
   // Look up avatar config if ID provided
   const avatarConfig = avatarId ? getAvatarById(avatarId) : undefined
 
-  // If we have a PlayLexi avatar, render it with colored background
+  // Determine pixel size based on variant
+  const pixelSize = size === "sm" ? 32 : size === "lg" ? 48 : 40
+
+  // If we have a PlayLexi avatar, render it with the character image
   if (avatarConfig) {
+    const imageSrc = getAvatarSrc(avatarConfig, "active")
+
     return (
       <Avatar size={size} className={className}>
-        {/* Colored background with character SVG */}
-        <div
-          className="flex size-full items-center justify-center rounded-full"
-          style={{ backgroundColor: avatarConfig.activeBg }}
-        >
-          <AvatarIcon
-            type={avatarConfig.type}
-            className={cn(
-              // Scale SVG to fit within avatar
-              size === "sm" && "size-4",
-              size === "default" && "size-5",
-              size === "lg" && "size-7"
-            )}
-          />
-        </div>
+        <Image
+          src={imageSrc}
+          alt={`${avatarConfig.name} avatar`}
+          width={pixelSize}
+          height={pixelSize}
+          className="size-full object-cover"
+        />
       </Avatar>
     )
   }
