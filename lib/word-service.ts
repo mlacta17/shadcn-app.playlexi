@@ -560,6 +560,63 @@ const TTS_GAIN_MULTIPLIER = 2.0
 /** Cached AudioContext for reuse */
 let audioContext: AudioContext | null = null
 
+// =============================================================================
+// AUDIO MANAGER — Centralized audio state management
+// =============================================================================
+
+/**
+ * Audio Manager tracks currently playing audio and provides stop functionality.
+ * This prevents audio overlap when user presses multiple audio buttons.
+ *
+ * Handles three types of audio playback:
+ * 1. Web Audio API BufferSource (amplified TTS audio)
+ * 2. HTMLAudioElement (fallback for standard audio)
+ * 3. SpeechSynthesis (browser text-to-speech fallback)
+ */
+interface AudioState {
+  /** Currently playing Web Audio API BufferSource */
+  bufferSource: AudioBufferSourceNode | null
+  /** Currently playing HTMLAudioElement */
+  audioElement: HTMLAudioElement | null
+  /** Flag indicating speech synthesis is active */
+  isSpeaking: boolean
+}
+
+const audioState: AudioState = {
+  bufferSource: null,
+  audioElement: null,
+  isSpeaking: false,
+}
+
+/**
+ * Stop any currently playing audio.
+ * Called automatically before starting new audio to prevent overlap.
+ */
+export function stopCurrentAudio(): void {
+  // Stop Web Audio API BufferSource
+  if (audioState.bufferSource) {
+    try {
+      audioState.bufferSource.stop()
+    } catch {
+      // BufferSource may already be stopped, ignore error
+    }
+    audioState.bufferSource = null
+  }
+
+  // Stop HTMLAudioElement
+  if (audioState.audioElement) {
+    audioState.audioElement.pause()
+    audioState.audioElement.currentTime = 0
+    audioState.audioElement = null
+  }
+
+  // Cancel Speech Synthesis
+  if (audioState.isSpeaking && typeof window !== "undefined" && "speechSynthesis" in window) {
+    window.speechSynthesis.cancel()
+    audioState.isSpeaking = false
+  }
+}
+
 /**
  * Get or create the AudioContext.
  * Reuses the same context to avoid creating too many.
@@ -574,11 +631,15 @@ function getAudioContext(): AudioContext {
 /**
  * Play audio with volume amplification using Web Audio API.
  * This allows boosting volume beyond the normal 0-1 range.
+ * Automatically stops any currently playing audio before starting.
  *
  * @param url - The audio URL to play
  * @param gain - Volume multiplier (1.0 = normal, 2.0 = 2x louder)
  */
 async function playAmplifiedAudio(url: string, gain: number): Promise<void> {
+  // Stop any currently playing audio before starting new audio
+  stopCurrentAudio()
+
   const ctx = getAudioContext()
 
   // Resume context if suspended (browsers require user interaction)
@@ -602,9 +663,18 @@ async function playAmplifiedAudio(url: string, gain: number): Promise<void> {
   source.connect(gainNode)
   gainNode.connect(ctx.destination)
 
+  // Track this source for potential stopping
+  audioState.bufferSource = source
+
   // Play and return a promise that resolves when done
   return new Promise((resolve) => {
-    source.onended = () => resolve()
+    source.onended = () => {
+      // Clear the reference when playback ends naturally
+      if (audioState.bufferSource === source) {
+        audioState.bufferSource = null
+      }
+      resolve()
+    }
     source.start(0)
   })
 }
@@ -612,6 +682,7 @@ async function playAmplifiedAudio(url: string, gain: number): Promise<void> {
 /**
  * Helper to play an audio URL with fallback to speech synthesis.
  * Uses Web Audio API with gain amplification for TTS audio.
+ * Automatically stops any currently playing audio before starting.
  *
  * @param audioUrl - Pre-generated audio URL (from R2)
  * @param fallbackText - Text to speak if audio URL is unavailable
@@ -634,8 +705,22 @@ async function playAudioWithFallback(
 
       // Fallback to standard Audio element (no amplification)
       try {
+        // Stop any currently playing audio before starting new audio
+        stopCurrentAudio()
+
         const audio = new Audio(audioUrl)
         audio.volume = 1.0
+
+        // Track this audio element for potential stopping
+        audioState.audioElement = audio
+
+        // Set up cleanup when audio ends
+        audio.onended = () => {
+          if (audioState.audioElement === audio) {
+            audioState.audioElement = null
+          }
+        }
+
         await audio.play()
         return
       } catch (fallbackError) {
@@ -646,8 +731,23 @@ async function playAudioWithFallback(
 
   // Fallback to browser speech synthesis
   if ("speechSynthesis" in window) {
+    // Stop any currently playing audio before starting speech synthesis
+    stopCurrentAudio()
+
     const utterance = new SpeechSynthesisUtterance(fallbackText)
     utterance.rate = rate
+
+    // Track speech synthesis state
+    audioState.isSpeaking = true
+
+    utterance.onend = () => {
+      audioState.isSpeaking = false
+    }
+
+    utterance.onerror = () => {
+      audioState.isSpeaking = false
+    }
+
     window.speechSynthesis.speak(utterance)
   }
 }
