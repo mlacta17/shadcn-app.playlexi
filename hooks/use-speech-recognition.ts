@@ -1,5 +1,55 @@
 "use client"
 
+/**
+ * Speech Recognition Hook — PlayLexi
+ *
+ * Manages voice input with real-time transcription and anti-cheat detection.
+ *
+ * ## File Structure (801 lines)
+ *
+ * | Lines | Section | Purpose |
+ * |-------|---------|---------|
+ * | 1-72 | Types | LetterTiming, AudioWordTiming, Options interfaces |
+ * | 73-142 | More Types | StopRecordingMetrics with anti-cheat fields |
+ * | 143-197 | Return Type | useSpeechRecognitionReturn interface |
+ * | 198-260 | Hook JSDoc | Provider selection, usage examples |
+ * | 261-350 | State Setup | Refs and state variables for tracking |
+ * | 351-550 | Recording Logic | startRecording, audio pipeline setup |
+ * | 551-700 | Anti-Cheat | Letter timing analysis, audio gap detection |
+ * | 701-801 | Cleanup + Return | stopRecording, clearTranscript, exports |
+ *
+ * ## Why One Large File?
+ *
+ * This hook handles complex anti-cheat detection that requires:
+ *
+ * 1. **Timing correlation**: Letter appearance times must match audio timestamps
+ * 2. **Provider abstraction**: Google Cloud vs Web Speech API differences
+ * 3. **Audio pipeline state**: MediaStream, AudioContext, AnalyserNode lifecycle
+ * 4. **Metrics calculation**: Multiple timing signals computed at stop time
+ *
+ * Splitting would require passing timing refs between files, adding complexity
+ * without improving clarity. The anti-cheat logic is best understood in context.
+ *
+ * ## Anti-Cheat Detection
+ *
+ * Two methods to detect if user spelled or said the word:
+ *
+ * 1. **Transcript timing** (less reliable): When letters appear in transcript
+ * 2. **Audio word timing** (more reliable): Google's word-level timestamps
+ *
+ * Spelling "C-A-T": Multiple word segments with ~200ms gaps
+ * Saying "cat": Single continuous word segment, no gaps
+ *
+ * ## Related Files
+ *
+ * - lib/speech-recognition-service.ts — Provider abstraction layer
+ * - lib/providers/google-speech-provider.ts — Google Cloud implementation
+ * - lib/answer-validation.ts — extractLettersFromVoice, validateAnswer
+ * - speech-server/ — WebSocket server for Google Speech streaming
+ *
+ * @see ADR-011 — Speech Recognition Provider Selection
+ */
+
 import * as React from "react"
 import {
   getSpeechProvider,

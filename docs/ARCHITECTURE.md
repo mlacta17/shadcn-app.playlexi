@@ -2734,7 +2734,7 @@ After Phase 2 is working locally, complete these before Phase 3:
 | 2.13 | Page | `/game/[gameId]/page.tsx` — game screen | Not Started |
 | 2.14 | Page | `/game/[gameId]/results/page.tsx` — end screen with stats | Not Started |
 | 2.15 | Logic | Game state machine (ready → playing → round → result → next/end) | Not Started |
-| 2.16 | Logic | XP calculation for solo games (+5 XP per round) | Not Started |
+| 2.16 | Logic | Solo results: personal stats (no XP display per ADR-014) | ✅ Done |
 
 **Exit Criteria:**
 - [ ] Can start an Endless game
@@ -2742,7 +2742,7 @@ After Phase 2 is working locally, complete these before Phase 3:
 - [ ] Timer counts down with visual states
 - [ ] Hearts decrease on wrong answers
 - [ ] Game ends when hearts = 0
-- [ ] Results screen shows rounds completed and XP earned
+- [ ] Results screen shows rounds completed, accuracy, personal best status (no XP per ADR-014)
 
 ---
 

@@ -49,6 +49,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getCloudflareContext } from "@opennextjs/cloudflare"
 import { validateUsernameFormat, sanitizeUsername } from "@/lib/username-utils"
 import { isUsernameAvailable } from "@/lib/services/user-service"
+import { handleApiError, Errors, type ApiErrorResponse } from "@/lib/api"
 
 // =============================================================================
 // CLOUDFLARE ENV AUGMENTATION
@@ -87,7 +88,7 @@ interface ErrorResponse {
   error: string
 }
 
-type ApiResponse = AvailableResponse | TakenResponse | InvalidResponse | ErrorResponse
+type ApiResponse = AvailableResponse | TakenResponse | InvalidResponse | ApiErrorResponse
 
 // =============================================================================
 // ROUTE HANDLER
@@ -106,13 +107,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<ApiRespons
 
     // Validate presence
     if (!rawUsername) {
-      return NextResponse.json(
-        {
-          available: false,
-          error: "Missing 'username' query parameter",
-        },
-        { status: 400 }
-      )
+      throw Errors.invalidInput("username", "Missing query parameter")
     }
 
     // Sanitize input
@@ -151,20 +146,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<ApiRespons
       })
     }
   } catch (error) {
-    // Log error with full context for debugging
-    console.error("[CheckUsername] Error:", {
-      name: error instanceof Error ? error.name : "Unknown",
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    })
-
-    // Return generic error
-    return NextResponse.json(
-      {
-        available: false,
-        error: "Internal server error. Please try again.",
-      },
-      { status: 500 }
-    )
+    return handleApiError(error, "[CheckUsername]")
   }
 }

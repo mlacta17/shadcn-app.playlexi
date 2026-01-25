@@ -5,51 +5,19 @@ import { Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 
 import { TopNavbar } from "@/components/ui/top-navbar"
-import { Progress } from "@/components/ui/progress"
 import { SearchInput } from "@/components/ui/search-input"
 import { Button } from "@/components/ui/button"
+import { PlayerAvatar } from "@/components/ui/player-avatar"
 import {
   LeaderboardTable,
   type LeaderboardPlayer,
 } from "@/components/game/leaderboard-table"
-import { RankBadge, type RankTier, RANK_LABELS } from "@/components/game/rank-badge"
-import type { RankTrack, GameMode, InputMethod } from "@/db/schema"
-import { XP_THRESHOLDS, TIER_ORDER, getTierProgress } from "@/lib/game-constants"
+import { usePlayLexiUser } from "@/hooks/use-playlexi-user"
+import type { GameMode, InputMethod } from "@/db/schema"
 
 // =============================================================================
 // TYPES
 // =============================================================================
-
-/**
- * League/rank information for the header section.
- */
-interface LeagueInfo {
-  /** Current rank tier */
-  rank: RankTier
-  /** XP earned within current tier (not total XP) */
-  xpInTier: number
-  /** XP required to reach next tier (from current tier threshold) */
-  xpForNextTier: number
-  /** Progress percentage (0-100) */
-  progress: number
-}
-
-/**
- * User rank data from API.
- */
-interface UserRank {
-  track: string
-  tier: string
-  xp: number
-}
-
-/**
- * User API response type.
- */
-interface UserMeResponse {
-  username?: string
-  ranks?: UserRank[]
-}
 
 /**
  * Game history entry from API.
@@ -62,6 +30,7 @@ interface GameHistoryEntry {
   wrongAnswers: number
   accuracy: number
   xpEarned: number
+  longestStreak: number
 }
 
 /**
@@ -74,6 +43,7 @@ interface GameStats {
   totalXp: number
   averageAccuracy: number
   bestRound: number
+  bestStreak: number
 }
 
 /**
@@ -84,44 +54,18 @@ interface GameHistoryResponse {
   stats: GameStats
 }
 
+/**
+ * Current game stats passed via URL params (from the game session).
+ */
+interface CurrentGameStats {
+  roundsCompleted: number
+  accuracy: number
+  longestStreak: number
+}
+
 // =============================================================================
 // HELPERS
 // =============================================================================
-
-/**
- * Get XP progress within the current tier.
- *
- * Uses the centralized getTierProgress() from game-constants.ts.
- *
- * @param totalXp - Player's total accumulated XP
- * @returns Object with xpInTier (earned within tier) and xpForNextTier (needed for promotion)
- */
-function getXpProgressForDisplay(totalXp: number): { xpInTier: number; xpForNextTier: number; progress: number } {
-  const { tier, progress, xpToNext } = getTierProgress(totalXp)
-  const tierIndex = TIER_ORDER.indexOf(tier)
-
-  // Calculate XP needed for next tier (gap between thresholds)
-  let xpForNextTier = 100 // Default for max tier
-  if (tierIndex >= 0 && tierIndex < TIER_ORDER.length - 1) {
-    const currentThreshold = XP_THRESHOLDS[tier]
-    const nextTier = TIER_ORDER[tierIndex + 1]
-    const nextThreshold = XP_THRESHOLDS[nextTier]
-    xpForNextTier = nextThreshold - currentThreshold
-  }
-
-  // XP earned within current tier
-  const currentThreshold = XP_THRESHOLDS[tier] || 0
-  const xpInTier = totalXp - currentThreshold
-
-  return { xpInTier, xpForNextTier, progress }
-}
-
-/**
- * Convert tier name to RankTier type (with hyphen format).
- */
-function tierToRankTier(tier: string): RankTier {
-  return tier.replace(/_/g, "-") as RankTier
-}
 
 /**
  * Format a date string for display.
@@ -144,19 +88,59 @@ function formatGameDate(dateStr: string): string {
 
 /**
  * Convert game history entries to leaderboard display format.
+ *
+ * For solo play, each row represents a past game session.
+ * We use the current user's avatarId for all entries since
+ * this is personal game history (not other players).
+ *
+ * @param games - Game history entries from API
+ * @param userAvatarId - Current user's avatar ID for consistency
  */
 function historyToLeaderboard(
   games: GameHistoryEntry[],
-  username: string
+  userAvatarId?: number
 ): LeaderboardPlayer[] {
-  return games.map((game, index) => ({
+  return games.map((game) => ({
     id: game.id,
-    name: username || "You",
-    description: formatGameDate(game.playedAt),
+    name: formatGameDate(game.playedAt),
+    description: `${game.longestStreak} streak`,
+    avatarId: userAvatarId, // Use current user's avatar for all entries
     round: game.roundsCompleted,
     accuracy: game.accuracy,
-    points: game.xpEarned,
+    points: game.roundsCompleted, // Use rounds as the "score" metric
   }))
+}
+
+/**
+ * Determine if current game is a personal best.
+ */
+function getPersonalBestStatus(
+  currentRound: number,
+  bestRound: number,
+  currentStreak: number,
+  bestStreak: number,
+  historyLength: number
+): { type: "new-round-best" | "new-streak-best" | "top-3" | null; message: string } {
+  if (historyLength === 0) {
+    return { type: "new-round-best", message: "First Game Complete!" }
+  }
+
+  // Check for new round record
+  if (currentRound > bestRound) {
+    return { type: "new-round-best", message: "New Personal Best!" }
+  }
+
+  // Check for new streak record
+  if (currentStreak > bestStreak) {
+    return { type: "new-streak-best", message: "New Best Streak!" }
+  }
+
+  // Check if in top 3 range
+  if (currentRound >= bestRound - 2) {
+    return { type: "top-3", message: "Great Game!" }
+  }
+
+  return { type: null, message: "" }
 }
 
 // =============================================================================
@@ -171,19 +155,20 @@ function GameResultContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
+  // Get current user's avatar for consistent display
+  const { user: playLexiUser } = usePlayLexiUser()
+
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
 
   const [searchQuery, setSearchQuery] = React.useState("")
-  const [leagueInfo, setLeagueInfo] = React.useState<LeagueInfo | null>(null)
   const [gameHistory, setGameHistory] = React.useState<LeaderboardPlayer[]>([])
   const [stats, setStats] = React.useState<GameStats | null>(null)
-  const [username, setUsername] = React.useState<string>("")
   const [isLoading, setIsLoading] = React.useState(true)
 
   // ---------------------------------------------------------------------------
-  // Derived Data
+  // Derived Data from URL Params
   // ---------------------------------------------------------------------------
 
   // Get game mode from URL params (default: endless)
@@ -192,8 +177,12 @@ function GameResultContent() {
   // Get input method from URL params (default: voice)
   const inputMethod = (searchParams.get("input") as InputMethod) || "voice"
 
-  // Build track name for looking up user rank
-  const track: RankTrack = `${mode}_${inputMethod}` as RankTrack
+  // Get current game stats from URL params (passed from game session)
+  const currentGame: CurrentGameStats = {
+    roundsCompleted: parseInt(searchParams.get("rounds") || "0", 10),
+    accuracy: parseInt(searchParams.get("accuracy") || "0", 10),
+    longestStreak: parseInt(searchParams.get("streak") || "0", 10),
+  }
 
   // ---------------------------------------------------------------------------
   // Fetch Data
@@ -202,48 +191,15 @@ function GameResultContent() {
   React.useEffect(() => {
     async function fetchData() {
       try {
-        // Fetch user data and game history in parallel
-        const [userResponse, historyResponse] = await Promise.all([
-          fetch("/api/users/me"),
-          fetch(`/api/games/history?mode=${mode}&inputMethod=${inputMethod}`),
-        ])
+        // Fetch game history
+        const historyResponse = await fetch(
+          `/api/games/history?mode=${mode}&inputMethod=${inputMethod}`
+        )
 
-        // Process user data
-        if (userResponse.ok) {
-          const userData = (await userResponse.json()) as UserMeResponse
-          setUsername(userData.username || "")
-
-          const trackRank = userData.ranks?.find((r) => r.track === track)
-          if (trackRank) {
-            const { xpInTier, xpForNextTier, progress } = getXpProgressForDisplay(trackRank.xp)
-            setLeagueInfo({
-              rank: tierToRankTier(trackRank.tier),
-              xpInTier,
-              xpForNextTier,
-              progress,
-            })
-          } else {
-            setLeagueInfo({
-              rank: "new-bee",
-              xpInTier: 0,
-              xpForNextTier: 100,
-              progress: 0,
-            })
-          }
-        } else {
-          // User not logged in - use defaults
-          setLeagueInfo({
-            rank: "new-bee",
-            xpInTier: 0,
-            xpForNextTier: 100,
-            progress: 0,
-          })
-        }
-
-        // Process game history
         if (historyResponse.ok) {
           const historyData = (await historyResponse.json()) as GameHistoryResponse
-          setGameHistory(historyToLeaderboard(historyData.games, username))
+          // Pass user's avatarId for consistent avatar display
+          setGameHistory(historyToLeaderboard(historyData.games, playLexiUser?.avatarId))
           setStats(historyData.stats)
         } else {
           // No history available (not logged in or no games)
@@ -252,20 +208,15 @@ function GameResultContent() {
         }
       } catch (err) {
         console.error("[GameResult] Error fetching data:", err)
-        setLeagueInfo({
-          rank: "new-bee",
-          xpInTier: 0,
-          xpForNextTier: 100,
-          progress: 0,
-        })
         setGameHistory([])
+        setStats(null)
       } finally {
         setIsLoading(false)
       }
     }
 
     fetchData()
-  }, [mode, inputMethod, track, username])
+  }, [mode, inputMethod, playLexiUser?.avatarId])
 
   // Filter history based on search query
   const filteredHistory = React.useMemo(() => {
@@ -278,6 +229,18 @@ function GameResultContent() {
         entry.description?.toLowerCase().includes(query)
     )
   }, [searchQuery, gameHistory])
+
+  // Determine personal best status
+  const personalBestStatus = React.useMemo(() => {
+    if (!stats) return { type: null, message: "" }
+    return getPersonalBestStatus(
+      currentGame.roundsCompleted,
+      stats.bestRound,
+      currentGame.longestStreak,
+      stats.bestStreak,
+      stats.totalGames
+    )
+  }, [currentGame.roundsCompleted, currentGame.longestStreak, stats])
 
   // ---------------------------------------------------------------------------
   // Event Handlers
@@ -296,7 +259,7 @@ function GameResultContent() {
   // ---------------------------------------------------------------------------
 
   // Show loading state while fetching data
-  if (isLoading || !leagueInfo) {
+  if (isLoading) {
     return (
       <div className="bg-background flex min-h-screen items-center justify-center">
         <div className="text-muted-foreground">Loading your results...</div>
@@ -304,8 +267,8 @@ function GameResultContent() {
     )
   }
 
-  // Get display name for the league (using rank label)
-  const leagueName = `${RANK_LABELS[leagueInfo.rank]} League`
+  // Format mode name for display
+  const modeName = mode.charAt(0).toUpperCase() + mode.slice(1)
 
   return (
     <div
@@ -315,76 +278,139 @@ function GameResultContent() {
       {/* Top Navigation */}
       <TopNavbar
         onClose={handleClose}
-        centerContent={`Game mode: ${mode.charAt(0).toUpperCase() + mode.slice(1)}`}
+        centerContent={`${modeName} Mode`}
         hideSkip
       />
 
       {/* Main Content */}
       <main className="flex flex-1 flex-col items-center px-4 py-6 sm:px-6">
         <div className="flex w-full max-w-3xl flex-col gap-6">
-          {/* League Header Section */}
+          {/* Current Game Stats Section */}
           <section
-            data-slot="league-header"
+            data-slot="current-game-stats"
             className="flex flex-col items-center gap-4 text-center"
           >
-            {/* Rank Badge */}
-            <RankBadge rank={leagueInfo.rank} size="xl" />
-
-            {/* League Title */}
-            <h1 className="text-2xl font-bold text-foreground">{leagueName}</h1>
-
-            {/* Rank Progress */}
-            <div className="flex w-full max-w-sm flex-col gap-2">
-              <Progress value={leagueInfo.progress} />
-              <div className="flex justify-between text-sm text-muted-foreground">
-                <span>XP PROGRESS</span>
-                <span>
-                  {leagueInfo.xpInTier}/{leagueInfo.xpForNextTier} XP
-                </span>
-              </div>
-            </div>
-
-            {/* Stats Summary */}
-            {stats && stats.totalGames > 0 && (
-              <div className="flex gap-6 text-sm text-muted-foreground">
-                <div className="flex flex-col items-center">
-                  <span className="text-lg font-bold text-foreground">{stats.totalGames}</span>
-                  <span>Games</span>
-                </div>
-                <div className="flex flex-col items-center">
-                  <span className="text-lg font-bold text-foreground">{stats.bestRound}</span>
-                  <span>Best Round</span>
-                </div>
-                <div className="flex flex-col items-center">
-                  <span className="text-lg font-bold text-foreground">{stats.averageAccuracy}%</span>
-                  <span>Avg Accuracy</span>
-                </div>
+            {/* Personal Best Badge */}
+            {personalBestStatus.type === "new-round-best" && (
+              <div className="rounded-full bg-yellow-500/10 px-4 py-1 text-sm font-medium text-yellow-600 dark:text-yellow-400">
+                {personalBestStatus.message}
               </div>
             )}
+            {personalBestStatus.type === "new-streak-best" && (
+              <div className="rounded-full bg-orange-500/10 px-4 py-1 text-sm font-medium text-orange-600 dark:text-orange-400">
+                {personalBestStatus.message}
+              </div>
+            )}
+            {personalBestStatus.type === "top-3" && (
+              <div className="rounded-full bg-blue-500/10 px-4 py-1 text-sm font-medium text-blue-600 dark:text-blue-400">
+                {personalBestStatus.message}
+              </div>
+            )}
+
+            {/* Player Avatar - Consistent with navbar */}
+            {playLexiUser?.avatarId && (
+              <PlayerAvatar
+                avatarId={playLexiUser.avatarId}
+                size="lg"
+                className="size-20"
+              />
+            )}
+
+            {/* Main Stat: Rounds Completed */}
+            <div className="flex flex-col items-center">
+              <span className="text-6xl font-bold text-foreground">
+                {currentGame.roundsCompleted}
+              </span>
+              <span className="text-lg text-muted-foreground">
+                {currentGame.roundsCompleted === 1 ? "Round" : "Rounds"} Completed
+              </span>
+            </div>
+
+            {/* Secondary Stats: Accuracy, Best Round, Streak */}
+            <div className="flex gap-6 text-sm sm:gap-8">
+              <div className="flex flex-col items-center">
+                <span className="text-2xl font-bold text-foreground">
+                  {currentGame.accuracy}%
+                </span>
+                <span className="text-muted-foreground">Accuracy</span>
+              </div>
+              <div className="flex flex-col items-center">
+                <span className="text-2xl font-bold text-foreground">
+                  {stats?.bestRound ?? currentGame.roundsCompleted}
+                </span>
+                <span className="text-muted-foreground">Best</span>
+              </div>
+              <div className="flex flex-col items-center">
+                <span className="text-2xl font-bold text-foreground">
+                  {currentGame.longestStreak}
+                </span>
+                <span className="text-muted-foreground">Streak</span>
+              </div>
+            </div>
           </section>
+
+          {/* Lifetime Progress (if available) */}
+          {stats && stats.totalGames > 0 && (
+            <section
+              data-slot="lifetime-stats"
+              className="rounded-lg border border-border bg-card p-4"
+            >
+              <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+                YOUR PROGRESS
+              </h2>
+              <div className="grid grid-cols-2 gap-4 text-center sm:grid-cols-4">
+                <div>
+                  <span className="block text-xl font-bold text-foreground">
+                    {stats.bestStreak}
+                  </span>
+                  <span className="text-xs text-muted-foreground">Best Streak</span>
+                </div>
+                <div>
+                  <span className="block text-xl font-bold text-foreground">
+                    {stats.averageAccuracy}%
+                  </span>
+                  <span className="text-xs text-muted-foreground">Avg Accuracy</span>
+                </div>
+                <div>
+                  <span className="block text-xl font-bold text-foreground">
+                    {stats.totalGames}
+                  </span>
+                  <span className="text-xs text-muted-foreground">Games Played</span>
+                </div>
+                <div>
+                  <span className="block text-xl font-bold text-foreground">
+                    {stats.totalCorrect}
+                  </span>
+                  <span className="text-xs text-muted-foreground">Words Spelled</span>
+                </div>
+              </div>
+            </section>
+          )}
 
           {/* Game History Section */}
           {gameHistory.length > 0 ? (
-            <>
+            <section data-slot="game-history">
               {/* Section Title */}
-              <h2 className="text-lg font-semibold text-foreground">Your Game History</h2>
+              <h2 className="mb-3 text-lg font-semibold text-foreground">
+                Your Game History
+              </h2>
 
               {/* Search Input */}
               <SearchInput
                 placeholder="Search games"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                containerClassName="max-w-sm"
+                containerClassName="max-w-sm mb-4"
               />
 
               {/* History Table */}
               <LeaderboardTable data={filteredHistory} pageSize={7} />
-            </>
+            </section>
           ) : (
             /* Empty State */
             <div className="flex flex-col items-center gap-4 py-8 text-center">
               <p className="text-muted-foreground">
-                No game history yet. Play a game to see your results here!
+                This was your first game! Keep playing to build your history.
               </p>
             </div>
           )}
@@ -404,21 +430,36 @@ function GameResultContent() {
 /**
  * Solo Game Result Screen
  *
- * Displays the player's game results and game history.
- * Shows their current league/rank, rank progress, stats summary,
- * and a history of their past games for this track.
+ * Displays the player's personal performance stats for solo games.
+ * Focused on self-improvement with key metrics that matter to players.
  *
- * ## Data Flow
- * - Fetches user rank from `/api/users/me`
- * - Fetches game history from `/api/games/history`
- * - Displays real game data, not mock data
+ * ## Design Philosophy
  *
- * ## URL Parameters
+ * Solo mode is practice mode focused on self-improvement. The stats shown
+ * are carefully chosen to provide actionable feedback:
+ *
+ * - **Rounds Completed**: Primary score metric (how far you got)
+ * - **Accuracy**: Precision metric (how consistent you are)
+ * - **Streak**: Momentum metric (consecutive correct answers)
+ * - **Best Round/Streak**: Personal bests to beat
+ *
+ * ## Avatar Consistency
+ *
+ * The player's selected avatar (from onboarding) is shown:
+ * - At the top of the results (hero section)
+ * - In every row of game history (using same avatarId)
+ *
+ * This creates visual consistency with the navbar and profile.
+ *
+ * ## URL Parameters (Input)
  * - `mode`: "endless" or "blitz" (default: "endless")
  * - `input`: "voice" or "keyboard" (default: "voice")
+ * - `rounds`: rounds completed in current game
+ * - `accuracy`: accuracy percentage
+ * - `streak`: longest streak in current game
  *
- * @see lib/services/game-service.ts for database operations
- * @see PRD Section 5.5.4 — Elimination Flow
+ * @see hooks/use-game-session.ts for game state management
+ * @see lib/services/game-service.ts for history/stats API
  */
 export default function GameResultPage() {
   return (

@@ -396,8 +396,22 @@ export default function EndlessGamePage() {
     // Navigate to results after a brief delay
     // Store in ref so subsequent effect runs don't clear it
     navigationTimeoutRef.current = setTimeout(() => {
-      // Pass mode and input method so results page can fetch correct history
-      router.push("/game/result?mode=endless&input=voice")
+      // Get current computed values from ref
+      const currentComputed = computedRef.current
+      const currentState = gameStateRef.current
+
+      // Build URL params with all game stats
+      const params = new URLSearchParams({
+        mode: "endless",
+        input: "voice",
+        rounds: String(currentState.currentRound),
+        accuracy: String(currentComputed.accuracy),
+        correct: String(currentComputed.correctCount),
+        wrong: String(currentComputed.wrongCount),
+        streak: String(currentComputed.longestStreak),
+      })
+
+      router.push(`/game/result?${params.toString()}`)
     }, 800)
 
     // Don't return cleanup - we WANT the navigation to complete

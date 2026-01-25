@@ -43,6 +43,7 @@ import {
   validateRecognitionEvent,
   createLogRecord,
 } from "@/lib/phonetic-learning"
+import { handleApiError, Errors, type ApiErrorResponse } from "@/lib/api"
 
 // =============================================================================
 // TYPE DEFINITIONS
@@ -58,7 +59,7 @@ interface ErrorResponse {
   error: string
 }
 
-type ApiResponse = SuccessResponse | ErrorResponse
+type ApiResponse = SuccessResponse | ApiErrorResponse
 
 // =============================================================================
 // ROUTE HANDLER
@@ -79,13 +80,7 @@ export async function POST(
     // Validate the event
     const validation = validateRecognitionEvent(body)
     if (!validation.isValid) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: validation.error || "Invalid event data",
-        },
-        { status: 400 }
-      )
+      throw Errors.validation(validation.error || "Invalid event data")
     }
 
     // Create log record (body is validated above)
@@ -104,7 +99,7 @@ export async function POST(
     const insertedId = result[0]?.id
 
     if (!insertedId) {
-      throw new Error("Failed to insert log record")
+      throw Errors.database("insert", { table: "recognitionLogs" })
     }
 
     return NextResponse.json(
@@ -115,20 +110,6 @@ export async function POST(
       { status: 201 }
     )
   } catch (error) {
-    // Log error with full context for debugging
-    console.error("[LogRecognitionEvent] Error:", {
-      name: error instanceof Error ? error.name : "Unknown",
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    })
-
-    // Return generic error (don't expose internal details)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to log recognition event",
-      },
-      { status: 500 }
-    )
+    return handleApiError(error, "[LogRecognitionEvent]")
   }
 }

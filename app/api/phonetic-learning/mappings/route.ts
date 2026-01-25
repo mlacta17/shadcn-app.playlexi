@@ -27,6 +27,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getCloudflareContext } from "@opennextjs/cloudflare"
 import { createDb, userPhoneticMappings, eq, sql } from "@/db"
 import type { PhoneticMapping } from "@/lib/phonetic-learning"
+import { handleApiError, Errors, type ApiErrorResponse } from "@/lib/api"
 
 // =============================================================================
 // TYPE DEFINITIONS
@@ -59,20 +60,14 @@ interface ErrorResponse {
  */
 export async function GET(
   request: NextRequest
-): Promise<NextResponse<GetSuccessResponse | ErrorResponse>> {
+): Promise<NextResponse<GetSuccessResponse | ApiErrorResponse>> {
   try {
     // Parse query parameters
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get("userId")
 
     if (!userId) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "userId parameter is required",
-        },
-        { status: 400 }
-      )
+      throw Errors.invalidInput("userId", "Query parameter is required")
     }
 
     // Get D1 database binding
@@ -101,20 +96,7 @@ export async function GET(
       mappings,
     })
   } catch (error) {
-    // Log error with full context for debugging
-    console.error("[GetPhoneticMappings] Error:", {
-      name: error instanceof Error ? error.name : "Unknown",
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    })
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to fetch phonetic mappings",
-      },
-      { status: 500 }
-    )
+    return handleApiError(error, "[GetPhoneticMappings]")
   }
 }
 
@@ -141,7 +123,7 @@ export async function GET(
  */
 export async function POST(
   request: NextRequest
-): Promise<NextResponse<PostSuccessResponse | ErrorResponse>> {
+): Promise<NextResponse<PostSuccessResponse | ApiErrorResponse>> {
   try {
     const body = (await request.json()) as {
       userId?: string
@@ -154,32 +136,20 @@ export async function POST(
 
     // Validate required fields
     if (!body.userId || typeof body.userId !== "string") {
-      return NextResponse.json(
-        { success: false, error: "userId is required" },
-        { status: 400 }
-      )
+      throw Errors.invalidInput("userId", "Required field missing or invalid type")
     }
 
     if (!body.heard || typeof body.heard !== "string") {
-      return NextResponse.json(
-        { success: false, error: "heard is required" },
-        { status: 400 }
-      )
+      throw Errors.invalidInput("heard", "Required field missing or invalid type")
     }
 
     if (!body.intended || typeof body.intended !== "string") {
-      return NextResponse.json(
-        { success: false, error: "intended is required" },
-        { status: 400 }
-      )
+      throw Errors.invalidInput("intended", "Required field missing or invalid type")
     }
 
     // Validate intended is a reasonable length (1-2 characters for letters)
     if (body.intended.length > 2) {
-      return NextResponse.json(
-        { success: false, error: "intended must be 1-2 characters" },
-        { status: 400 }
-      )
+      throw Errors.invalidInput("intended", "Must be 1-2 characters", "1-2 chars", body.intended)
     }
 
     // Get D1 database binding
@@ -224,7 +194,7 @@ export async function POST(
     const insertedId = result[0]?.id
 
     if (!insertedId) {
-      throw new Error("Failed to insert mapping")
+      throw Errors.database("insert", { table: "userPhoneticMappings" })
     }
 
     return NextResponse.json(
@@ -236,19 +206,6 @@ export async function POST(
       { status: 201 }
     )
   } catch (error) {
-    // Log error with full context for debugging
-    console.error("[CreatePhoneticMapping] Error:", {
-      name: error instanceof Error ? error.name : "Unknown",
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    })
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to create phonetic mapping",
-      },
-      { status: 500 }
-    )
+    return handleApiError(error, "[CreatePhoneticMapping]")
   }
 }

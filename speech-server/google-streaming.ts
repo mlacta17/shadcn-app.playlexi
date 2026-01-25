@@ -35,7 +35,26 @@ import type {
  * Speech context for letter recognition.
  * Boosts recognition of individual letters and their phonetic names.
  *
+ * ## Relationship to lib/speech-utils.ts
+ *
+ * The base letter and phonetic phrases are duplicated from lib/speech-utils.ts.
+ * This file is kept separate because:
+ *
+ * 1. **Separate deployment**: The speech-server deploys independently to
+ *    Railway/Cloud Run with its own package.json and node_modules.
+ *
+ * 2. **Extended phrases**: This file includes additional disambiguation
+ *    phrases (like "B as in boy") that the client-side code doesn't need.
+ *
+ * 3. **No build-time sharing**: Adding npm workspaces or build scripts to
+ *    share code would add complexity without proportional benefit.
+ *
+ * **If you modify the base 26 letters or phonetic names, update both:**
+ * - lib/speech-utils.ts (LETTER_PHRASES, PHONETIC_LETTER_NAMES)
+ * - speech-server/google-streaming.ts (SPEECH_CONTEXT.phrases)
+ *
  * ## Confusable Letter Groups
+ *
  * These letters are acoustically similar and often confused by speech recognition:
  * - B/D/P/V: Plosive consonants with similar mouth positions
  * - M/N: Nasal consonants

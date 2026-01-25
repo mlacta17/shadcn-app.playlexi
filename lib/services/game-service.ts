@@ -38,6 +38,49 @@ import { updateSkillRating } from "./glicko2-service"
 import { getTierForXP } from "@/lib/game-constants"
 
 // =============================================================================
+// HELPERS
+// =============================================================================
+
+/**
+ * Calculate the longest streak of consecutive correct answers.
+ *
+ * Iterates through rounds in order and tracks the longest run of
+ * consecutive correct answers. This is calculated server-side to
+ * prevent client manipulation.
+ *
+ * @param rounds - Array of round results (must be sorted by roundNumber)
+ * @returns The longest streak of consecutive correct answers
+ *
+ * @example
+ * ```typescript
+ * const rounds = [
+ *   { isCorrect: true },   // streak: 1
+ *   { isCorrect: true },   // streak: 2
+ *   { isCorrect: false },  // streak reset
+ *   { isCorrect: true },   // streak: 1
+ *   { isCorrect: true },   // streak: 2
+ *   { isCorrect: true },   // streak: 3 (new longest)
+ * ]
+ * calculateLongestStreak(rounds) // returns 3
+ * ```
+ */
+function calculateLongestStreak(rounds: { isCorrect: boolean }[]): number {
+  let longestStreak = 0
+  let currentStreak = 0
+
+  for (const round of rounds) {
+    if (round.isCorrect) {
+      currentStreak++
+      longestStreak = Math.max(longestStreak, currentStreak)
+    } else {
+      currentStreak = 0
+    }
+  }
+
+  return longestStreak
+}
+
+// =============================================================================
 // TYPES
 // =============================================================================
 
@@ -113,6 +156,8 @@ export interface GameHistoryEntry {
   accuracy: number
   /** XP earned */
   xpEarned: number
+  /** Longest streak of consecutive correct answers in this game */
+  longestStreak: number
 }
 
 /**
@@ -237,6 +282,11 @@ export async function finalizeGame(
   const wrongAnswers = input.rounds.filter((r) => !r.isCorrect).length
   const roundsCompleted = input.rounds.length
 
+  // Calculate longest streak (consecutive correct answers)
+  // Rounds must be sorted by roundNumber for accurate calculation
+  const sortedRounds = [...input.rounds].sort((a, b) => a.roundNumber - b.roundNumber)
+  const longestStreak = calculateLongestStreak(sortedRounds)
+
   // Step 1: Insert rounds in chunks to avoid SQLite parameter limits
   // D1/SQLite has a limit on bound parameters (~100). With 10 columns per row,
   // we can safely insert ~10 rows per batch. Using 5 to be conservative.
@@ -273,7 +323,7 @@ export async function finalizeGame(
     }
   }
 
-  // Step 2: Update game player stats
+  // Step 2: Update game player stats (including streak)
   try {
     await db
       .update(schema.gamePlayers)
@@ -281,6 +331,7 @@ export async function finalizeGame(
         roundsCompleted,
         correctAnswers,
         wrongAnswers,
+        longestStreak,
         xpEarned: input.xpEarned,
         hearts: input.heartsRemaining,
         isEliminated: input.heartsRemaining === 0,
@@ -327,51 +378,54 @@ export async function finalizeGame(
   if (game) {
     const track = `${game.mode}_${game.inputMethod}` as RankTrack
 
-    // Award XP and update tier if threshold crossed
-    if (input.xpEarned > 0) {
-      try {
-        // Get current rank
-        const currentRank = await db.query.userRanks.findFirst({
-          where: and(
-            eq(schema.userRanks.userId, input.userId),
-            eq(schema.userRanks.track, track)
-          ),
-        })
+    // Step 5: Update user_ranks with XP and best streak
+    try {
+      // Get current rank
+      const currentRank = await db.query.userRanks.findFirst({
+        where: and(
+          eq(schema.userRanks.userId, input.userId),
+          eq(schema.userRanks.track, track)
+        ),
+      })
 
-        if (!currentRank) {
-          console.warn("[finalizeGame] No user_rank found:", {
-            userId: input.userId,
-            track,
-          })
-          // Don't throw - this shouldn't block the game save
-        } else {
-          const newTotalXP = (currentRank.xp ?? 0) + input.xpEarned
-          const newTier = getTierForXP(newTotalXP)
-
-          // Update XP and tier atomically
-          await db
-            .update(schema.userRanks)
-            .set({
-              xp: newTotalXP,
-              tier: newTier,
-              updatedAt: new Date(),
-            })
-            .where(
-              and(
-                eq(schema.userRanks.userId, input.userId),
-                eq(schema.userRanks.track, track)
-              )
-            )
-        }
-      } catch (error) {
-        // Log but don't fail the game save if XP update fails
-        console.error("[finalizeGame] Failed to update user_ranks:", {
+      if (!currentRank) {
+        console.warn("[finalizeGame] No user_rank found:", {
           userId: input.userId,
           track,
-          xpEarned: input.xpEarned,
-          error: error instanceof Error ? error.message : String(error),
         })
+        // Don't throw - this shouldn't block the game save
+      } else {
+        // Calculate new values
+        const newTotalXP = (currentRank.xp ?? 0) + input.xpEarned
+        const newTier = getTierForXP(newTotalXP)
+        const currentBestStreak = currentRank.bestStreak ?? 0
+        const newBestStreak = Math.max(currentBestStreak, longestStreak)
+
+        // Update XP, tier, and best streak atomically
+        await db
+          .update(schema.userRanks)
+          .set({
+            xp: newTotalXP,
+            tier: newTier,
+            bestStreak: newBestStreak,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(schema.userRanks.userId, input.userId),
+              eq(schema.userRanks.track, track)
+            )
+          )
       }
+    } catch (error) {
+      // Log but don't fail the game save if rank update fails
+      console.error("[finalizeGame] Failed to update user_ranks:", {
+        userId: input.userId,
+        track,
+        xpEarned: input.xpEarned,
+        longestStreak,
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
 
     // Update Glicko-2 skill rating (hidden system for word difficulty)
@@ -433,6 +487,7 @@ export async function getGameHistory(
       correctAnswers: schema.gamePlayers.correctAnswers,
       wrongAnswers: schema.gamePlayers.wrongAnswers,
       xpEarned: schema.gamePlayers.xpEarned,
+      longestStreak: schema.gamePlayers.longestStreak,
     })
     .from(schema.games)
     .innerJoin(schema.gamePlayers, eq(schema.games.id, schema.gamePlayers.gameId))
@@ -460,6 +515,7 @@ export async function getGameHistory(
       wrongAnswers: row.wrongAnswers ?? 0,
       accuracy,
       xpEarned: row.xpEarned ?? 0,
+      longestStreak: row.longestStreak ?? 0,
     }
   })
 }
@@ -487,9 +543,11 @@ export async function getGameStats(
   totalXp: number
   averageAccuracy: number
   bestRound: number
+  bestStreak: number
 }> {
   const db = drizzle(d1, { schema })
 
+  // Query aggregate stats from games
   const result = await db
     .select({
       totalGames: sql<number>`COUNT(*)`,
@@ -511,6 +569,16 @@ export async function getGameStats(
       )
     )
 
+  // Get best streak from user_ranks (stored as all-time best for this track)
+  const track = `${mode}_${inputMethod}` as RankTrack
+  const rankResult = await db.query.userRanks.findFirst({
+    where: and(
+      eq(schema.userRanks.userId, userId),
+      eq(schema.userRanks.track, track)
+    ),
+    columns: { bestStreak: true },
+  })
+
   const stats = result[0]
   const totalAnswers = (stats?.totalCorrect ?? 0) + (stats?.totalWrong ?? 0)
   const averageAccuracy = totalAnswers > 0
@@ -523,6 +591,7 @@ export async function getGameStats(
     totalCorrect: stats?.totalCorrect ?? 0,
     totalXp: stats?.totalXp ?? 0,
     averageAccuracy,
+    bestStreak: rankResult?.bestStreak ?? 0,
     bestRound: stats?.bestRound ?? 0,
   }
 }

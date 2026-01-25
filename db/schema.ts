@@ -229,6 +229,8 @@ export const userRanks = sqliteTable(
     tier: text("tier", { enum: rankTiers }).notNull().default("new_bee"),
     xp: integer("xp").notNull().default(0),
     crownPoints: integer("crown_points").notNull().default(0), // Only for royal_bee
+    /** All-time best streak of consecutive correct answers for this track */
+    bestStreak: integer("best_streak").notNull().default(0),
     updatedAt: integer("updated_at", { mode: "timestamp" })
       .notNull()
       .default(sql`(unixepoch())`),
@@ -374,6 +376,8 @@ export const gamePlayers = sqliteTable(
     roundsCompleted: integer("rounds_completed").notNull().default(0),
     correctAnswers: integer("correct_answers").notNull().default(0),
     wrongAnswers: integer("wrong_answers").notNull().default(0),
+    /** Longest streak of consecutive correct answers in this game */
+    longestStreak: integer("longest_streak").notNull().default(0),
 
     // XP earned (calculated at end)
     xpEarned: integer("xp_earned"),

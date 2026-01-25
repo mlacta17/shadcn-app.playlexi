@@ -63,14 +63,22 @@ export const USE_DATABASE = true
 // API RESPONSE TYPES
 // =============================================================================
 
+/**
+ * Success response format from /api/words/random
+ */
 interface ApiSuccessResponse {
   success: true
   word: Word
 }
 
+/**
+ * Error response format from centralized error handling.
+ * Uses the standard AppError response format from lib/api/errors.ts
+ */
 interface ApiErrorResponse {
-  success: false
   error: string
+  code: string
+  details?: Record<string, unknown>
 }
 
 type ApiResponse = ApiSuccessResponse | ApiErrorResponse
@@ -163,19 +171,31 @@ export async function fetchRandomWord(
     const response = await fetch(`/api/words/random?${params.toString()}`)
     const data: ApiResponse = await response.json()
 
-    if (!data.success) {
+    // Check for error response (centralized error format: { error, code })
+    if ("error" in data && !("word" in data)) {
       return {
         success: false,
         error: data.error || "Failed to fetch word",
       }
     }
 
+    // Success response (has word property)
+    if (!("word" in data)) {
+      return {
+        success: false,
+        error: "Invalid response: missing word data",
+      }
+    }
+
+    // At this point we know data has a word property
+    const successData = data as ApiSuccessResponse
+
     // Debug: Log the word we received
-    console.log(`[WordFetcher] Received word: "${data.word.word}" (id=${data.word.id}, tier=${data.word.tier})`)
+    console.log(`[WordFetcher] Received word: "${successData.word.word}" (id=${successData.word.id}, tier=${successData.word.tier})`)
 
     return {
       success: true,
-      word: data.word,
+      word: successData.word,
     }
   } catch (error) {
     console.error("[WordFetcher] API call failed:", error)

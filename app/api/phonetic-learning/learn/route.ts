@@ -55,6 +55,7 @@ import {
   type RecognitionEvent,
 } from "@/lib/phonetic-learning"
 import { SPOKEN_LETTER_NAMES } from "@/lib/answer-validation"
+import { handleApiError, Errors, type ApiErrorResponse } from "@/lib/api"
 
 // =============================================================================
 // TYPE DEFINITIONS
@@ -73,7 +74,7 @@ interface ErrorResponse {
   error: string
 }
 
-type ApiResponse = SuccessResponse | ErrorResponse
+type ApiResponse = SuccessResponse | ApiErrorResponse
 
 // =============================================================================
 // ROUTE HANDLER
@@ -92,10 +93,7 @@ export async function POST(
 
     // Validate user ID
     if (!body.userId || typeof body.userId !== "string") {
-      return NextResponse.json(
-        { success: false, error: "userId is required" },
-        { status: 400 }
-      )
+      throw Errors.invalidInput("userId", "Required field missing or invalid type")
     }
 
     const userId = body.userId
@@ -226,19 +224,6 @@ export async function POST(
       newMappings,
     })
   } catch (error) {
-    // Log error with full context for debugging
-    console.error("[TriggerLearning] Error:", {
-      name: error instanceof Error ? error.name : "Unknown",
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    })
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to process learning",
-      },
-      { status: 500 }
-    )
+    return handleApiError(error, "[TriggerLearning]")
   }
 }

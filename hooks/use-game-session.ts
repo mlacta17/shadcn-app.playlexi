@@ -1,5 +1,48 @@
 "use client"
 
+/**
+ * Game Session Hook — PlayLexi
+ *
+ * Central state management for spelling game sessions (Endless & Blitz modes).
+ *
+ * ## File Structure (771 lines)
+ *
+ * | Lines | Section | Purpose |
+ * |-------|---------|---------|
+ * | 1-113 | Types | GamePhase, GameState, AnswerRecord interfaces |
+ * | 114-178 | More Types | SubmitAnswerOptions, GameActions, Return type |
+ * | 179-251 | Constants | INITIAL_HEARTS, FEEDBACK_DURATION, createInitialState |
+ * | 252-320 | Hook JSDoc | Architecture diagram, usage examples |
+ * | 321-470 | Core Actions | loadNextWord, startGame, beginPlaying |
+ * | 471-557 | Submit Logic | submitAnswer with anti-cheat integration |
+ * | 558-682 | Other Actions | handleTimeUp, nextWord, resetGame, audio helpers |
+ * | 683-723 | Effects | Auto-play word intro, auto-advance after feedback |
+ * | 724-771 | Computed + Return | correctCount, accuracy, isGameOver, etc. |
+ *
+ * ## Why One Large File?
+ *
+ * This hook is intentionally kept as a single file because:
+ *
+ * 1. **State machine visibility**: All 7 phases and transitions in one place
+ * 2. **Ref patterns**: Refs prevent stale closures — splitting would complicate this
+ * 3. **Testing**: One file = one test file with clear boundaries
+ * 4. **Onboarding**: New devs see the complete flow without jumping between files
+ *
+ * The complexity is **inherent** (game logic is complex), not **accidental**
+ * (poor organization). Extracting a state machine library (XState) was considered
+ * but rejected as the current pattern works and is well-understood.
+ *
+ * ## Related Files
+ *
+ * - app/(focused)/game/endless/page.tsx — Consumes this hook
+ * - hooks/use-game-timer.ts — Timer logic (separate hook)
+ * - hooks/use-game-feedback.ts — Overlay logic (separate hook)
+ * - hooks/use-speech-recognition.ts — Voice input (separate hook)
+ *
+ * @see PRD Section 4 — Game Modes
+ * @see ADR-012 — Hidden Skill Rating System
+ */
+
 import * as React from "react"
 import {
   type Word,
@@ -192,6 +235,8 @@ export interface UseGameSessionReturn {
     wrongCount: number
     /** Accuracy percentage (0-100) */
     accuracy: number
+    /** Longest streak of consecutive correct answers in this game */
+    longestStreak: number
     /** Whether the game is active (not idle or result) */
     isActive: boolean
     /** Whether the game is over */
@@ -730,6 +775,19 @@ export function useGameSession(
   const totalAnswers = state.answers.length
   const accuracy = totalAnswers > 0 ? Math.round((correctCount / totalAnswers) * 100) : 0
 
+  // Calculate longest streak of consecutive correct answers
+  // Iterate through answers in order to find the longest run
+  let longestStreak = 0
+  let currentStreak = 0
+  for (const answer of state.answers) {
+    if (answer.isCorrect) {
+      currentStreak++
+      longestStreak = Math.max(longestStreak, currentStreak)
+    } else {
+      currentStreak = 0
+    }
+  }
+
   const isActive = !["idle", "result"].includes(state.phase)
   const isGameOver = state.phase === "result"
   const isLoading = state.phase === "loading"
@@ -761,6 +819,7 @@ export function useGameSession(
     correctCount,
     wrongCount,
     accuracy,
+    longestStreak,
     isActive,
     isGameOver,
     isLoading,

@@ -28,6 +28,7 @@ import {
   sql,
   and,
 } from "@/db"
+import { handleApiError, Errors, type ApiErrorResponse } from "@/lib/api"
 
 // =============================================================================
 // TYPE DEFINITIONS
@@ -78,7 +79,7 @@ interface ErrorResponse {
   error: string
 }
 
-type ApiResponse = SuccessResponse | ErrorResponse
+type ApiResponse = SuccessResponse | ApiErrorResponse
 
 // =============================================================================
 // HELPERS
@@ -115,13 +116,7 @@ export async function GET(
     )
 
     if (!userId) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "userId parameter is required",
-        },
-        { status: 400 }
-      )
+      throw Errors.invalidInput("userId", "Query parameter is required")
     }
 
     // Get D1 database binding
@@ -239,18 +234,6 @@ export async function GET(
       recentLogs,
     })
   } catch (error) {
-    console.error("[PhoneticLearningStats] Error:", {
-      name: error instanceof Error ? error.name : "Unknown",
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    })
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to fetch phonetic learning stats",
-      },
-      { status: 500 }
-    )
+    return handleApiError(error, "[PhoneticLearningStats]")
   }
 }

@@ -1,6 +1,6 @@
 # PlayLexi — Architecture Decision Records (ADRs)
 
-> **Last Updated:** January 20, 2026
+> **Last Updated:** January 24, 2026
 > **Purpose:** Track significant architectural decisions made during the project.
 
 This document is extracted from ARCHITECTURE.md Section 19 to make decisions easier to find and reference.
@@ -22,7 +22,8 @@ This document is extracted from ARCHITECTURE.md Section 19 to make decisions eas
 11. [ADR-011: Merriam-Webster API Integration](#adr-011-merriam-webster-api-integration)
 12. [ADR-012: Hidden Skill Rating System (Glicko-2)](#adr-012-hidden-skill-rating-system-glicko-2)
 13. [ADR-013: Adaptive Placement Test](#adr-013-adaptive-placement-test)
-14. [Template for New ADRs](#template-for-new-adrs)
+14. [ADR-014: Solo vs Multiplayer Progression Systems](#adr-014-solo-vs-multiplayer-progression-systems)
+15. [Template for New ADRs](#template-for-new-adrs)
 
 ---
 
@@ -628,22 +629,30 @@ export const userSkillRatings = sqliteTable('user_skill_ratings', {
 }));
 ```
 
-**Integration with Existing XP System:**
+**Integration with Progression Systems:**
 
-The Glicko-2 system **does not replace** the XP system — they serve different purposes:
+> **Updated per ADR-014:** Solo games no longer display XP. Glicko-2 is the primary skill system for solo mode.
 
-| Event | XP Effect | Glicko-2 Effect |
-|-------|-----------|-----------------|
-| Correct answer | +5 XP (Endless) | Rating increases (based on word tier vs player rating) |
-| Wrong answer | 0 XP | Rating decreases (based on word tier vs player rating) |
-| Win multiplayer 1st | +50 XP | Rating increases (based on opponent ratings) |
-| Reach new tier (XP) | Tier badge updates | No effect (Glicko-2 tier is hidden) |
+The Glicko-2 system serves different purposes depending on game mode:
 
-**Coexistence Rules:**
-1. **Visible tier** comes from XP (existing system, unchanged)
-2. **Word difficulty** comes from Glicko-2 rating (new)
-3. **Matchmaking** uses Glicko-2 rating for skill-based pairing
-4. **Leaderboards** use XP (visible metric players understand)
+| Mode | Visible Progression | Hidden Progression (Glicko-2) |
+|------|---------------------|-------------------------------|
+| **Solo** | Personal stats (rounds, accuracy) | Word difficulty adjustment |
+| **Multiplayer** | XP and Rank tier | Matchmaking + word difficulty |
+
+**How They Coexist:**
+
+| Event | Solo Effect | Multiplayer Effect |
+|-------|-------------|-------------------|
+| Correct answer | Glicko-2 rating increases | XP +5, Glicko-2 increases |
+| Wrong answer | Glicko-2 rating decreases | XP unchanged, Glicko-2 decreases |
+| Win 1st place | N/A | XP +50, Glicko-2 increases |
+| Lose 6th place | N/A | XP -30, Glicko-2 decreases |
+
+**System Responsibilities:**
+1. **Glicko-2 (hidden)** — Word difficulty selection, multiplayer matchmaking
+2. **XP (multiplayer only)** — Visible rank progression, leaderboards
+3. **Personal stats (solo only)** — Rounds, accuracy, history comparison
 
 **Consequences:**
 
@@ -885,6 +894,148 @@ The following PRD sections have been updated to reflect this decision:
 2. `lib/placement/irt-model.ts` — Item Response Theory calculations
 3. `components/placement/placement-progress.tsx` — Progress UI (no hearts)
 4. Update `app/(focused)/onboarding/placement/page.tsx` — Use new engine
+
+---
+
+## ADR-014: Solo vs Multiplayer Progression Systems
+
+| Field | Value |
+|-------|-------|
+| **Date** | January 24, 2026 |
+| **Status** | Accepted |
+| **Deciders** | Project team |
+
+**Context:** The original design showed XP and rank progression on the solo game results screen, treating solo games like a "lighter" version of multiplayer. However, this created several problems:
+
+1. **Anxiety without reward** — Showing XP/rank in solo creates pressure, but there's no opponent to beat (no emotional payoff)
+2. **"Protect my rank" behavior** — If players could see rank progress, they might avoid playing to protect it
+3. **Conflicting feedback loops** — Solo players want "Am I improving?" while competitive players want "Where do I rank?"
+4. **Rank inflation risk** — If solo games added XP, everyone would eventually grind to max rank
+
+**Decision:** Split the progression systems completely:
+
+| Mode | XP/Rank Display | What Players See | Stakes |
+|------|-----------------|------------------|--------|
+| **Solo** | Hidden (not shown) | Personal stats + game history | None (practice mode) |
+| **Multiplayer** | Visible, can go up/down | Rank badge + XP change + placement | Real (competitive mode) |
+
+---
+
+### Sub-Decision 1: Solo Results Screen
+
+**What we show in solo mode:**
+
+| Element | Description |
+|---------|-------------|
+| Rounds Completed | How far they got this game |
+| Accuracy % | Correct / Total answers |
+| Best Streak | Longest consecutive correct answers |
+| Personal Leaderboard | This game ranked against their own history |
+| Personal Best indicators | Badges for new records |
+
+**What we DON'T show:**
+- Rank badge
+- XP earned
+- XP progress bar
+- Tier progression
+
+**Why:** Solo is practice mode. The frame is "Am I getting better at spelling?" not "Am I climbing a ladder?" This reframe reduces anxiety and encourages daily play.
+
+---
+
+### Sub-Decision 2: Multiplayer XP with Real Stakes
+
+**XP changes by placement:**
+
+| Placement | XP Change |
+|-----------|-----------|
+| 1st | +50 |
+| 2nd | +30 |
+| 3rd | +10 |
+| 4th | -10 |
+| 5th | -20 |
+| 6th | -30 |
+
+**Why XP can decrease:** Without loss, rank means nothing. If everyone eventually reaches Bee Keeper through grinding, the title is worthless. Real stakes create real achievement.
+
+**Why not solo XP loss:** In multiplayer, you lose to another human (acceptable). In solo, you lose to a word (feels unfair, like the game cheated you).
+
+---
+
+### Sub-Decision 3: No Tier Protection
+
+**Rejected option:** "Tier shields" that prevent demotion once you reach a new tier.
+
+**Why rejected:**
+- Leads to rank inflation (everyone eventually at top)
+- Ranks lose meaning
+- Removes stakes from competitive play
+- Creates "participation trophy" feeling
+
+**What we do instead:**
+- Fair matchmaking (similar tiers play together)
+- Weighted modifiers (underdogs protected)
+- Max loss per game is 30 XP (not catastrophic)
+- Players choose when to play multiplayer (can warm up in solo)
+
+---
+
+### Sub-Decision 4: No Recovery Bonuses
+
+**Rejected option:** Give bonus XP after demotion to help players recover.
+
+**Why rejected:**
+- It's a handout that inflates ranks over time
+- Reduces the "cost" of demotion
+- Makes the system feel dishonest
+- Teaches wrong lesson (failure has no real consequence)
+
+**What we do instead:** If you demote, earn your way back at normal rate. The demotion itself is the feedback.
+
+---
+
+**Design Philosophy:**
+
+The key insight is: **Solo = self-improvement, Multiplayer = competition**.
+
+These are fundamentally different player motivations:
+
+| Motivation | What Player Wants | How We Deliver |
+|------------|-------------------|----------------|
+| Self-improvement (solo) | "Am I getting better?" | Personal stats, history comparison |
+| Competition (multiplayer) | "Am I better than others?" | Rank, placement, XP stakes |
+
+Mixing these creates cognitive dissonance. A player in solo mode seeing "You lost XP" feels punished for practicing. A player in multiplayer seeing "Everyone gets XP" feels the competition is fake.
+
+---
+
+**Consequences:**
+
+*Positive:*
+- Solo players practice without anxiety
+- Multiplayer has genuine stakes
+- Ranks maintain meaning (not everyone at top)
+- Clean separation of concerns
+- Encourages daily solo play (no "protect my rank" fear)
+
+*Negative:*
+- Solo progress is less "visible" (no XP bar filling up)
+- Players may not understand why solo doesn't have ranks
+- Two different UI paradigms for results screen
+
+**Mitigation for negatives:**
+- Personal leaderboard gives visible progress (against yourself)
+- Onboarding can explain: "Solo is practice, multiplayer is ranked"
+- Personal best badges still give achievement feeling
+
+---
+
+**PRD Sections Updated:**
+
+1. **Section 3.3** — Complete rewrite of XP system philosophy
+2. **Section 7.4** — Solo tab now shows personal stats, not XP
+3. **Section 15.1** — XP thresholds clarified as multiplayer-only
+4. **Section 15.2.2** — Solo XP section now explains why it's not tracked
 
 ---
 

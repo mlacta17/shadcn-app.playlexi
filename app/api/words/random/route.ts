@@ -57,6 +57,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare"
 import type { WordTier, Word } from "@/lib/word-service"
 import { createDb } from "@/db"
 import { createD1WordDataSource, type RandomWordOptions } from "@/lib/services/d1-word-data-source"
+import { handleApiError, Errors, type ApiErrorResponse } from "@/lib/api"
 
 // =============================================================================
 // CLOUDFLARE ENV AUGMENTATION
@@ -83,7 +84,7 @@ interface ErrorResponse {
   error: string
 }
 
-type ApiResponse = SuccessResponse | ErrorResponse
+type ApiResponse = SuccessResponse | ApiErrorResponse
 
 // =============================================================================
 // VALIDATION
@@ -145,13 +146,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<ApiRespons
 
     // Validate tier parameter
     if (tier === null) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid or missing 'tier' parameter. Must be 1-7.",
-        },
-        { status: 400 }
-      )
+      throw Errors.invalidInput("tier", "Must be 1-7", [1, 2, 3, 4, 5, 6, 7])
     }
 
     // Debug: Log incoming request
@@ -180,13 +175,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<ApiRespons
     const word = await dataSource.getRandomWord(tier, options)
 
     if (!word) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `No words available for tier ${tier}.`,
-        },
-        { status: 404 }
-      )
+      throw Errors.notFound("Word", `tier ${tier}`)
     }
 
     // Debug: Log returned word
@@ -197,20 +186,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<ApiRespons
       word,
     })
   } catch (error) {
-    // Log error with full context for debugging
-    console.error("[GetRandomWord] Error:", {
-      name: error instanceof Error ? error.name : "Unknown",
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    })
-
-    // Return generic error (don't expose internal details)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Internal server error. Please try again.",
-      },
-      { status: 500 }
-    )
+    return handleApiError(error, "[GetRandomWord]")
   }
 }

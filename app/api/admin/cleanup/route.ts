@@ -31,7 +31,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getCloudflareContext } from "@opennextjs/cloudflare"
 import { createDb, recognitionLogs } from "@/db"
-import { lt, sql } from "drizzle-orm"
+import { lt } from "drizzle-orm"
+import { handleApiError, Errors, type ApiErrorResponse } from "@/lib/api"
 
 // =============================================================================
 // CONFIGURATION
@@ -137,16 +138,13 @@ async function cleanupRecognitionLogs(db: ReturnType<typeof createDb>): Promise<
  */
 export async function POST(
   request: NextRequest
-): Promise<NextResponse<SuccessResponse | ErrorResponse>> {
+): Promise<NextResponse<SuccessResponse | ApiErrorResponse>> {
   const startTime = Date.now()
 
   try {
     // Validate authentication
     if (!validateAuth(request)) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      )
+      throw Errors.unauthorized("Invalid or missing authorization token")
     }
 
     console.log("[Cleanup] Starting cleanup job...")
@@ -174,17 +172,7 @@ export async function POST(
       totalDurationMs,
     })
   } catch (error) {
-    // Log error with full context
-    console.error("[Cleanup] Error:", {
-      name: error instanceof Error ? error.name : "Unknown",
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    })
-
-    return NextResponse.json(
-      { success: false, error: "Cleanup job failed" },
-      { status: 500 }
-    )
+    return handleApiError(error, "[Cleanup]")
   }
 }
 

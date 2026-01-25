@@ -1,7 +1,7 @@
 # PlayLexi — Product Requirements Document (PRD)
 
-> **Version:** 1.4
-> **Last Updated:** January 17, 2026
+> **Version:** 1.5
+> **Last Updated:** January 24, 2026
 > **Status:** Final Draft
 
 ---
@@ -263,10 +263,47 @@ Players have **separate ranks** for each combination of game mode and input meth
 
 ### 3.3 XP System
 
-#### 3.3.1 Base XP from Placement (Multiplayer)
+#### 3.3.1 Design Philosophy: Solo vs Multiplayer
 
-| Placement | Base XP |
-|-----------|---------|
+PlayLexi uses **different progression models** for solo and multiplayer modes:
+
+| Mode | XP Behavior | Rank Display | Rationale |
+|------|-------------|--------------|-----------|
+| **Solo** | Hidden (not displayed) | Not shown | Practice mode — focus on self-improvement, not anxiety |
+| **Multiplayer** | Visible, can go up/down | Prominently shown | Competitive mode — real stakes create engagement |
+
+**Why This Split:**
+
+1. **Solo is practice, not competition** — You're playing against words, not people. Showing rank/XP creates artificial pressure without the reward of beating an opponent.
+
+2. **Avoid the "protect my rank" problem** — If solo XP could decrease, players would stop playing to avoid losing progress. We want daily practice, not rank anxiety.
+
+3. **Multiplayer needs real stakes** — Competition is meaningless if everyone eventually reaches max rank. XP loss for poor placement creates genuine investment.
+
+4. **Different feedback loops** — Solo players want "Am I improving?" (personal stats). Multiplayer players want "Where do I rank?" (XP/tier).
+
+#### 3.3.2 Solo Mode (Practice)
+
+In solo games, players see **personal performance stats** instead of XP:
+
+| Metric | Description |
+|--------|-------------|
+| Rounds Completed | How far they got this game |
+| Accuracy % | Correct answers / total answers |
+| Best Streak | Longest consecutive correct answers |
+| Personal Best | How this game ranks against their history |
+
+**What happens in the background:**
+- Word difficulty adjusts via hidden Glicko-2 rating (see ADR-012)
+- Game history is saved for personal leaderboard
+- No XP is tracked or displayed
+
+#### 3.3.3 Multiplayer Mode (Competitive)
+
+In multiplayer games, XP is visible and can increase OR decrease:
+
+| Placement | XP Change |
+|-----------|-----------|
 | 1st | +50 |
 | 2nd | +30 |
 | 3rd | +10 |
@@ -274,9 +311,11 @@ Players have **separate ranks** for each combination of game mode and input meth
 | 5th | -20 |
 | 6th | -30 |
 
-#### 3.3.2 Weighted Modifiers (Mixed-Tier Lobbies)
+**Note:** Total XP from a 6-player game is +30 (50+30+10-10-20-30). The system is slightly inflationary to reward participation while maintaining stakes.
 
-When players of different ranks are in the same lobby:
+#### 3.3.4 Weighted Modifiers (Mixed-Tier Lobbies)
+
+When players of different ranks are in the same multiplayer lobby:
 
 | Scenario | Modifier |
 |----------|----------|
@@ -286,9 +325,31 @@ When players of different ranks are in the same lobby:
 
 **Rationale:** Protects underdogs, prevents high-rank players from farming easy wins.
 
-#### 3.3.3 XP Consistency
+#### 3.3.5 Tier Demotion (Multiplayer Only)
 
-The same XP system applies to:
+Players CAN be demoted to a lower tier if they lose enough XP:
+
+| Rule | Description |
+|------|-------------|
+| When it happens | XP drops below current tier threshold |
+| No protection | No shields, no bonuses, no handouts |
+| Recovery | Earn XP at normal rate to climb back |
+| Fairness | Same rules for everyone — ranks have meaning |
+
+**Design Rationale:** We considered "tier protection" (can't demote once reached) but rejected it:
+- Leads to rank inflation (everyone eventually reaches top tiers)
+- Ranks lose meaning ("Busy Bee" means nothing if you can't lose it)
+- Removes stakes from competitive play
+
+**To prevent frustration:**
+- Matchmaking pairs similar-tier players (fair matches)
+- Weighted modifiers protect underdogs
+- A single bad game costs ~30 XP max (not catastrophic)
+- Players choose when to play multiplayer (can warm up in solo first)
+
+#### 3.3.6 XP Consistency
+
+The same XP system applies to all multiplayer modes:
 - Local multiplayer
 - Online private multiplayer
 - Online public multiplayer
@@ -681,11 +742,33 @@ Leaderboard is a main navigation tab alongside Play and Profile.
 
 ### 7.4 Solo Tab
 
-Shows player's match history:
-- Rank badge + progress bar (XP to next tier)
-- Table columns: Placement, Ranking, Round, Accuracy, XP Earned
+Shows player's personal game history — **no rank or XP displayed** (see Section 3.3.1 for rationale).
+
+**Header Stats:**
+| Stat | Description |
+|------|-------------|
+| Total Games | Number of solo games played |
+| Best Round | Highest round ever reached |
+| Average Accuracy | Accuracy % across all games |
+
+**Game History Table:**
+| Column | Description |
+|--------|-------------|
+| Date | When the game was played (relative: "2h ago", "Yesterday") |
+| Mode | Endless or Blitz |
+| Round | How far they got |
+| Accuracy | Correct / Total (percentage) |
+| **Highlight** | Current game highlighted if viewing from results screen |
+
+**Personal Best Indicators:**
+- 🥇 New personal best (highest round ever)
+- ⭐ Top 3 game (among all their games)
+- 🔥 Streak badge (if they had 10+ correct in a row)
+
+**Filters:**
+- Mode: Endless | Blitz | All
+- Input: Voice | Keyboard | All
 - Pagination for long history
-- Filter by mode/input
 
 #### 7.4.1 Game Result Details
 
@@ -693,7 +776,7 @@ Clicking on a game in the Solo tab expands to show:
 
 | Section | Content |
 |---------|---------|
-| Summary | Round reached, accuracy %, time played, XP earned |
+| Summary | Round reached, accuracy %, time played, best streak |
 | Words Attempted | List of all words from that session |
 | **Review Mistakes** | Words spelled incorrectly with comparison view |
 
@@ -1335,7 +1418,9 @@ When a player says the whole word instead of spelling it:
 
 ## 15. XP Thresholds & Crown Points Details
 
-### 15.1 XP Thresholds Per Tier
+> **Important:** XP and rank tiers are **only relevant for multiplayer**. Solo games do not display or track XP — see Section 3.3.1 for rationale.
+
+### 15.1 XP Thresholds Per Tier (Multiplayer)
 
 | Tier | Name | XP Required | XP to Next Tier |
 |------|------|-------------|-----------------|
@@ -1347,7 +1432,10 @@ When a player says the whole word instead of spelling it:
 | 6 | Royal Bee | 12,000 | N/A (Crown Points take over) |
 | 7 | Bee Keeper | N/A | Crown Points leader |
 
-**Note:** Bee Keeper is not an XP threshold — it's the Royal Bee with the most Crown Points in each track.
+**Notes:**
+- Bee Keeper is not an XP threshold — it's the Royal Bee with the most Crown Points in each track
+- XP can go UP (win) or DOWN (lose) in multiplayer — see Section 3.3.5 for demotion rules
+- These thresholds apply per-track (4 separate ranks for each mode/input combination)
 
 ### 15.2 XP Gain/Loss by Game Type
 
@@ -1364,10 +1452,19 @@ When a player says the whole word instead of spelling it:
 
 #### 15.2.2 Solo Game XP
 
-| Mode | XP Calculation |
-|------|----------------|
-| Endless | +5 XP per round survived |
-| Blitz | +2 XP per correct word |
+**Solo games do NOT display or track visible XP.** See Section 3.3.1 for the design rationale.
+
+| What's Tracked | What's NOT Tracked |
+|----------------|-------------------|
+| Game history (rounds, accuracy) | Visible XP |
+| Hidden Glicko-2 rating (for word difficulty) | Rank progression |
+| Personal best stats | XP gains/losses |
+
+**Why no XP in solo?**
+- Solo is practice mode, not competitive mode
+- Showing XP creates anxiety without the reward of beating opponents
+- Players should focus on "Am I improving?" not "Am I climbing?"
+- Prevents "protect my rank by not playing" behavior
 
 ### 15.3 Crown Points System (Royal Bees Only)
 
