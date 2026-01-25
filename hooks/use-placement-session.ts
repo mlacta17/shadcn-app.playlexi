@@ -9,8 +9,9 @@ import {
   playWordSentence,
   playWordDefinition,
 } from "@/lib/word-service"
-import { fetchRandomWord } from "@/lib/word-fetcher"
+import { fetchRandomWord, type FetchWordOptions } from "@/lib/word-fetcher"
 import { validateAnswer, isEmptyAnswer } from "@/lib/answer-validation"
+import { GLICKO2_CONSTANTS, ratingToTier } from "@/lib/game-constants"
 
 // =============================================================================
 // TYPES
@@ -185,6 +186,9 @@ export function usePlacementSession(): UsePlacementSessionReturn {
   // before state updates propagate.
   const usedWordIdsRef = React.useRef<Set<string>>(new Set())
 
+  // Track the last word ID for anti-repeat safeguard
+  const lastWordIdRef = React.useRef<string | undefined>(undefined)
+
   // ---------------------------------------------------------------------------
   // ACTIONS
   // ---------------------------------------------------------------------------
@@ -213,7 +217,15 @@ export function usePlacementSession(): UsePlacementSessionReturn {
     // Debug: Log what we're fetching
     console.log(`[PlacementSession] loadNextWord - tier=${currentTier}, usedWordIds.length=${usedWordIds.length}`)
 
-    const result = await fetchRandomWord(currentTier, usedWordIds)
+    // Build fetch options with anti-repeat safeguard
+    // Note: Adaptive mixing disabled during placement (want consistent difficulty assessment)
+    const fetchOptions: FetchWordOptions = {
+      excludeIds: usedWordIds,
+      lastWordId: lastWordIdRef.current,
+      enableAdaptiveMixing: false, // Disabled for placement test
+    }
+
+    const result = await fetchRandomWord(currentTier, fetchOptions)
 
     if (!result.success) {
       setState((prev) => ({
@@ -236,6 +248,9 @@ export function usePlacementSession(): UsePlacementSessionReturn {
     // Add word ID to ref IMMEDIATELY (prevents duplicates on concurrent calls)
     usedWordIdsRef.current.add(word.id)
 
+    // Update last word ID for anti-repeat safeguard
+    lastWordIdRef.current = word.id
+
     // Debug: Log the word we received
     console.log(`[PlacementSession] Received word: "${word.word}" (id=${word.id}), usedWordIdsRef now has ${usedWordIdsRef.current.size} entries`)
 
@@ -253,8 +268,9 @@ export function usePlacementSession(): UsePlacementSessionReturn {
    * Start the placement test.
    */
   const startPlacement = React.useCallback(async () => {
-    // Clear used word IDs ref for the new placement test
+    // Clear used word IDs ref and last word ID for the new placement test
     usedWordIdsRef.current.clear()
+    lastWordIdRef.current = undefined
 
     setState(createInitialState())
     await new Promise((resolve) => setTimeout(resolve, 100))
@@ -438,14 +454,26 @@ export function usePlacementSession(): UsePlacementSessionReturn {
 
       // Calculate derived tier based on performance
       // Simple algorithm: base tier + adjustment for accuracy
+      // Tier 1 = 0% accuracy, Tier 7 = 100% accuracy
       const baseTier = 1
       const tierBonus = Math.round(accuracy * 6) // 0-6 bonus based on accuracy
       const derivedTier = Math.min(7, Math.max(1, baseTier + tierBonus)) as WordTier
 
-      // Estimate rating (simplified Glicko-2 approximation)
-      const baseRating = 800
-      const ratingBonus = Math.round(accuracy * 700) // Up to 700 bonus
-      const rating = baseRating + ratingBonus
+      // Calculate Glicko-2 rating that matches the tier
+      // Use the proper rating ranges from GLICKO2_CONSTANTS
+      // Tier ranges: 1=1000-1149, 2=1150-1299, 3=1300-1449, 4=1450-1599, 5=1600-1749, 6=1750-1899, 7=1900+
+      const tierRanges = GLICKO2_CONSTANTS.TIER_RATING_RANGES
+      const tierRange = tierRanges[derivedTier as keyof typeof tierRanges]
+      // Place user in middle of their tier's range
+      const tierMidpoint = (tierRange.min + Math.min(tierRange.max, tierRange.min + 149)) / 2
+      const rating = Math.round(tierMidpoint)
+
+      // Higher rating deviation for new players (more uncertainty)
+      // Use a value between min and max RD based on how many rounds they played
+      const ratingDeviation = Math.max(
+        GLICKO2_CONSTANTS.MIN_RD,
+        GLICKO2_CONSTANTS.INITIAL_RD - (state.totalRounds * 20) // Reduce uncertainty with more rounds
+      )
 
       try {
         sessionStorage.setItem(
@@ -453,7 +481,7 @@ export function usePlacementSession(): UsePlacementSessionReturn {
           JSON.stringify({
             derivedTier,
             rating,
-            ratingDeviation: 200,
+            ratingDeviation,
             correctCount,
             totalRounds: state.totalRounds,
             accuracy: Math.round(accuracy * 100),

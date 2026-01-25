@@ -115,8 +115,12 @@ export async function POST(
       { status: 201 }
     )
   } catch (error) {
-    // Log error for debugging
-    console.error("[API] Error logging recognition event:", error)
+    // Log error with full context for debugging
+    console.error("[LogRecognitionEvent] Error:", {
+      name: error instanceof Error ? error.name : "Unknown",
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    })
 
     // Return generic error (don't expose internal details)
     return NextResponse.json(

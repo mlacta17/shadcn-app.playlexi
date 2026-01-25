@@ -210,13 +210,14 @@ export async function createUser(
  *
  * @param d1 - D1 database binding
  * @param userId - User ID
- * @returns User with ranks or null if not found
+ * @returns User with ranks and skill ratings, or null if not found
  */
 export async function getUserById(
   d1: D1Database,
   userId: string
 ): Promise<(typeof schema.users.$inferSelect & {
   ranks: (typeof schema.userRanks.$inferSelect)[]
+  skillRatings: (typeof schema.userSkillRatings.$inferSelect)[]
 }) | null> {
   const db = drizzle(d1, { schema })
 
@@ -230,7 +231,11 @@ export async function getUserById(
     where: eq(schema.userRanks.userId, userId),
   })
 
-  return { ...user, ranks }
+  const skillRatings = await db.query.userSkillRatings.findMany({
+    where: eq(schema.userSkillRatings.userId, userId),
+  })
+
+  return { ...user, ranks, skillRatings }
 }
 
 /**

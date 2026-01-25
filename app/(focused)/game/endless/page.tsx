@@ -9,6 +9,7 @@ import { HeartsDisplay } from "@/components/game/hearts-display"
 import { SpeechInput } from "@/components/ui/speech-input"
 import { GameFeedbackOverlay } from "@/components/game/game-feedback-overlay"
 import { VoiceWaveform } from "@/components/ui/voice-waveform"
+import { PhoneticDebugPanel } from "@/components/debug/phonetic-debug-panel"
 
 import { useGameSession } from "@/hooks/use-game-session"
 import { useGameTimer } from "@/hooks/use-game-timer"
@@ -16,6 +17,8 @@ import { useGameFeedback } from "@/hooks/use-game-feedback"
 import { useGameSounds } from "@/hooks/use-game-sounds"
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition"
 import { usePhoneticLearning } from "@/hooks/use-phonetic-learning"
+import { useUserTier } from "@/hooks/use-user-tier"
+import { useGamePersistence } from "@/hooks/use-game-persistence"
 import { formatTranscriptForDisplay, extractLettersFromVoice } from "@/lib/answer-validation"
 
 /**
@@ -48,11 +51,20 @@ export default function EndlessGamePage() {
   const router = useRouter()
 
   // ---------------------------------------------------------------------------
+  // User Tier (for word difficulty matching)
+  // ---------------------------------------------------------------------------
+  // Fetch user's skill tier to select appropriate difficulty words.
+  // Falls back to tier 1 if user is not logged in or fetch fails.
+  const { tier: userTier, isLoading: isTierLoading } = useUserTier("endless_voice")
+
+  // ---------------------------------------------------------------------------
   // Game Session State
   // ---------------------------------------------------------------------------
+  // Pass user's tier to ensure word difficulty matches their skill level
   const { state: gameState, actions: gameActions, computed } = useGameSession(
     "endless",
-    "voice"
+    "voice",
+    { initialTier: userTier }
   )
 
   // ---------------------------------------------------------------------------
@@ -92,7 +104,17 @@ export default function EndlessGamePage() {
   // Logs voice recognition events for the adaptive learning system.
   // This is fire-and-forget — errors don't affect gameplay.
   // Also provides userMappings for personalized phonetic recognition.
-  const { logAnswer, triggerLearning, fetchMappings, userMappings } = usePhoneticLearning()
+  const { logAnswer, triggerLearning, fetchMappings, userMappings, userId } = usePhoneticLearning()
+
+  // Debug panel refresh trigger - increments on each answer to refresh stats
+  const [debugRefreshTrigger, setDebugRefreshTrigger] = React.useState(0)
+
+  // ---------------------------------------------------------------------------
+  // Game Persistence
+  // ---------------------------------------------------------------------------
+  // Saves game results to the server when game ends.
+  // This awards XP and records game history.
+  const { saveGame } = useGamePersistence()
 
   // ---------------------------------------------------------------------------
   // Answer Submission Logic
@@ -228,16 +250,19 @@ export default function EndlessGamePage() {
   // Effects: Coordinate game phase with timer and feedback
   // ---------------------------------------------------------------------------
 
-  // Auto-start game on mount (only once)
+  // Auto-start game once tier is loaded (only once)
   // Also fetch user's phonetic mappings for personalized recognition
   React.useEffect(() => {
+    // Wait for user tier to load before starting game
+    // This ensures word difficulty matches user's skill level
+    if (isTierLoading) return
     if (!hasStartedRef.current) {
       hasStartedRef.current = true
       // Fetch user mappings in parallel with game start
       fetchMappings()
       gameActions.startGame()
     }
-  }, [gameActions, fetchMappings])
+  }, [gameActions, fetchMappings, isTierLoading])
 
   // Store timer methods in refs to avoid dependency array issues during HMR
   const timerRestartRef = React.useRef(timer.restart)
@@ -319,6 +344,9 @@ export default function EndlessGamePage() {
       extractedLetters,
       wasCorrect: gameState.lastAnswerCorrect,
     })
+
+    // Trigger debug panel refresh
+    setDebugRefreshTrigger((prev) => prev + 1)
   }, [
     gameState.phase,
     gameState.inputMethod,
@@ -329,25 +357,52 @@ export default function EndlessGamePage() {
   ])
 
   // ---------------------------------------------------------------------------
-  // Phonetic Learning: Trigger Learning on Game End
+  // Game End: Save Results & Navigate
   // ---------------------------------------------------------------------------
-  React.useEffect(() => {
-    if (gameState.phase === "result") {
-      // Trigger learning analysis (fire-and-forget)
-      triggerLearning()
-    }
-  }, [gameState.phase, triggerLearning])
+  // Track if we've already handled game end (prevent double-fire)
+  const hasHandledEndRef = React.useRef(false)
 
-  // Navigate to results when game is over
+  // Store navigation timeout ref so cleanup doesn't kill it prematurely
+  const navigationTimeoutRef = React.useRef<NodeJS.Timeout | null>(null)
+
+  // Capture computed values in refs for stable dependency
+  const computedRef = React.useRef(computed)
+  const gameStateRef = React.useRef(gameState)
   React.useEffect(() => {
-    if (gameState.phase === "result") {
-      // Small delay to show the final feedback
-      const timeout = setTimeout(() => {
-        router.push("/game/result")
-      }, 800)
-      return () => clearTimeout(timeout)
+    computedRef.current = computed
+    gameStateRef.current = gameState
+  })
+
+  React.useEffect(() => {
+    // Only trigger on phase change to "result"
+    // Using gameState.phase specifically (not full gameState object) prevents
+    // the effect from re-running on unrelated state changes which was causing
+    // the cleanup function to clear the navigation timeout prematurely
+    if (gameState.phase !== "result") {
+      hasHandledEndRef.current = false
+      return
     }
-  }, [gameState.phase, router])
+
+    if (hasHandledEndRef.current) return
+    hasHandledEndRef.current = true
+
+    // Trigger phonetic learning analysis (fire-and-forget)
+    triggerLearning()
+
+    // Save game results to server (fire-and-forget)
+    // Use refs to get current values without adding them to dependencies
+    saveGame({ state: gameStateRef.current, computed: computedRef.current })
+
+    // Navigate to results after a brief delay
+    // Store in ref so subsequent effect runs don't clear it
+    navigationTimeoutRef.current = setTimeout(() => {
+      // Pass mode and input method so results page can fetch correct history
+      router.push("/game/result?mode=endless&input=voice")
+    }, 800)
+
+    // Don't return cleanup - we WANT the navigation to complete
+    // even if the component re-renders. The timeout is fire-and-forget.
+  }, [gameState.phase, triggerLearning, saveGame, router])
 
   // Reset helper state when word changes
   React.useEffect(() => {
@@ -421,9 +476,15 @@ export default function EndlessGamePage() {
     gameActions.playDefinition()
   }
 
-  // Cleanup timeout on unmount
+  // Cleanup timeouts on unmount
   React.useEffect(() => {
-    return () => clearHelperTimeout()
+    return () => {
+      clearHelperTimeout()
+      // Also clear navigation timeout if component unmounts before navigation
+      if (navigationTimeoutRef.current) {
+        clearTimeout(navigationTimeoutRef.current)
+      }
+    }
   }, [])
 
   // ---------------------------------------------------------------------------
@@ -516,6 +577,9 @@ export default function EndlessGamePage() {
           </div>
         </div>
       </main>
+
+      {/* Phonetic Debug Panel (development only) */}
+      <PhoneticDebugPanel userId={userId} refreshTrigger={debugRefreshTrigger} />
     </div>
   )
 }

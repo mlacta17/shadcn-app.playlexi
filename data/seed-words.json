@@ -1,5 +1,5 @@
 {
-  "description": "Seed words for PlayLexi organized by difficulty tier (1-7)",
+  "description": "Seed words for PlayLexi organized by difficulty tier (1-7). Minimum 100 words per tier for extended play sessions.",
   "source": "Curated list for initial seeding. Words will be enriched with MW API data.",
   "tiers": {
     "1": {
@@ -8,7 +8,14 @@
       "words": [
         "cat", "dog", "run", "sit", "hat", "bed", "cup", "sun", "red", "big",
         "hot", "wet", "fun", "map", "pen", "box", "bus", "leg", "arm", "eye",
-        "ear", "lip", "toe", "day", "sky", "sea", "ice", "fog", "mud", "ant"
+        "ear", "lip", "toe", "day", "sky", "sea", "ice", "fog", "mud", "ant",
+        "bat", "cow", "fly", "hen", "owl", "pig", "bee", "bug", "cub", "elf",
+        "gem", "jar", "key", "log", "net", "orb", "pod", "rag", "sap", "van",
+        "web", "yak", "zip", "ape", "bay", "den", "elk", "fig", "gum", "hub",
+        "ink", "jam", "kit", "lid", "mop", "nap", "oak", "paw", "ram", "sob",
+        "tan", "urn", "vat", "wax", "axe", "cod", "dew", "elm", "fad", "gas",
+        "ham", "ivy", "jab", "keg", "lap", "mat", "nod", "oar", "pal", "rad",
+        "sew", "tab", "use", "vet", "wag", "yam", "zap", "ace", "bid", "cot"
       ]
     },
     "2": {
@@ -18,7 +25,16 @@
         "apple", "happy", "water", "house", "plant", "table", "chair", "bread",
         "light", "night", "dream", "sleep", "clean", "fresh", "green", "brown",
         "black", "white", "small", "large", "quick", "quiet", "sunny", "rainy",
-        "windy", "cloud", "river", "ocean", "beach", "grass"
+        "windy", "cloud", "river", "ocean", "beach", "grass", "train", "plane",
+        "sweet", "salty", "spicy", "music", "dance", "paint", "story", "movie",
+        "phone", "radio", "paper", "brush", "knife", "spoon", "plate", "glass",
+        "clock", "watch", "shelf", "floor", "wall", "door", "lunch", "snack",
+        "juice", "fruit", "candy", "money", "price", "store", "shop", "road",
+        "path", "hill", "farm", "lake", "pond", "tree", "leaf", "root", "seed",
+        "bloom", "rose", "bird", "fish", "frog", "duck", "bear", "deer", "wolf",
+        "lion", "tiger", "horse", "sheep", "goat", "mouse", "snake", "whale",
+        "shark", "crab", "star", "moon", "earth", "space", "rock", "sand", "dust",
+        "fire", "heat", "cold", "warm", "cool", "soft", "hard"
       ]
     },
     "3": {
@@ -28,8 +44,18 @@
         "castle", "garden", "bridge", "forest", "island", "stream", "summer",
         "winter", "spring", "autumn", "orange", "purple", "silver", "golden",
         "secret", "simple", "sudden", "wonder", "silent", "famous", "hungry",
-        "thirsty", "lonely", "friendly", "careful", "helpful", "peaceful", "joyful",
-        "playful", "graceful"
+        "thirsty", "lonely", "careful", "helpful", "joyful", "playful", "rabbit",
+        "monkey", "dragon", "turtle", "flower", "planet", "rocket", "museum",
+        "market", "school", "church", "temple", "palace", "tunnel", "harbor",
+        "kitchen", "living", "dining", "closet", "garage", "sunset", "sunrise",
+        "rainbow", "thunder", "weather", "climate", "season", "holiday", "weekend",
+        "morning", "evening", "century", "decade", "minute", "second", "moment",
+        "artist", "singer", "dancer", "writer", "teacher", "doctor", "farmer",
+        "baker", "sailor", "soldier", "knight", "prince", "queen", "wizard",
+        "pirate", "robot", "alien", "monster", "zombie", "angel", "spirit",
+        "shadow", "mirror", "candle", "blanket", "pillow", "carpet", "curtain",
+        "picture", "statue", "button", "zipper", "pocket", "collar", "sleeve",
+        "basket", "bucket", "handle", "ladder"
       ]
     },
     "4": {
@@ -39,8 +65,20 @@
         "ancient", "balance", "captain", "discover", "elegant", "familiar",
         "generous", "harmony", "imagine", "journey", "kingdom", "language",
         "mystery", "natural", "original", "patience", "quality", "response",
-        "solution", "tradition", "umbrella", "valuable", "whisper", "yesterday",
-        "abundant", "brilliant", "champion", "delicate", "enormous", "festival"
+        "solution", "umbrella", "valuable", "whisper", "abundant", "brilliant",
+        "champion", "delicate", "enormous", "festival", "grateful", "hospital",
+        "innocent", "jealousy", "keyboard", "laughter", "mountain", "neighbor",
+        "obstacle", "paradise", "question", "romantic", "strength", "treasure",
+        "universe", "vacation", "wildlife", "absolute", "approval", "bachelor",
+        "calendar", "database", "elevator", "faithful", "geometry", "hardware",
+        "identity", "judgment", "kindness", "landmark", "momentum", "negative",
+        "official", "parallel", "quotient", "reliable", "schedule", "terrible",
+        "ultimate", "validate", "warranty", "accurate", "boundary", "civilian",
+        "dialogue", "emphasis", "fraction", "graduate", "headline", "imperial",
+        "juvenile", "latitude", "magnetic", "national", "oriental", "portable",
+        "quantity", "regiment", "sandwich", "telegram", "vertical", "workshop",
+        "bacteria", "capacity", "diameter", "equation", "guardian", "hydrogen",
+        "integral", "memorial", "ordinary", "platinum"
       ]
     },
     "5": {
@@ -48,11 +86,23 @@
       "description": "Advanced 7-8 letter words",
       "words": [
         "adventure", "beautiful", "celebrate", "determine", "education",
-        "fortunate", "guarantee", "hospitality", "illustrate", "journalism",
-        "knowledge", "literature", "magnificent", "navigation", "observation",
-        "particular", "quarantine", "revolution", "spectacular", "tremendous",
-        "unanimous", "vocabulary", "wilderness", "accomplish", "boundaries",
-        "conscience", "discipline", "enthusiasm", "fascinating", "gratitude"
+        "fortunate", "guarantee", "illustrate", "journalism", "knowledge",
+        "literature", "magnificent", "navigation", "particular", "quarantine",
+        "revolution", "spectacular", "tremendous", "unanimous", "vocabulary",
+        "wilderness", "accomplish", "boundaries", "conscience", "discipline",
+        "enthusiasm", "fascinating", "gratitude", "horizontal", "impatient",
+        "jeopardize", "kidnapping", "locomotive", "masterpiece", "nationwide",
+        "opposition", "pedestrian", "quadruple", "reasonable", "settlement",
+        "tournament", "understand", "veterinary", "widespread", "accelerate",
+        "bankruptcy", "calculator", "dedication", "earthquake", "fellowship",
+        "generation", "helicopter", "incredible", "journalist", "laboratory",
+        "medication", "newsletter", "occupation", "percentage", "regulation",
+        "sufficient", "technology", "unemployed", "accomplish", "basketball",
+        "democratic", "electronic", "friendship", "impossible", "journalism",
+        "leadership", "membership", "photograph", "republican", "strawberry",
+        "themselves", "understand", "volleyball", "watermelon", "ambassador",
+        "atmosphere", "blackberry", "collection", "depression", "everything",
+        "foundation", "government", "hypothesis", "importance", "javascript"
       ]
     },
     "6": {
@@ -60,12 +110,26 @@
       "description": "Complex 8-10 letter words",
       "words": [
         "achievement", "bibliography", "circumstance", "demonstrate",
-        "entrepreneur", "fundamental", "grandiloquent", "hypothetical",
-        "independent", "jurisdiction", "kaleidoscope", "labyrinthine",
-        "melancholy", "nomenclature", "omnipotent", "perpendicular",
-        "idiosyncrasy", "reminiscent", "serendipity", "temperament",
-        "ubiquitous", "venerable", "wherewithal", "xylophone", "acquiesce",
-        "cacophony", "chameleon", "dichotomy", "ephemeral", "formidable"
+        "entrepreneur", "fundamental", "hypothetical", "independent",
+        "jurisdiction", "kaleidoscope", "melancholy", "omnipotent",
+        "perpendicular", "idiosyncrasy", "reminiscent", "serendipity",
+        "temperament", "ubiquitous", "venerable", "wherewithal", "xylophone",
+        "acquiesce", "cacophony", "chameleon", "dichotomy", "ephemeral",
+        "formidable", "gregarious", "heterogeneous", "implication", "justifiable",
+        "kindergarten", "manipulation", "nevertheless", "ostentatious",
+        "predominant", "questionnaire", "revolutionary", "sophisticated",
+        "transformation", "unbelievable", "vulnerability", "weatherproof",
+        "acknowledge", "beautifully", "considerably", "disappointed",
+        "establishment", "furthermore", "grandchildren", "humanitarian",
+        "illustration", "jeopardizing", "knowledgeable", "nevertheless",
+        "overwhelming", "philosophical", "relationships", "transportation",
+        "uncomfortable", "visualization", "wholehearted", "acceleration",
+        "biodiversity", "commemorative", "dramatically", "electromagnetic",
+        "hallucination", "implementation", "jurisprudence", "kaleidoscopic",
+        "lighthearted", "manufacturing", "neighborhood", "organizational",
+        "predominantly", "qualifications", "reconnaissance", "simultaneously",
+        "traditionally", "unconditional", "biodegradable", "characteristic",
+        "disadvantage", "environmental", "extraordinary", "groundbreaking"
       ]
     },
     "7": {
@@ -74,12 +138,28 @@
       "words": [
         "antediluvian", "connoisseur", "chrysanthemum", "doppelganger",
         "ecclesiastical", "flibbertigibbet", "gubernatorial", "hemorrhage",
-        "idiosyncratic", "juxtaposition", "Kafkaesque", "loquacious",
-        "malfeasance", "nomenclature", "onomatopoeia", "phantasmagoria",
-        "quixotic", "reconnaissance", "sesquipedalian", "tintinnabulation",
-        "unconscionable", "verisimilitude", "weltanschauung", "xerophyte",
-        "prestidigitation", "pulchritudinous", "psychosomatic", "rhinoceros",
-        "surreptitious", "supercilious"
+        "idiosyncratic", "juxtaposition", "loquacious", "malfeasance",
+        "onomatopoeia", "phantasmagoria", "quixotic", "reconnaissance",
+        "sesquipedalian", "tintinnabulation", "unconscionable", "verisimilitude",
+        "weltanschauung", "xerophyte", "prestidigitation", "pulchritudinous",
+        "psychosomatic", "rhinoceros", "surreptitious", "supercilious",
+        "anthropomorphic", "bibliophile", "circumlocution", "discombobulate",
+        "effervescent", "grandiloquence", "hippopotamus", "incomprehensible",
+        "lackadaisical", "metamorphosis", "nondenominational", "ophthalmologist",
+        "quintessential", "reverberation", "scintillating", "transcendental",
+        "uncharacteristically", "whippersnapper", "xanthophyll", "accoutrements",
+        "bougainvillea", "conscientious", "denouement", "extraordinaire",
+        "foreshadowing", "gesticulation", "hallucinogenic", "idiosyncrasies",
+        "jurisprudence", "knickknack", "melodramatic", "obsequious",
+        "perspicacious", "quizzically", "recalcitrant", "schadenfreude",
+        "thaumaturgist", "unequivocally", "vicissitudes", "worcestershire",
+        "acquiescence", "bourgeoisie", "claustrophobia", "disproportionate",
+        "ecclesiastic", "flabbergasted", "gastrointestinal", "hypochondriac",
+        "incorrigible", "kaleidoscope", "legerdemain", "magnanimous",
+        "nomenclature", "ostracism", "philanthropist", "quarrelsome",
+        "remuneration", "serendipitous", "thoroughfare", "unambiguous",
+        "verisimilar", "whimsicality", "xylophonist", "anthropology",
+        "bibliography", "circumference", "disambiguation", "egalitarianism"
       ]
     }
   }

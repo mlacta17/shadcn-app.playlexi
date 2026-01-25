@@ -1,41 +1,41 @@
 "use client"
 
 import * as React from "react"
+import { useSession } from "@/lib/auth/client"
 
 /**
  * Hook to get the current user ID for phonetic learning.
  *
- * ## Current Behavior (No Auth)
+ * ## Behavior
  *
- * Returns an anonymous device ID stored in localStorage. This allows:
- * - Recognition logging to work immediately
- * - Data to persist across sessions on the same device
- * - Future migration to authenticated user IDs
+ * 1. **Authenticated users**: Returns the Better Auth user ID from session
+ * 2. **Anonymous users**: Falls back to device ID stored in localStorage
  *
- * ## Future Behavior (With Auth)
- *
- * When authentication is integrated, this hook should:
- * 1. Check for authenticated user first
- * 2. Fall back to device ID for anonymous users
- * 3. Optionally merge device data into user account on sign-up
+ * This allows:
+ * - Recognition logging to work for everyone (authenticated or not)
+ * - Phonetic mappings to be created for authenticated users (FK constraint)
+ * - Data to persist across sessions on the same device for anonymous users
  *
  * ## Storage Key
  *
- * Uses `playlexi_device_id` in localStorage. The ID is a UUID v4.
+ * Uses `playlexi_device_id` in localStorage for anonymous fallback.
  *
- * @returns Object with userId and loading state
+ * @returns Object with userId, loading state, and anonymous flag
  *
  * @example
  * ```tsx
  * function GamePage() {
- *   const { userId, isLoading } = useUserId()
+ *   const { userId, isLoading, isAnonymous } = useUserId()
  *
- *   // Use userId for logging
+ *   // Use userId for logging (works for all users)
  *   useEffect(() => {
  *     if (userId) {
  *       logRecognitionEvent({ userId, ... })
  *     }
  *   }, [userId])
+ *
+ *   // isAnonymous tells you if phonetic mappings can be created
+ *   // (they require authenticated user due to FK constraint)
  * }
  * ```
  */
@@ -47,45 +47,43 @@ export function useUserId(): {
   /** Whether this is an anonymous (device) ID vs authenticated */
   isAnonymous: boolean
 } {
-  const [userId, setUserId] = React.useState<string | null>(null)
-  const [isLoading, setIsLoading] = React.useState(true)
+  const { data: session, isPending: isSessionPending } = useSession()
+  const [deviceId, setDeviceId] = React.useState<string | null>(null)
+  const [isDeviceIdLoading, setIsDeviceIdLoading] = React.useState(true)
 
+  // Load device ID from localStorage (for anonymous fallback)
   React.useEffect(() => {
-    // TODO: When auth is integrated, check for authenticated user first
-    // const authUser = useAuth() // hypothetical
-    // if (authUser?.id) {
-    //   setUserId(authUser.id)
-    //   setIsLoading(false)
-    //   return
-    // }
-
-    // Fall back to anonymous device ID
     const STORAGE_KEY = "playlexi_device_id"
 
     try {
-      let deviceId = localStorage.getItem(STORAGE_KEY)
+      let storedDeviceId = localStorage.getItem(STORAGE_KEY)
 
-      if (!deviceId) {
+      if (!storedDeviceId) {
         // Generate a new device ID
-        deviceId = crypto.randomUUID()
-        localStorage.setItem(STORAGE_KEY, deviceId)
+        storedDeviceId = crypto.randomUUID()
+        localStorage.setItem(STORAGE_KEY, storedDeviceId)
       }
 
-      setUserId(deviceId)
+      setDeviceId(storedDeviceId)
     } catch {
       // localStorage not available (SSR, private browsing, etc.)
       // Generate a session-only ID
-      setUserId(crypto.randomUUID())
+      setDeviceId(crypto.randomUUID())
     }
 
-    setIsLoading(false)
+    setIsDeviceIdLoading(false)
   }, [])
+
+  // Determine the user ID to return
+  // Priority: authenticated user ID > anonymous device ID
+  const isAuthenticated = !!session?.user?.id
+  const userId = isAuthenticated ? session.user.id : deviceId
+  const isLoading = isSessionPending || isDeviceIdLoading
 
   return {
     userId,
     isLoading,
-    // TODO: Set to false when authenticated user is detected
-    isAnonymous: true,
+    isAnonymous: !isAuthenticated,
   }
 }
 

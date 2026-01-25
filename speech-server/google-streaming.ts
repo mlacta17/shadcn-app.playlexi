@@ -66,13 +66,21 @@ const SPEECH_CONTEXT = {
     "letter B", "letter D", "letter P", "letter V",
     "B as in boy", "D as in dog", "P as in Paul", "V as in Victor",
 
-    // M/N confusion
+    // M/N confusion (commonly confused nasal consonants)
+    "M", "em", "N", "en",
     "M", "em", "N", "en",
     "letter M", "letter N",
+    "M as in Mary", "N as in Nancy",
 
     // C/S/G confusion
     "C", "cee", "S", "ess", "G", "gee",
     "letter C", "letter S", "letter G",
+
+    // T/C confusion (commonly confused due to similar-sounding names "tee"/"cee")
+    "T", "tee", "C", "cee",
+    "T", "tee", "C", "cee",
+    "letter T", "letter C",
+    "T as in Tom", "C as in cat",
 
     // F/S confusion
     "F", "eff", "S", "ess",

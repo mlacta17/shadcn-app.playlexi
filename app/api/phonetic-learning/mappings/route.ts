@@ -101,7 +101,12 @@ export async function GET(
       mappings,
     })
   } catch (error) {
-    console.error("[API] Error fetching phonetic mappings:", error)
+    // Log error with full context for debugging
+    console.error("[GetPhoneticMappings] Error:", {
+      name: error instanceof Error ? error.name : "Unknown",
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    })
 
     return NextResponse.json(
       {
@@ -231,7 +236,12 @@ export async function POST(
       { status: 201 }
     )
   } catch (error) {
-    console.error("[API] Error creating phonetic mapping:", error)
+    // Log error with full context for debugging
+    console.error("[CreatePhoneticMapping] Error:", {
+      name: error instanceof Error ? error.name : "Unknown",
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    })
 
     return NextResponse.json(
       {

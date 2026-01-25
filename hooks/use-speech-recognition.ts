@@ -353,24 +353,30 @@ export function useSpeechRecognition(
     }
 
     // Wait for FINAL result to arrive (with timeout)
-    // The final result callback will resolve this promise
-    const MAX_WAIT_MS = 2000 // Maximum time to wait for final result
+    // The final result callback will resolve this promise.
+    //
+    // PERFORMANCE: Reduced timeout from 2000ms to 500ms because:
+    // 1. Google typically sends FINAL within 200-400ms after we send "stop"
+    // 2. If FINAL doesn't arrive in 500ms, something is wrong anyway
+    // 3. The interim transcript is usually accurate enough for validation
+    // 4. Anti-cheat falls back to transcript-based timing if no audio data
+    const MAX_WAIT_MS = 500 // Reduced from 2000ms for better responsiveness
     const finalResultReceived = providerBasedIsSpelledOutRef.current !== null
 
     if (!finalResultReceived) {
       if (process.env.NODE_ENV === "development") {
-        console.log("[Speech] Waiting for FINAL result before returning metrics...")
+        console.log("[Speech] Waiting for FINAL result (max 500ms)...")
       }
 
       await new Promise<void>((resolve) => {
         // Store the resolver so the onWordTiming callback can resolve it
         finalResultResolverRef.current = resolve
 
-        // Timeout: don't wait forever
+        // Timeout: don't wait too long - responsiveness is more important
         setTimeout(() => {
           if (finalResultResolverRef.current) {
             if (process.env.NODE_ENV === "development") {
-              console.log("[Speech] Timeout waiting for FINAL result, proceeding with available data")
+              console.log("[Speech] Timeout waiting for FINAL, using interim data")
             }
             finalResultResolverRef.current = null
             resolve()

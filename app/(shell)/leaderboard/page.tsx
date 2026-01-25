@@ -1,84 +1,274 @@
 "use client"
 
 import * as React from "react"
-import { FilterIcon } from "@/lib/icons"
 
 import { RankBadge, LeaderboardTable, type LeaderboardPlayer } from "@/components/game"
+import type { RankTier as BadgeRankTier, RANK_LABELS } from "@/components/game/rank-badge"
 import { HexPattern } from "@/components/ui/hex-pattern"
 import { Progress } from "@/components/ui/progress"
 import { SearchInput } from "@/components/ui/search-input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Skeleton } from "@/components/ui/skeleton"
+import { useLeaderboard, type UserRankData } from "@/hooks/use-leaderboard"
+import type { GameMode, InputMethod, RankTier } from "@/db/schema"
 
 /**
  * Leaderboard Page — Ranked player standings.
  *
- * Displays player rankings across different game modes (Endless, Multiplayer, Blitz)
- * with search, filtering, and pagination capabilities.
+ * Displays player rankings across different game modes (Endless, Blitz)
+ * with search and pagination capabilities.
  *
  * ## Features
- * - League badge with rank progress
- * - Game mode tabs
+ * - League badge with rank progress (when authenticated)
+ * - Game mode tabs with input method subtabs
  * - Player search
- * - Filter dropdown
  * - Paginated results
+ * - Current user highlighting
  *
- * @see Figma node 2435:33026 for design reference
+ * ## Data Flow
+ *
+ * 1. User selects track via tabs (e.g., Endless Voice)
+ * 2. useLeaderboard hook fetches from /api/leaderboard
+ * 3. API queries userRanks joined with users and game stats
+ * 4. Results paginated and displayed in LeaderboardTable
+ *
+ * @see lib/services/leaderboard-service.ts for data fetching
+ * @see hooks/use-leaderboard.ts for client-side state
  */
 
-// Mock data for demonstration
-const MOCK_PLAYERS: LeaderboardPlayer[] = [
-  { id: "1", name: "Luffy", description: "Description Text", round: 11, delta: 1, accuracy: 99, points: 15420 },
-  { id: "2", name: "felicia.reid@example.com", description: "Description Text", round: 10, delta: -1, accuracy: 99, points: 14850 },
-  { id: "3", name: "georgia.young@example.com", description: "Description Text", round: 9, delta: -1, accuracy: 99, points: 14200 },
-  { id: "4", name: "alma.lawson@example.com", description: "Description Text", round: 8, delta: 1, accuracy: 99, points: 13500 },
-  { id: "5", name: "dolores.chambers@example.com", description: "Description Text", round: 7, delta: -1, accuracy: 99, points: 12900 },
-  { id: "6", name: "alma.lawson@example.com", description: "Description Text", round: 6, delta: -1, accuracy: 99, points: 12100 },
-  { id: "7", name: "dolores.chambers@example.com", description: "Description Text", round: 5, delta: 1, accuracy: 99, points: 11500 },
-  // Additional mock data for pagination
-  { id: "8", name: "player8@example.com", description: "Description Text", round: 4, delta: 0, accuracy: 98, points: 10800 },
-  { id: "9", name: "player9@example.com", description: "Description Text", round: 3, delta: 2, accuracy: 97, points: 10200 },
-  { id: "10", name: "player10@example.com", description: "Description Text", round: 2, delta: -2, accuracy: 96, points: 9500 },
-]
+// =============================================================================
+// HELPERS
+// =============================================================================
 
-// Generate more mock data
-const EXTENDED_MOCK_PLAYERS: LeaderboardPlayer[] = [
-  ...MOCK_PLAYERS,
-  ...Array.from({ length: 110 }, (_, i) => ({
-    id: `${i + 11}`,
-    name: `player${i + 11}@example.com`,
-    description: "Description Text",
-    round: Math.max(1, 100 - i),
-    delta: Math.random() > 0.5 ? 1 : -1,
-    accuracy: Math.floor(Math.random() * 10) + 90,
-    points: Math.max(100, 9000 - i * 80),
-  })),
-]
+/**
+ * Human-readable labels for each rank tier.
+ */
+const TIER_LABELS: Record<string, string> = {
+  new_bee: "New Bee",
+  bumble_bee: "Bumble Bee",
+  busy_bee: "Busy Bee",
+  honey_bee: "Honey Bee",
+  worker_bee: "Worker Bee",
+  royal_bee: "Royal Bee",
+  bee_keeper: "Bee Keeper",
+}
 
-type GameMode = "endless" | "multiplayer" | "blitz"
+/**
+ * Convert database tier format (underscore) to badge format (hyphen).
+ * Database: "new_bee" → Badge: "new-bee"
+ */
+function tierToBadgeFormat(tier: RankTier | string): BadgeRankTier {
+  return tier.replace(/_/g, "-") as BadgeRankTier
+}
+
+/**
+ * Get tier label from tier name.
+ */
+function getTierLabel(tier: RankTier | string): string {
+  return TIER_LABELS[tier] || tier
+}
+
+// =============================================================================
+// COMPONENTS
+// =============================================================================
+
+/**
+ * Loading skeleton for the leaderboard header.
+ */
+function HeaderSkeleton() {
+  return (
+    <div className="mb-8 flex flex-col items-center gap-4">
+      <Skeleton className="h-24 w-24 rounded-full" />
+      <Skeleton className="h-6 w-32" />
+      <div className="w-full max-w-xs space-y-2">
+        <Skeleton className="h-2 w-full" />
+        <div className="flex justify-between">
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-4 w-16" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Loading skeleton for the leaderboard table.
+ */
+function TableSkeleton() {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: 7 }).map((_, i) => (
+        <div key={i} className="flex items-center gap-4 py-3">
+          <Skeleton className="h-8 w-12" />
+          <Skeleton className="h-10 w-10 rounded-full" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-3 w-20" />
+          </div>
+          <Skeleton className="h-4 w-12" />
+          <Skeleton className="h-4 w-12" />
+          <Skeleton className="h-4 w-16" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * Rank header showing user's current rank and progress.
+ */
+interface RankHeaderProps {
+  userRank: UserRankData | null
+  isLoading: boolean
+}
+
+function RankHeader({ userRank, isLoading }: RankHeaderProps) {
+  if (isLoading) {
+    return <HeaderSkeleton />
+  }
+
+  // Show default state if no user rank (not authenticated or no games played)
+  const tier = userRank?.tier ? tierToBadgeFormat(userRank.tier) : "new-bee"
+  const tierLabel = userRank?.tier ? getTierLabel(userRank.tier) : "New Bee"
+  const xp = userRank?.xp ?? 0
+  const xpForNextTier = userRank?.xpForNextTier ?? 100
+  const progress = Math.min(100, (xp / xpForNextTier) * 100)
+  const position = userRank?.position ?? 0
+  const totalPlayers = userRank?.totalPlayers ?? 0
+
+  return (
+    <div className="mb-8 flex flex-col items-center gap-4">
+      <RankBadge rank={tier} size="lg" />
+      <h1 className="text-xl font-bold">{tierLabel} League</h1>
+      <div className="w-full max-w-xs space-y-2">
+        <Progress value={progress} className="h-2" />
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span>XP PROGRESS</span>
+          <span>
+            {xp}/{xpForNextTier}
+          </span>
+        </div>
+        {position > 0 && (
+          <div className="text-center text-xs text-muted-foreground">
+            Rank #{position} of {totalPlayers.toLocaleString()}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Leaderboard content for a specific track.
+ */
+interface LeaderboardContentProps {
+  mode: GameMode
+  inputMethod: InputMethod
+  search: string
+  onSearchChange: (value: string) => void
+}
+
+function LeaderboardContent({
+  mode,
+  inputMethod,
+  search,
+  onSearchChange,
+}: LeaderboardContentProps) {
+  const {
+    players,
+    isLoading,
+    error,
+    userRank,
+  } = useLeaderboard({
+    mode,
+    inputMethod,
+    pageSize: 7,
+  })
+
+  // Transform players for LeaderboardTable component
+  const tableData: LeaderboardPlayer[] = React.useMemo(() => {
+    return players.map((player) => ({
+      id: player.id,
+      name: player.isCurrentUser ? `${player.name} (You)` : player.name,
+      description: player.description || getTierLabel(player.tier),
+      avatarId: player.avatarId,
+      round: player.round,
+      delta: player.delta,
+      accuracy: player.accuracy,
+      points: player.points,
+    }))
+  }, [players])
+
+  // Filter by search (client-side for immediate feedback)
+  const filteredData = React.useMemo(() => {
+    if (!search) return tableData
+    return tableData.filter((player) =>
+      player.name.toLowerCase().includes(search.toLowerCase())
+    )
+  }, [tableData, search])
+
+  return (
+    <>
+      <RankHeader userRank={userRank} isLoading={isLoading} />
+
+      {/* Search row */}
+      <div className="mb-6 flex items-center gap-4">
+        <SearchInput
+          placeholder="Search players"
+          value={search}
+          onChange={(e) => onSearchChange(e.target.value)}
+          containerClassName="flex-1"
+        />
+      </div>
+
+      {/* Error state */}
+      {error && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-center text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
+      {/* Loading state */}
+      {isLoading && <TableSkeleton />}
+
+      {/* Empty state */}
+      {!isLoading && !error && filteredData.length === 0 && (
+        <div className="py-12 text-center text-muted-foreground">
+          {search
+            ? `No players found matching "${search}"`
+            : "No players on this leaderboard yet. Be the first!"}
+        </div>
+      )}
+
+      {/* Data table */}
+      {!isLoading && !error && filteredData.length > 0 && (
+        <LeaderboardTable data={filteredData} pageSize={7} />
+      )}
+    </>
+  )
+}
+
+// =============================================================================
+// MAIN COMPONENT
+// =============================================================================
+
+type TabValue = "endless_voice" | "endless_keyboard" | "blitz_voice" | "blitz_keyboard"
 
 export default function LeaderboardPage() {
   const [search, setSearch] = React.useState("")
-  const [filter, setFilter] = React.useState<string>("all")
-  const [activeTab, setActiveTab] = React.useState<GameMode>("endless")
+  const [activeTab, setActiveTab] = React.useState<TabValue>("endless_voice")
 
-  // Filter players based on search
-  const filteredPlayers = React.useMemo(() => {
-    return EXTENDED_MOCK_PLAYERS.filter((player) =>
-      player.name.toLowerCase().includes(search.toLowerCase())
-    )
-  }, [search])
+  // Parse tab value into mode and inputMethod
+  const [mode, inputMethod] = React.useMemo((): [GameMode, InputMethod] => {
+    const parts = activeTab.split("_")
+    return [parts[0] as GameMode, parts[1] as InputMethod]
+  }, [activeTab])
 
-  // TODO: Connect to actual rank from user state
-  const currentRank = "new-bee" as const
-  const rankRating = 57
-  const maxRating = 100
+  // Clear search when tab changes
+  const handleTabChange = (value: string) => {
+    setActiveTab(value as TabValue)
+    setSearch("")
+  }
 
   return (
     <div className="relative flex-1">
@@ -87,69 +277,59 @@ export default function LeaderboardPage() {
 
       {/* Main content — Navbar is provided by (shell)/layout.tsx */}
       <main className="container mx-auto max-w-4xl px-6 py-8">
-        {/* League header */}
-        <div className="mb-8 flex flex-col items-center gap-4">
-          <RankBadge rank={currentRank} size="lg" />
-          <h1 className="text-xl font-bold">Bronze League</h1>
-          <div className="w-full max-w-xs space-y-2">
-            <Progress value={(rankRating / maxRating) * 100} className="h-2" />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>RANK RATING</span>
-              <span>
-                {rankRating}/{maxRating}
-              </span>
-            </div>
-          </div>
-        </div>
-
         {/* Game mode tabs */}
         <Tabs
           value={activeTab}
-          onValueChange={(v) => setActiveTab(v as GameMode)}
+          onValueChange={handleTabChange}
           className="w-full"
         >
-          <TabsList className="w-full">
-            <TabsTrigger value="endless" className="flex-1">
-              Endless
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="endless_voice" className="text-xs sm:text-sm">
+              Endless Voice
             </TabsTrigger>
-            <TabsTrigger value="multiplayer" className="flex-1">
-              Multiplayer
+            <TabsTrigger value="endless_keyboard" className="text-xs sm:text-sm">
+              Endless Keyboard
             </TabsTrigger>
-            <TabsTrigger value="blitz" className="flex-1">
-              Blitz
+            <TabsTrigger value="blitz_voice" className="text-xs sm:text-sm">
+              Blitz Voice
+            </TabsTrigger>
+            <TabsTrigger value="blitz_keyboard" className="text-xs sm:text-sm">
+              Blitz Keyboard
             </TabsTrigger>
           </TabsList>
 
-          {/* Search and filter row */}
-          <div className="mt-6 flex items-center gap-4">
-            <SearchInput
-              placeholder="Search players"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              containerClassName="flex-1"
+          {/* Tab content - each track has its own content */}
+          <TabsContent value="endless_voice" className="mt-6">
+            <LeaderboardContent
+              mode="endless"
+              inputMethod="voice"
+              search={search}
+              onSearchChange={setSearch}
             />
-            <Select value={filter} onValueChange={setFilter}>
-              <SelectTrigger className="w-auto">
-                <FilterIcon className="size-4" />
-                <SelectValue placeholder="Filter" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Players</SelectItem>
-                <SelectItem value="friends">Friends Only</SelectItem>
-                <SelectItem value="region">My Region</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Tab content - all share the same table for now */}
-          <TabsContent value="endless" className="mt-6">
-            <LeaderboardTable data={filteredPlayers} pageSize={7} />
           </TabsContent>
-          <TabsContent value="multiplayer" className="mt-6">
-            <LeaderboardTable data={filteredPlayers} pageSize={7} />
+          <TabsContent value="endless_keyboard" className="mt-6">
+            <LeaderboardContent
+              mode="endless"
+              inputMethod="keyboard"
+              search={search}
+              onSearchChange={setSearch}
+            />
           </TabsContent>
-          <TabsContent value="blitz" className="mt-6">
-            <LeaderboardTable data={filteredPlayers} pageSize={7} />
+          <TabsContent value="blitz_voice" className="mt-6">
+            <LeaderboardContent
+              mode="blitz"
+              inputMethod="voice"
+              search={search}
+              onSearchChange={setSearch}
+            />
+          </TabsContent>
+          <TabsContent value="blitz_keyboard" className="mt-6">
+            <LeaderboardContent
+              mode="blitz"
+              inputMethod="keyboard"
+              search={search}
+              onSearchChange={setSearch}
+            />
           </TabsContent>
         </Tabs>
       </main>

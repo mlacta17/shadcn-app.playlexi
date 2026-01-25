@@ -1509,20 +1509,20 @@ function HeartsDisplayDemo() {
 function LeaderboardTableDemo() {
   // Sample player data for demonstration
   const samplePlayers: LeaderboardPlayer[] = [
-    { id: "1", name: "Luffy", description: "luffy@grandline.com", round: 11, delta: 1, accuracy: 99, points: 15420 },
-    { id: "2", name: "Zoro", description: "zoro@grandline.com", round: 10, delta: -1, accuracy: 98, points: 14850 },
-    { id: "3", name: "Nami", description: "nami@grandline.com", round: 10, delta: 0, accuracy: 97, points: 14200 },
-    { id: "4", name: "Sanji", description: "sanji@grandline.com", round: 9, delta: 2, accuracy: 95, points: 13500 },
-    { id: "5", name: "Chopper", description: "chopper@grandline.com", avatarUrl: "https://github.com/shadcn.png", round: 9, delta: -2, accuracy: 94, points: 12900 },
-    { id: "6", name: "Robin", description: "robin@grandline.com", round: 8, delta: 0, accuracy: 93, points: 12100 },
-    { id: "7", name: "Franky", description: "franky@grandline.com", round: 8, delta: 1, accuracy: 92, points: 11500 },
-    { id: "8", name: "Brook", description: "brook@grandline.com", round: 7, delta: -1, accuracy: 91, points: 10800 },
-    { id: "9", name: "Jinbe", description: "jinbe@grandline.com", round: 7, delta: 3, accuracy: 90, points: 10200 },
-    { id: "10", name: "Usopp", description: "usopp@grandline.com", round: 6, delta: -3, accuracy: 89, points: 9500 },
-    { id: "11", name: "Vivi", description: "vivi@alabasta.com", round: 6, delta: 0, accuracy: 88, points: 8800 },
-    { id: "12", name: "Ace", description: "ace@whitebeard.com", round: 5, delta: 1, accuracy: 87, points: 8100 },
-    { id: "13", name: "Sabo", description: "sabo@revolutionary.com", round: 5, delta: -1, accuracy: 86, points: 7400 },
-    { id: "14", name: "Law", description: "law@heart.com", round: 4, delta: 2, accuracy: 85, points: 6700 },
+    { id: "1", name: "Luffy", description: "luffy@grandline.com", avatarId: 1, round: 11, delta: 1, accuracy: 99, points: 15420 },
+    { id: "2", name: "Zoro", description: "zoro@grandline.com", avatarId: 2, round: 10, delta: -1, accuracy: 98, points: 14850 },
+    { id: "3", name: "Nami", description: "nami@grandline.com", avatarId: 3, round: 10, delta: 0, accuracy: 97, points: 14200 },
+    { id: "4", name: "Sanji", description: "sanji@grandline.com", avatarId: 1, round: 9, delta: 2, accuracy: 95, points: 13500 },
+    { id: "5", name: "Chopper", description: "chopper@grandline.com", avatarId: 2, round: 9, delta: -2, accuracy: 94, points: 12900 },
+    { id: "6", name: "Robin", description: "robin@grandline.com", avatarId: 3, round: 8, delta: 0, accuracy: 93, points: 12100 },
+    { id: "7", name: "Franky", description: "franky@grandline.com", avatarId: 1, round: 8, delta: 1, accuracy: 92, points: 11500 },
+    { id: "8", name: "Brook", description: "brook@grandline.com", avatarId: 2, round: 7, delta: -1, accuracy: 91, points: 10800 },
+    { id: "9", name: "Jinbe", description: "jinbe@grandline.com", avatarId: 3, round: 7, delta: 3, accuracy: 90, points: 10200 },
+    { id: "10", name: "Usopp", description: "usopp@grandline.com", avatarId: 1, round: 6, delta: -3, accuracy: 89, points: 9500 },
+    { id: "11", name: "Vivi", description: "vivi@alabasta.com", avatarId: 2, round: 6, delta: 0, accuracy: 88, points: 8800 },
+    { id: "12", name: "Ace", description: "ace@whitebeard.com", avatarId: 3, round: 5, delta: 1, accuracy: 87, points: 8100 },
+    { id: "13", name: "Sabo", description: "sabo@revolutionary.com", avatarId: 1, round: 5, delta: -1, accuracy: 86, points: 7400 },
+    { id: "14", name: "Law", description: "law@heart.com", avatarId: 2, round: 4, delta: 2, accuracy: 85, points: 6700 },
   ]
 
   return (

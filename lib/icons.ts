@@ -70,6 +70,9 @@ export { IconMonitorOutline24 as MonitorIcon } from "nucleo-core-outline-24"
 // Game icons
 export { IconHeartOutline24 as HeartIcon } from "nucleo-core-outline-24"
 
+// Debug/Refresh icons
+export { IconArrowRotateClockwiseOutline24 as RefreshIcon } from "nucleo-core-outline-24"
+
 // SpeechInput helper buttons
 export { IconMessage2ContentOutline24 as SentenceIcon } from "nucleo-core-outline-24"
 export { IconBookOutline24 as DictionaryIcon } from "nucleo-core-outline-24"

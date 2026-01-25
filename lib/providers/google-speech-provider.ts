@@ -241,6 +241,24 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
         try {
           const message: ServerMessage = JSON.parse(event.data)
 
+          // CRITICAL: Guard against processing INTERIM messages after session is stopped.
+          // After stop() is called, isActive becomes false. We should not process
+          // interim results because:
+          // 1. The hook has already reset its state
+          // 2. Late interim results would corrupt the next session's state
+          // 3. The accumulated text would carry over incorrectly
+          //
+          // HOWEVER, we MUST still allow FINAL results through because:
+          // 1. FINAL results contain word-level timing data for anti-cheat
+          // 2. The hook is waiting (with timeout) for the FINAL result
+          // 3. Without FINAL data, anti-cheat cannot detect "saying vs spelling"
+          if (!isActive && message.type === "interim") {
+            if (process.env.NODE_ENV === "development") {
+              console.log("[Google] Ignoring interim message after session stopped")
+            }
+            return
+          }
+
           switch (message.type) {
             case "ready":
               if (process.env.NODE_ENV === "development") {
@@ -564,8 +582,15 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
           if (!isActive) return
           isActive = false
 
+          // Reset accumulated state immediately to prevent carryover to next session
+          // This is critical: if we don't reset here, late-arriving messages
+          // (before the 500ms cleanup) could corrupt the accumulated text
+          accumulatedStableText = ""
+          lastStability = 0
+          lastTranscript = ""
+
           if (process.env.NODE_ENV === "development") {
-            console.log("[Google] Stopping session")
+            console.log("[Google] Stopping session (accumulated state reset)")
           }
 
           // Send stop message to get final results

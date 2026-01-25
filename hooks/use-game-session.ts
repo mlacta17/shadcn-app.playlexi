@@ -9,7 +9,7 @@ import {
   playWordSentence,
   playWordDefinition,
 } from "@/lib/word-service"
-import { fetchRandomWord } from "@/lib/word-fetcher"
+import { fetchRandomWord, type FetchWordOptions } from "@/lib/word-fetcher"
 import {
   validateAnswer,
   isEmptyAnswer,
@@ -210,8 +210,8 @@ export interface UseGameSessionReturn {
 /** Starting hearts for Endless mode (per PRD) */
 const INITIAL_HEARTS = 3
 
-/** Starting tier for new players */
-const INITIAL_TIER: WordTier = 1
+/** Default starting tier for new players (used when no user tier provided) */
+const DEFAULT_INITIAL_TIER: WordTier = 1
 
 /** Blitz mode duration in seconds (per PRD: 3 minutes) */
 const BLITZ_DURATION = 180
@@ -228,7 +228,8 @@ const FEEDBACK_DURATION = 400
 
 function createInitialState(
   mode: GameMode,
-  inputMethod: InputMethod
+  inputMethod: InputMethod,
+  initialTier: WordTier = DEFAULT_INITIAL_TIER
 ): GameState {
   return {
     phase: "idle",
@@ -237,8 +238,8 @@ function createInitialState(
     currentRound: 0,
     hearts: mode === "endless" ? INITIAL_HEARTS : 0,
     currentWord: null,
-    currentTier: INITIAL_TIER,
-    timerDuration: getTimerDuration(INITIAL_TIER, inputMethod),
+    currentTier: initialTier,
+    timerDuration: getTimerDuration(initialTier, inputMethod),
     answers: [],
     usedWordIds: [],
     blitzTimeRemaining: mode === "blitz" ? BLITZ_DURATION : 0,
@@ -305,12 +306,36 @@ function createInitialState(
  * @param mode - Game mode (endless or blitz)
  * @param inputMethod - Input method (voice or keyboard)
  */
+/**
+ * Options for configuring the game session.
+ */
+export interface UseGameSessionOptions {
+  /**
+   * Initial tier for word difficulty.
+   * Should be the user's current skill tier from their profile.
+   * Defaults to tier 1 if not provided.
+   */
+  initialTier?: WordTier
+}
+
 export function useGameSession(
   mode: GameMode,
-  inputMethod: InputMethod
+  inputMethod: InputMethod,
+  options?: UseGameSessionOptions
 ): UseGameSessionReturn {
+  const initialTier = options?.initialTier ?? DEFAULT_INITIAL_TIER
+
+  // Store the initial tier in a ref so it persists across re-renders
+  // and is accessible in startGame() even if options change
+  const initialTierRef = React.useRef<WordTier>(initialTier)
+
+  // Update ref when initialTier changes (e.g., when user tier loads)
+  React.useEffect(() => {
+    initialTierRef.current = initialTier
+  }, [initialTier])
+
   const [state, setState] = React.useState<GameState>(() =>
-    createInitialState(mode, inputMethod)
+    createInitialState(mode, inputMethod, initialTier)
   )
 
   // Track time when word was presented (for time tracking)
@@ -320,6 +345,9 @@ export function useGameSession(
   // This prevents race conditions when loadNextWord is called multiple times
   // before state updates propagate.
   const usedWordIdsRef = React.useRef<Set<string>>(new Set())
+
+  // Track the last word ID for anti-repeat safeguard
+  const lastWordIdRef = React.useRef<string | undefined>(undefined)
 
   // ==========================================================================
   // ACTIONS
@@ -347,13 +375,14 @@ export function useGameSession(
     // Capture current values for the async fetch
     // Use ref for usedWordIds to prevent race conditions when this function
     // is called multiple times before state updates propagate
-    let currentTier: WordTier = tierOverride ?? INITIAL_TIER
+    let currentTier: WordTier = tierOverride ?? initialTierRef.current
     let currentInputMethod: InputMethod = "voice"
 
     // IMPORTANT: setState callback runs synchronously, but we need to capture
     // the values BEFORE the await, so this pattern works correctly
     setState((prev) => {
-      // Only read tier from state if not overridden
+      // Read tier from state if not overridden, but only if state has a valid tier
+      // Otherwise fall back to the initialTierRef
       if (tierOverride === undefined) {
         currentTier = prev.currentTier
       }
@@ -367,8 +396,16 @@ export function useGameSession(
     // Debug: Log what we're fetching
     console.log(`[GameSession] loadNextWord - tier=${currentTier}, usedWordIds.length=${usedWordIds.length}`)
 
-    // Fetch word asynchronously
-    const result = await fetchRandomWord(currentTier, usedWordIds)
+    // Build fetch options with anti-repeat and adaptive mixing
+    // Enable adaptive mixing for skilled players (tier 3+) to keep gameplay varied
+    const fetchOptions: FetchWordOptions = {
+      excludeIds: usedWordIds,
+      lastWordId: lastWordIdRef.current,
+      enableAdaptiveMixing: currentTier >= 3,
+    }
+
+    // Fetch word asynchronously with enhanced options
+    const result = await fetchRandomWord(currentTier, fetchOptions)
 
     if (!result.success) {
       setState((prev) => ({
@@ -391,6 +428,9 @@ export function useGameSession(
     // Add word ID to ref IMMEDIATELY (prevents duplicates on concurrent calls)
     usedWordIdsRef.current.add(word.id)
 
+    // Update last word ID for anti-repeat safeguard
+    lastWordIdRef.current = word.id
+
     // Debug: Log the word we received and current ref state
     console.log(`[GameSession] Received word: "${word.word}" (id=${word.id}), usedWordIdsRef now has ${usedWordIdsRef.current.size} entries`)
 
@@ -409,17 +449,23 @@ export function useGameSession(
    * Start a new game.
    */
   const startGame = React.useCallback(async () => {
-    // Clear used word IDs ref for the new game
+    // Clear used word IDs ref and last word ID for the new game
     usedWordIdsRef.current.clear()
+    lastWordIdRef.current = undefined
+
+    // Use the tier from the ref (updated when options.initialTier changes)
+    const tierToUse = initialTierRef.current
+
+    console.log(`[GameSession] startGame - using tier ${tierToUse}`)
 
     setState((prev) => ({
-      ...createInitialState(prev.mode, prev.inputMethod),
+      ...createInitialState(prev.mode, prev.inputMethod, tierToUse),
       phase: "idle",
     }))
 
-    // Small delay then load first word
+    // Small delay then load first word with the correct tier
     await new Promise((resolve) => setTimeout(resolve, 100))
-    await loadNextWord()
+    await loadNextWord(tierToUse)
   }, [loadNextWord])
 
   /**
@@ -560,7 +606,8 @@ export function useGameSession(
    * Move to the next word after feedback.
    */
   const nextWord = React.useCallback(async () => {
-    let newTierForFetch: WordTier = INITIAL_TIER
+    // Start with the current tier from ref (will be updated from state if available)
+    let newTierForFetch: WordTier = initialTierRef.current
 
     setState((prev) => {
       if (prev.phase !== "feedback") return prev
@@ -597,6 +644,7 @@ export function useGameSession(
    */
   const resetGame = React.useCallback(() => {
     usedWordIdsRef.current.clear()
+    lastWordIdRef.current = undefined
     setState(createInitialState(mode, inputMethod))
   }, [mode, inputMethod])
 

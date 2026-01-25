@@ -226,7 +226,12 @@ export async function POST(
       newMappings,
     })
   } catch (error) {
-    console.error("[API] Error in learning trigger:", error)
+    // Log error with full context for debugging
+    console.error("[TriggerLearning] Error:", {
+      name: error instanceof Error ? error.name : "Unknown",
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    })
 
     return NextResponse.json(
       {

@@ -20,15 +20,14 @@
  */
 
 import { NextResponse } from "next/server"
-import { headers } from "next/headers"
-import { getCloudflareContext } from "@opennextjs/cloudflare"
-import { createAuth } from "@/lib/auth"
+import { requireAuth, handleApiError, Errors } from "@/lib/api"
 import {
   createUser,
   isUsernameAvailable,
   type PlacementResult,
 } from "@/lib/services/user-service"
 import { validateUsernameFormat } from "@/lib/username-utils"
+import { isValidPlacementTier, GLICKO2_CONSTANTS } from "@/lib/game-constants"
 
 // =============================================================================
 // TYPES
@@ -47,20 +46,8 @@ interface CompleteProfileRequest {
 
 export async function POST(request: Request) {
   try {
-    // Get Cloudflare context
-    const { env } = await getCloudflareContext({ async: true })
-
-    // Verify authentication
-    const auth = createAuth(env.DB)
-    const requestHeaders = await headers()
-    const session = await auth.api.getSession({ headers: requestHeaders })
-
-    if (!session?.user) {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    // Require authentication
+    const { user, db } = await requireAuth()
 
     // Parse request body
     const body = await request.json() as CompleteProfileRequest
@@ -69,68 +56,112 @@ export async function POST(request: Request) {
     // Validate username format
     const formatValidation = validateUsernameFormat(username)
     if (!formatValidation.isValid) {
-      return NextResponse.json(
-        { error: formatValidation.error ?? "Invalid username format" },
-        { status: 400 }
-      )
+      throw Errors.validation(formatValidation.error ?? "Invalid username format", {
+        field: "username",
+      })
     }
 
     // Check username availability
-    const available = await isUsernameAvailable(env.DB, username)
+    const available = await isUsernameAvailable(db, username)
     if (!available) {
-      return NextResponse.json(
-        { error: "Username is already taken" },
-        { status: 400 }
-      )
+      throw Errors.conflict("Username", "username")
     }
 
     // Validate avatarId
     if (avatarId !== undefined && (avatarId < 1 || avatarId > 3)) {
-      return NextResponse.json(
-        { error: "Invalid avatar ID (must be 1, 2, or 3)" },
-        { status: 400 }
-      )
+      throw Errors.invalidInput("avatarId", "Must be 1, 2, or 3", [1, 2, 3], avatarId)
     }
 
-    // Create the PlayLexi user
-    const user = await createUser(
-      env.DB,
+    // Validate placement data (SECURITY: Prevent users from claiming any tier)
+    let validatedPlacement: PlacementResult | undefined
+    if (placement) {
+      // Validate derivedTier is in valid range (1-7)
+      if (!isValidPlacementTier(placement.derivedTier)) {
+        throw Errors.validation("Invalid placement tier", {
+          field: "placement.derivedTier",
+          expected: "integer between 1 and 7",
+          received: placement.derivedTier,
+        })
+      }
+
+      // Validate rating is within reasonable bounds
+      const minRating = GLICKO2_CONSTANTS.TIER_RATING_RANGES[1].min
+      const maxRating = GLICKO2_CONSTANTS.TIER_RATING_RANGES[7].min + 200 // Slightly above tier 7 min
+      if (
+        typeof placement.rating !== "number" ||
+        placement.rating < minRating ||
+        placement.rating > maxRating
+      ) {
+        throw Errors.validation("Invalid placement rating", {
+          field: "placement.rating",
+          expected: `number between ${minRating} and ${maxRating}`,
+          received: placement.rating,
+        })
+      }
+
+      // Validate rating deviation is within bounds
+      if (
+        typeof placement.ratingDeviation !== "number" ||
+        placement.ratingDeviation < GLICKO2_CONSTANTS.MIN_RD ||
+        placement.ratingDeviation > GLICKO2_CONSTANTS.INITIAL_RD
+      ) {
+        throw Errors.validation("Invalid placement rating deviation", {
+          field: "placement.ratingDeviation",
+          expected: `number between ${GLICKO2_CONSTANTS.MIN_RD} and ${GLICKO2_CONSTANTS.INITIAL_RD}`,
+          received: placement.ratingDeviation,
+        })
+      }
+
+      // Verify tier matches rating (prevent tier/rating mismatch cheating)
+      // Allow some tolerance since tier is derived from rating
+      const expectedTierRange = GLICKO2_CONSTANTS.TIER_RATING_RANGES[
+        placement.derivedTier as keyof typeof GLICKO2_CONSTANTS.TIER_RATING_RANGES
+      ]
+      if (
+        placement.rating < expectedTierRange.min - 50 ||
+        placement.rating > (expectedTierRange.max === Infinity ? 2100 : expectedTierRange.max) + 50
+      ) {
+        console.warn(
+          `[CompleteProfile] Tier/rating mismatch: tier=${placement.derivedTier}, rating=${placement.rating}. Using defaults.`
+        )
+        // Don't throw - just ignore suspect placement data
+        validatedPlacement = undefined
+      } else {
+        validatedPlacement = placement
+      }
+    }
+
+    // Create the PlayLexi user (using validated placement or undefined)
+    const newUser = await createUser(
+      db,
       {
-        authUserId: session.user.id,
-        email: session.user.email,
+        authUserId: user.id,
+        email: user.email,
         username: username.trim(),
         birthYear,
         authProvider: "google", // TODO: Detect from session when Apple is added
         avatarId: avatarId ?? 1,
       },
-      placement
+      validatedPlacement
     )
 
     return NextResponse.json(
       {
         success: true,
         user: {
-          id: user.id,
-          username: user.username,
-          avatarId: user.avatarId,
+          id: newUser.id,
+          username: newUser.username,
+          avatarId: newUser.avatarId,
         },
       },
       { status: 201 }
     )
   } catch (error) {
-    console.error("[CompleteProfile] Error:", error)
-
     // Handle unique constraint violation (race condition)
     if (error instanceof Error && error.message.includes("UNIQUE")) {
-      return NextResponse.json(
-        { error: "Username is already taken" },
-        { status: 400 }
-      )
+      return handleApiError(Errors.conflict("Username", "username"), "[CompleteProfile]")
     }
 
-    return NextResponse.json(
-      { error: "Failed to create user profile" },
-      { status: 500 }
-    )
+    return handleApiError(error, "[CompleteProfile]")
   }
 }

@@ -92,4 +92,4 @@ export * from "./schema"
 export * from "./types"
 
 // Re-export common Drizzle operators for queries
-export { eq, and, or, gt, gte, lt, lte, ne, isNull, isNotNull, inArray, notInArray, like, sql } from "drizzle-orm"
+export { eq, and, or, gt, gte, lt, lte, ne, isNull, isNotNull, inArray, notInArray, like, sql, desc, asc } from "drizzle-orm"
