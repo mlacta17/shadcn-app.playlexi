@@ -15,7 +15,14 @@
         "ink", "jam", "kit", "lid", "mop", "nap", "oak", "paw", "ram", "sob",
         "tan", "urn", "vat", "wax", "axe", "cod", "dew", "elm", "fad", "gas",
         "ham", "ivy", "jab", "keg", "lap", "mat", "nod", "oar", "pal", "rad",
-        "sew", "tab", "use", "vet", "wag", "yam", "zap", "ace", "bid", "cot"
+        "sew", "tab", "use", "vet", "wag", "yam", "zap", "ace", "bid", "cot",
+        "add", "age", "aid", "aim", "air", "all", "and", "any", "are", "art",
+        "ask", "ate", "bad", "bag", "bar", "bit", "bob", "bow", "boy", "bud",
+        "cab", "can", "cap", "car", "cop", "cue", "cut", "dad", "dam", "did",
+        "dig", "dim", "dip", "dot", "dry", "dub", "dug", "duo", "eat", "egg",
+        "end", "era", "eve", "fab", "fan", "far", "fat", "fed", "fee", "few",
+        "fit", "fix", "foe", "for", "fox", "fur", "gap", "get", "got", "gun",
+        "gut", "gym", "had", "has", "her", "hid", "him", "hip", "his", "hit"
       ]
     },
     "2": {
@@ -34,7 +41,15 @@
         "bloom", "rose", "bird", "fish", "frog", "duck", "bear", "deer", "wolf",
         "lion", "tiger", "horse", "sheep", "goat", "mouse", "snake", "whale",
         "shark", "crab", "star", "moon", "earth", "space", "rock", "sand", "dust",
-        "fire", "heat", "cold", "warm", "cool", "soft", "hard"
+        "fire", "heat", "cold", "warm", "cool", "soft", "hard",
+        "about", "above", "after", "again", "alien", "allow", "alone", "along",
+        "angry", "arrow", "audio", "basic", "begin", "being", "below", "birth",
+        "blank", "blind", "blood", "board", "bonus", "brain", "brave", "break",
+        "brick", "brief", "bring", "brown", "build", "bunch", "cabin", "cable",
+        "camel", "canal", "carry", "catch", "cause", "chain", "charm", "chart",
+        "chase", "cheap", "check", "chest", "chief", "child", "china", "chunk",
+        "clamp", "clasp", "clear", "clerk", "click", "climb", "close", "coach",
+        "coast", "color", "comet", "coral", "couch", "count", "court", "cover"
       ]
     },
     "3": {
@@ -55,7 +70,15 @@
         "pirate", "robot", "alien", "monster", "zombie", "angel", "spirit",
         "shadow", "mirror", "candle", "blanket", "pillow", "carpet", "curtain",
         "picture", "statue", "button", "zipper", "pocket", "collar", "sleeve",
-        "basket", "bucket", "handle", "ladder"
+        "basket", "bucket", "handle", "ladder",
+        "accept", "access", "action", "active", "actual", "advice", "afford",
+        "agency", "agenda", "amount", "animal", "annual", "answer", "appeal",
+        "appear", "arrest", "arrive", "aspect", "assign", "assist", "assume",
+        "attach", "attack", "attend", "author", "avenue", "battle", "beauty",
+        "become", "before", "behind", "belong", "beside", "better", "beyond",
+        "bitter", "border", "boring", "borrow", "bottom", "bounce", "branch",
+        "breath", "bright", "broken", "bronze", "bubble", "budget", "bullet",
+        "bundle", "burden", "butter", "button", "camera", "campus", "cancel"
       ]
     },
     "4": {
@@ -78,7 +101,14 @@
         "juvenile", "latitude", "magnetic", "national", "oriental", "portable",
         "quantity", "regiment", "sandwich", "telegram", "vertical", "workshop",
         "bacteria", "capacity", "diameter", "equation", "guardian", "hydrogen",
-        "integral", "memorial", "ordinary", "platinum"
+        "integral", "memorial", "ordinary", "platinum",
+        "abstract", "accident", "acoustic", "adequate", "adjacent", "advocate",
+        "aesthetic", "affection", "alliance", "allocate", "ambition", "analysis",
+        "ancestor", "announce", "antibody", "apparent", "appetite", "applause",
+        "approach", "argument", "artifact", "assembly", "attorney", "audience",
+        "backward", "baseball", "bathroom", "behavior", "believer", "birthday",
+        "blessing", "bracelet", "breakout", "breathe", "brothers", "campaign",
+        "campfire", "cardinal", "carnival", "category", "cautious", "ceremony"
       ]
     },
     "5": {
@@ -102,7 +132,14 @@
         "leadership", "membership", "photograph", "republican", "strawberry",
         "themselves", "understand", "volleyball", "watermelon", "ambassador",
         "atmosphere", "blackberry", "collection", "depression", "everything",
-        "foundation", "government", "hypothesis", "importance", "javascript"
+        "foundation", "government", "hypothesis", "importance", "javascript",
+        "absorption", "acceptance", "accessible", "accomplish", "accountant",
+        "accusation", "achievement", "adaptation", "adjustment", "admiration",
+        "admission", "adolescent", "affirmative", "aggression", "allegation",
+        "allocation", "ambassador", "ammunition", "anniversary", "appearance",
+        "appreciate", "apprentice", "assignment", "assistance", "assumption",
+        "attraction", "automobile", "background", "basketball", "benefactor",
+        "beneficial", "binoculars", "birthplace", "blacksmith", "blossoming"
       ]
     },
     "6": {
@@ -129,7 +166,14 @@
         "lighthearted", "manufacturing", "neighborhood", "organizational",
         "predominantly", "qualifications", "reconnaissance", "simultaneously",
         "traditionally", "unconditional", "biodegradable", "characteristic",
-        "disadvantage", "environmental", "extraordinary", "groundbreaking"
+        "disadvantage", "environmental", "extraordinary", "groundbreaking",
+        "abbreviation", "accidentally", "accommodate", "accomplishment",
+        "accumulation", "acquaintance", "administration", "advertisement",
+        "affectionate", "agricultural", "alphabetical", "alternatively",
+        "announcement", "anticipation", "appreciation", "architectural",
+        "assassination", "authorization", "autobiography", "availability",
+        "battleground", "breakthrough", "broadcasting", "businessman",
+        "cancellation", "catastrophic", "championship", "civilization"
       ]
     },
     "7": {
@@ -159,7 +203,14 @@
         "nomenclature", "ostracism", "philanthropist", "quarrelsome",
         "remuneration", "serendipitous", "thoroughfare", "unambiguous",
         "verisimilar", "whimsicality", "xylophonist", "anthropology",
-        "bibliography", "circumference", "disambiguation", "egalitarianism"
+        "bibliography", "circumference", "disambiguation", "egalitarianism",
+        "absquatulate", "anachronistic", "appurtenance", "bathysphere",
+        "cantankerous", "cataclysmic", "circumnavigate", "companionable",
+        "concatenation", "conglomeration", "conspiratorial", "contemptuous",
+        "counterintuitive", "crystallography", "defenestration", "demonstrative",
+        "deterioration", "differentiation", "disingenuous", "dissemination",
+        "ebullient", "efflorescence", "electrocardiogram", "embellishment",
+        "encephalopathy", "entrepreneurial", "equivocation", "extemporaneous"
       ]
     }
   }

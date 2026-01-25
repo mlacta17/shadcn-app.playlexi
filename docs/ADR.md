@@ -23,7 +23,8 @@ This document is extracted from ARCHITECTURE.md Section 19 to make decisions eas
 12. [ADR-012: Hidden Skill Rating System (Glicko-2)](#adr-012-hidden-skill-rating-system-glicko-2)
 13. [ADR-013: Adaptive Placement Test](#adr-013-adaptive-placement-test)
 14. [ADR-014: Solo vs Multiplayer Progression Systems](#adr-014-solo-vs-multiplayer-progression-systems)
-15. [Template for New ADRs](#template-for-new-adrs)
+15. [ADR-015: OpenAI TTS for Realistic Voice Output](#adr-015-openai-tts-for-realistic-voice-output)
+16. [Template for New ADRs](#template-for-new-adrs)
 
 ---
 
@@ -1036,6 +1037,186 @@ Mixing these creates cognitive dissonance. A player in solo mode seeing "You los
 2. **Section 7.4** — Solo tab now shows personal stats, not XP
 3. **Section 15.1** — XP thresholds clarified as multiplayer-only
 4. **Section 15.2.2** — Solo XP section now explains why it's not tracked
+
+---
+
+## ADR-015: OpenAI TTS for Realistic Voice Output
+
+| Field | Value |
+|-------|-------|
+| **Date** | January 24, 2026 |
+| **Status** | Accepted |
+| **Deciders** | Project team |
+
+**Context:** The current implementation uses the browser's built-in Speech Synthesis API for:
+- Word introductions ("Your word is castle")
+- Reading sentences ("The castle stood on the hill")
+- Reading definitions ("A large fortified building...")
+
+Problems with browser Speech Synthesis:
+1. **Robotic quality** — Sounds artificial, not human-like
+2. **Inconsistent across devices** — Different browsers/OS have different voices
+3. **Mispronunciations** — Complex spelling bee words often pronounced incorrectly
+4. **No control** — Cannot customize voice characteristics
+
+We need a realistic TTS solution that:
+- Sounds human-like (comparable to ChatGPT voice)
+- Pronounces complex words correctly
+- Is cost-effective at scale
+- Doesn't add latency during gameplay
+
+**Decision:** Use OpenAI TTS API with pre-generated audio cached in Cloudflare R2.
+
+**Alternatives Considered:**
+
+| Provider | Cost/1M chars | Quality | Why Not Chosen |
+|----------|---------------|---------|----------------|
+| **OpenAI TTS** | $15 | ⭐⭐⭐⭐ | ✅ **Chosen** — Best price/quality ratio |
+| ElevenLabs | $180-200 | ⭐⭐⭐⭐⭐ | Too expensive at scale ($540 for 10K words) |
+| Google WaveNet | $16 | ⭐⭐⭐ | Less natural, "assistant-like" |
+| Fish Audio | $15 | ⭐⭐⭐⭐⭐ | Newer company, less proven |
+| Amazon Polly | $16-30 | ⭐⭐⭐⭐ | Similar to Google, less natural |
+| Deepgram Aura | $30 | ⭐⭐⭐⭐ | Enterprise-focused, overkill |
+
+**Architecture: "Generate Once, Serve Forever"**
+
+Key insight: All TTS content is **deterministic** — each word always has the same intro, sentence, and definition. We pre-generate all audio at build time and cache in R2.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    TTS Generation Pipeline                       │
+│                    (Offline / Build Time)                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   Word List ──► TTS Script ──► OpenAI TTS API ──► MP3 Files     │
+│      (D1)       (Node.js)         (Generate)        (Buffer)     │
+│                     │                                   │        │
+│                     └───────────────────────────────────┘        │
+│                                     │                            │
+│                                     ▼                            │
+│                              Upload to R2                        │
+│                                     │                            │
+│                                     ▼                            │
+│                           Update D1 with URLs                    │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+
+Runtime Flow (Zero TTS API calls):
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                  │
+│   Client ──► /api/words/random ──► D1 (URLs) ──► R2 (Audio)     │
+│              (fetch word)          (includes     (serve MP3)     │
+│                                    TTS URLs)                     │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Database Schema Changes:**
+
+```sql
+-- Add to words table
+ALTER TABLE words ADD COLUMN intro_audio_url TEXT;      -- "Your word is {word}"
+ALTER TABLE words ADD COLUMN sentence_audio_url TEXT;   -- Example sentence
+ALTER TABLE words ADD COLUMN definition_audio_url TEXT; -- Definition
+ALTER TABLE words ADD COLUMN tts_generated_at INTEGER;  -- Timestamp
+ALTER TABLE words ADD COLUMN tts_voice TEXT DEFAULT 'nova'; -- Voice used
+```
+
+**Cost Analysis:**
+
+One-time generation (10,000 words):
+- Intro (~20 chars × 10K): 200K chars → $3.00
+- Sentence (~100 chars × 10K): 1M chars → $15.00
+- Definition (~150 chars × 10K): 1.5M chars → $22.50
+- **Total: ~$41 one-time cost**
+
+Ongoing costs:
+- R2 storage (~1.5GB): $0.02/month
+- R2 egress: $0 (Cloudflare's zero egress)
+- New words (~100/month): ~$0.40/month
+- **Total: <$1/month**
+
+Comparison if we used real-time TTS:
+- 10K sessions/month × 500 chars = 5M chars = $75/month
+- Caching saves 99.5%+ of TTS costs
+
+**Implementation:**
+
+1. **New files:**
+   - `lib/tts/openai-tts.ts` — OpenAI TTS client
+   - `lib/tts/tts-types.ts` — TypeScript types
+   - `scripts/generate-tts.ts` — Generation script
+
+2. **Modified files:**
+   - `db/schema.ts` — Add TTS columns
+   - `lib/word-service.ts` — Update playback functions
+   - `lib/services/d1-word-data-source.ts` — Map new columns
+   - `scripts/lib/r2-upload.ts` — Add TTS upload helpers
+
+3. **Voice selection:** OpenAI's "nova" voice (clear, friendly, good for education)
+
+**Graceful Degradation:**
+
+Every playback function falls back to browser Speech Synthesis if:
+- TTS audio URL is missing (not yet generated)
+- Audio playback fails (network error)
+- Browser doesn't support Audio API
+
+```typescript
+async function playWordIntro(word: Word): Promise<void> {
+  // Try pre-generated TTS first
+  if (word.introAudioUrl) {
+    try {
+      const audio = new Audio(word.introAudioUrl)
+      await audio.play()
+      return
+    } catch { /* fall through */ }
+  }
+
+  // Fallback to browser speech synthesis
+  if ("speechSynthesis" in window) {
+    const utterance = new SpeechSynthesisUtterance(`Your word is ${word.word}`)
+    window.speechSynthesis.speak(utterance)
+  }
+}
+```
+
+**Rationale:**
+
+1. **Cost efficiency** — $41 one-time vs $75+/month for real-time
+2. **Zero latency during gameplay** — Audio served from edge (R2)
+3. **Consistent quality** — Same voice for all users
+4. **Scalable** — Works for 1 user or 1 million users at same cost
+5. **Simple integration** — Follows existing R2 caching pattern (MW audio)
+6. **Graceful degradation** — Never breaks, just falls back to browser TTS
+
+**Consequences:**
+
+*Positive:*
+- Dramatically improved voice quality
+- Zero runtime TTS API costs
+- Zero additional latency
+- Consistent experience across all devices
+- Follows existing audio caching pattern
+
+*Negative:*
+- One-time upfront cost (~$41)
+- Larger database (3 new URL columns per word)
+- Must regenerate audio if text changes
+- Requires OpenAI API key in environment
+
+**Files to Create/Modify:**
+
+| File | Action | Purpose |
+|------|--------|---------|
+| `lib/tts/openai-tts.ts` | Create | OpenAI TTS client |
+| `lib/tts/tts-types.ts` | Create | TypeScript interfaces |
+| `scripts/generate-tts.ts` | Create | TTS generation script |
+| `db/schema.ts` | Modify | Add TTS columns |
+| `db/migrations/` | Create | New migration |
+| `lib/word-service.ts` | Modify | Update playback |
+| `lib/services/d1-word-data-source.ts` | Modify | Map new columns |
+| `scripts/lib/r2-upload.ts` | Modify | Add TTS helpers |
 
 ---
 
