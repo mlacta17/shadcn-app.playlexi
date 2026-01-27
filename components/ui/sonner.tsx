@@ -112,26 +112,36 @@ const Toaster = ({ ...props }: ToasterProps) => {
         error: <CircleWarningIcon className="size-4 text-destructive" />,
         loading: <LoadingSpinner className="size-4 animate-spin" />,
       }}
-      // Style using PlayLexi design tokens
-      style={
-        {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
-          "--border-radius": "var(--radius)",
-        } as React.CSSProperties
-      }
+      // No custom CSS variables needed - we use unstyled mode and Tailwind classes
+      // Enable close button for dismissibility
+      closeButton={true}
       toastOptions={{
+        // Disable Sonner's default styles so our Tailwind classes have full control
+        // This sets data-styled="false" on toasts, preventing Sonner's CSS from applying
+        unstyled: true,
         classNames: {
+          // Toast container - matches Figma design (336px max-width, 16px padding, rounded-2xl)
+          // flex layout with gap for icon + content + close button
           toast:
-            "group toast bg-popover text-popover-foreground border-border shadow-lg",
+            "group toast flex items-start gap-2 bg-popover text-popover-foreground border border-border shadow-lg rounded-2xl p-4 w-[336px]",
+          // Title text - medium weight per Figma
           title: "text-sm font-medium",
+          // Description text - regular weight, muted color
           description: "text-sm text-muted-foreground",
+          // Content wrapper (contains title + description)
+          content: "flex-1 flex flex-col gap-1",
+          // Action button - matches PlayLexi default button variant (yellow/primary, pill shape)
           actionButton:
-            "bg-primary text-primary-foreground text-sm font-medium px-3 py-1.5 rounded-md",
+            "bg-primary text-primary-foreground hover:bg-[var(--primary-hover)] text-sm font-medium h-6 px-2 rounded-full cursor-pointer transition-colors",
+          // Cancel button - matches secondary button variant
           cancelButton:
-            "bg-muted text-muted-foreground text-sm font-medium px-3 py-1.5 rounded-md",
-          closeButton: "text-muted-foreground hover:text-foreground",
+            "bg-secondary text-secondary-foreground hover:bg-[var(--secondary-hover)] text-sm font-medium h-6 px-2 rounded-full cursor-pointer transition-colors",
+          // Close button - styled like ghost icon button (matches Button variant="ghost" size="icon-sm")
+          // Positioned top-right, circular, with hover background
+          closeButton:
+            "absolute right-2 top-2 size-6 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer transition-colors",
+          // Icon container - fixed size, flex centered
+          icon: "shrink-0 mt-0.5",
         },
       }}
       {...props}
