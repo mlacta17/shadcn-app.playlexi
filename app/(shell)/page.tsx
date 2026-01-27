@@ -68,39 +68,6 @@ export default function DashboardPage() {
           </Card>
         </div>
       </section>
-
-      {/* Stats Preview */}
-      <section className="container mx-auto max-w-4xl px-6 pb-12">
-        <Card>
-          <CardHeader>
-            <CardTitle>Your Progress</CardTitle>
-            <CardDescription>
-              Keep playing to improve your rank and climb the leaderboard.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-3 gap-4 text-center">
-              <div>
-                <p className="text-2xl font-bold">—</p>
-                <p className="text-sm text-muted-foreground">Current Rank</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold">0</p>
-                <p className="text-sm text-muted-foreground">Games Played</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold">0</p>
-                <p className="text-sm text-muted-foreground">Words Spelled</p>
-              </div>
-            </div>
-            <div className="mt-4 text-center">
-              <Button asChild variant="link">
-                <Link href="/leaderboard">View Leaderboard</Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </section>
     </main>
   )
 }

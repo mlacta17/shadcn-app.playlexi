@@ -77,9 +77,12 @@ export { IconArrowRotateClockwiseOutline24 as RefreshIcon } from "nucleo-core-ou
 export { IconMessage2ContentOutline24 as SentenceIcon } from "nucleo-core-outline-24"
 export { IconBookOutline24 as DictionaryIcon } from "nucleo-core-outline-24"
 
-// Alert/Feedback icons (AlertDialog)
+// Alert/Feedback icons (AlertDialog, Toast notifications)
 export { IconAlertWarningOutline24 as AlertWarningIcon } from "nucleo-core-outline-24"
 export { IconCircleCheckOutline24 as CircleCheckIcon } from "nucleo-core-outline-24"
+export { IconCircleInfoOutline24 as CircleInfoIcon } from "nucleo-core-outline-24"
+export { IconTriangleWarningOutline24 as TriangleWarningIcon } from "nucleo-core-outline-24"
+export { IconCircleWarningOutline24 as CircleWarningIcon } from "nucleo-core-outline-24"
 
 // Search/Filter icons (Leaderboard, tables)
 export { IconMagnifierOutline24 as SearchIcon } from "nucleo-core-outline-24"

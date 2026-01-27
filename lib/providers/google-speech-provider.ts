@@ -47,6 +47,7 @@ import type {
   WordTimingData,
 } from "../speech-recognition-service"
 import { cleanTranscript, float32ToInt16 } from "../speech-utils"
+import { toSpeechFriendlyError } from "../error-messages"
 
 // =============================================================================
 // CONSTANTS
@@ -497,8 +498,12 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
               break
 
             case "error":
+              // Log technical error for debugging
               console.error("[Google] Server error:", message.message)
-              onError?.(new Error(message.message || "Recognition error"))
+              // Convert to user-friendly error
+              const friendlyError = toSpeechFriendlyError(message.message || "Recognition error")
+              console.error("[Google] Technical details:", friendlyError.technicalDetails)
+              onError?.(new Error(friendlyError.message))
               break
           }
         } catch (err) {
@@ -508,7 +513,9 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
 
       ws.onerror = (event) => {
         console.error("[Google] WebSocket error:", event)
-        onError?.(new Error("WebSocket error"))
+        // User-friendly message for WebSocket errors
+        const friendlyError = toSpeechFriendlyError("WebSocket connection failed")
+        onError?.(new Error(friendlyError.message))
       }
 
       ws.onclose = () => {
@@ -516,8 +523,9 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
           console.log("[Google] WebSocket closed")
         }
         if (isActive) {
-          // Unexpected close
-          onError?.(new Error("WebSocket connection closed unexpectedly"))
+          // Unexpected close - user-friendly message
+          const friendlyError = toSpeechFriendlyError("WebSocket connection closed unexpectedly")
+          onError?.(new Error(friendlyError.message))
         }
       }
 

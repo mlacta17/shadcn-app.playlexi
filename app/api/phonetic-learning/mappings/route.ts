@@ -1,18 +1,25 @@
 /**
  * User Phonetic Mappings API
  *
- * GET /api/phonetic-learning/mappings?userId=abc123
- * - Returns all phonetic mappings for a user
+ * GET /api/phonetic-learning/mappings
+ * - Returns all phonetic mappings for the authenticated user
  *
  * POST /api/phonetic-learning/mappings
  * - Creates a new phonetic mapping (auto-learned or manual)
+ *
+ * ## Authentication
+ *
+ * Both endpoints require authentication. The user ID is extracted from
+ * the session, NOT from query params or request body. This prevents:
+ * - Reading other users' phonetic mappings
+ * - Creating mappings for other users
  *
  * ## Usage
  *
  * Fetch user's mappings at game start for optimal performance:
  *
  * ```typescript
- * const response = await fetch(`/api/phonetic-learning/mappings?userId=${userId}`)
+ * const response = await fetch('/api/phonetic-learning/mappings')
  * const { mappings } = await response.json()
  *
  * // Convert to Map for fast lookup
@@ -24,10 +31,9 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { getCloudflareContext } from "@opennextjs/cloudflare"
 import { createDb, userPhoneticMappings, eq, sql } from "@/db"
 import type { PhoneticMapping } from "@/lib/phonetic-learning"
-import { handleApiError, Errors, type ApiErrorResponse } from "@/lib/api"
+import { requireAuth, handleApiError, Errors, type ApiErrorResponse } from "@/lib/api"
 
 // =============================================================================
 // TYPE DEFINITIONS
@@ -56,29 +62,22 @@ interface ErrorResponse {
 /**
  * GET /api/phonetic-learning/mappings
  *
- * Fetches all phonetic mappings for a user.
+ * Fetches all phonetic mappings for the authenticated user.
+ * Requires authentication — users can only read their own mappings.
  */
 export async function GET(
   request: NextRequest
 ): Promise<NextResponse<GetSuccessResponse | ApiErrorResponse>> {
   try {
-    // Parse query parameters
-    const { searchParams } = new URL(request.url)
-    const userId = searchParams.get("userId")
+    // Require authentication — user can only read their own mappings
+    const { user, db: d1Binding } = await requireAuth()
+    const db = createDb(d1Binding)
 
-    if (!userId) {
-      throw Errors.invalidInput("userId", "Query parameter is required")
-    }
-
-    // Get D1 database binding
-    const { env } = await getCloudflareContext({ async: true })
-    const db = createDb(env.DB)
-
-    // Fetch user's mappings
+    // Fetch authenticated user's mappings
     const rows = await db
       .select()
       .from(userPhoneticMappings)
-      .where(eq(userPhoneticMappings.userId, userId))
+      .where(eq(userPhoneticMappings.userId, user.id))
 
     // Transform to PhoneticMapping type
     const mappings: PhoneticMapping[] = rows.map((row) => ({
@@ -107,12 +106,12 @@ export async function GET(
 /**
  * POST /api/phonetic-learning/mappings
  *
- * Creates a new phonetic mapping.
+ * Creates a new phonetic mapping for the authenticated user.
+ * Requires authentication — users can only create mappings for themselves.
  *
  * Request body:
  * ```json
  * {
- *   "userId": "abc123",
  *   "heard": "ohs",
  *   "intended": "o",
  *   "source": "auto_learned",
@@ -120,23 +119,23 @@ export async function GET(
  *   "occurrenceCount": 3
  * }
  * ```
+ *
+ * Note: userId is no longer accepted — it's taken from auth session.
  */
 export async function POST(
   request: NextRequest
 ): Promise<NextResponse<PostSuccessResponse | ApiErrorResponse>> {
   try {
+    // Require authentication — user can only create their own mappings
+    const { user, db: d1Binding } = await requireAuth()
+    const db = createDb(d1Binding)
+
     const body = (await request.json()) as {
-      userId?: string
       heard?: string
       intended?: string
       source?: string
       confidence?: number
       occurrenceCount?: number
-    }
-
-    // Validate required fields
-    if (!body.userId || typeof body.userId !== "string") {
-      throw Errors.invalidInput("userId", "Required field missing or invalid type")
     }
 
     if (!body.heard || typeof body.heard !== "string") {
@@ -152,10 +151,6 @@ export async function POST(
       throw Errors.invalidInput("intended", "Must be 1-2 characters", "1-2 chars", body.intended)
     }
 
-    // Get D1 database binding
-    const { env } = await getCloudflareContext({ async: true })
-    const db = createDb(env.DB)
-
     // Validate and parse source
     const validSources = ["auto_learned", "manual", "support_added"] as const
     type ValidSource = (typeof validSources)[number]
@@ -163,9 +158,9 @@ export async function POST(
       ? (body.source as ValidSource)
       : "auto_learned"
 
-    // Prepare mapping data
+    // Prepare mapping data (use authenticated user's ID)
     const mappingData = {
-      userId: body.userId,
+      userId: user.id,
       heard: body.heard.toLowerCase().trim(),
       intended: body.intended.toLowerCase().trim(),
       source,

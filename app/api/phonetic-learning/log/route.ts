@@ -6,11 +6,16 @@
  * Logs a speech recognition event for pattern analysis.
  * Called after every voice answer submission to enable learning.
  *
+ * ## Authentication
+ *
+ * This endpoint requires authentication. The user ID is extracted from
+ * the authenticated session, NOT from the request body. This prevents
+ * malicious users from logging fake data for other users.
+ *
  * ## Request Body
  *
  * ```json
  * {
- *   "userId": "abc123",
  *   "wordToSpell": "to",
  *   "googleTranscript": "tee ohs",
  *   "extractedLetters": "tos",
@@ -20,6 +25,8 @@
  * }
  * ```
  *
+ * Note: userId is no longer accepted in the body — it's taken from auth session.
+ *
  * ## Response
  *
  * Success (201):
@@ -27,7 +34,7 @@
  * { "success": true, "id": "log-123" }
  * ```
  *
- * Error (400/500):
+ * Error (400/401/500):
  * ```json
  * { "success": false, "error": "Error message" }
  * ```
@@ -37,13 +44,12 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { getCloudflareContext } from "@opennextjs/cloudflare"
 import { createDb, recognitionLogs } from "@/db"
 import {
   validateRecognitionEvent,
   createLogRecord,
 } from "@/lib/phonetic-learning"
-import { handleApiError, Errors, type ApiErrorResponse } from "@/lib/api"
+import { requireAuth, handleApiError, Errors, type ApiErrorResponse } from "@/lib/api"
 
 // =============================================================================
 // TYPE DEFINITIONS
@@ -69,26 +75,30 @@ type ApiResponse = SuccessResponse | ApiErrorResponse
  * POST /api/phonetic-learning/log
  *
  * Logs a recognition event to the database.
+ * Requires authentication — user ID comes from session, not request body.
  */
 export async function POST(
   request: NextRequest
 ): Promise<NextResponse<ApiResponse>> {
   try {
-    // Parse request body
-    const body = await request.json()
+    // Require authentication — user can only log their own data
+    const { user, db: d1Binding } = await requireAuth()
+    const db = createDb(d1Binding)
+
+    // Parse request body (typed as Record for spreading)
+    const body = (await request.json()) as Record<string, unknown>
+
+    // Inject authenticated user's ID (override any userId in body for security)
+    const eventWithUserId = { ...body, userId: user.id }
 
     // Validate the event
-    const validation = validateRecognitionEvent(body)
+    const validation = validateRecognitionEvent(eventWithUserId)
     if (!validation.isValid) {
       throw Errors.validation(validation.error || "Invalid event data")
     }
 
     // Create log record (body is validated above)
-    const record = createLogRecord(body as Parameters<typeof createLogRecord>[0])
-
-    // Get D1 database binding from Cloudflare context
-    const { env } = await getCloudflareContext({ async: true })
-    const db = createDb(env.DB)
+    const record = createLogRecord(eventWithUserId as Parameters<typeof createLogRecord>[0])
 
     // Insert the log record
     const result = await db

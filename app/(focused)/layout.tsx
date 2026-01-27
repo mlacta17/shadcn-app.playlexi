@@ -24,9 +24,15 @@
  * Each page renders its own TopNavbar because the content and
  * handlers vary (game mode, step number, skip destination).
  *
+ * ## Error Handling
+ *
+ * This layout includes an Error Boundary that catches React errors
+ * in child components. If a page crashes, users see a friendly error
+ * message instead of a white screen.
+ *
  * ## Why This Layout is Minimal
  *
- * This layout just passes children through. It doesn't add any
+ * This layout just wraps children with error handling. It doesn't add any
  * navigation because:
  *
  * 1. Pages have different TopNavbar configurations
@@ -41,14 +47,18 @@
  *
  * @see app/(shell)/layout.tsx for full navigation shell
  * @see components/ui/top-navbar.tsx for TopNavbar component
+ * @see components/ui/error-boundary.tsx for error handling
  * @see middleware.ts for route protection
  */
+
+import { ErrorBoundary } from "@/components/ui/error-boundary"
 
 export default function FocusedLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  // Intentionally minimal - pages own their navigation
-  return children
+  // Wrap children with Error Boundary for graceful error handling
+  // Pages still own their navigation
+  return <ErrorBoundary context="FocusedLayout">{children}</ErrorBoundary>
 }

@@ -58,6 +58,8 @@ import {
   isEmptyAnswer,
   type InputMode,
 } from "@/lib/answer-validation"
+import { showErrorToast } from "@/lib/toast-utils"
+import { toWordFriendlyError } from "@/lib/error-messages"
 
 // =============================================================================
 // TYPES
@@ -453,6 +455,21 @@ export function useGameSession(
     const result = await fetchRandomWord(currentTier, fetchOptions)
 
     if (!result.success) {
+      // Convert technical error to user-friendly message
+      const friendlyError = toWordFriendlyError(result.error || "Failed to load word")
+
+      // Log technical details for debugging
+      console.error("[GameSession] Word fetch failed:", friendlyError.technicalDetails)
+
+      // Show user-friendly toast
+      showErrorToast(friendlyError.message, {
+        action: friendlyError.canRetry
+          ? {
+              label: friendlyError.actionLabel || "Retry",
+              onClick: () => loadNextWord(tierOverride),
+            }
+          : undefined,
+      })
       setState((prev) => ({
         ...prev,
         error: result.error,

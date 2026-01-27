@@ -1,24 +1,23 @@
 /**
  * Phonetic Learning Stats API — Debug endpoint for observability.
  *
- * GET /api/phonetic-learning/stats?userId=abc123
+ * GET /api/phonetic-learning/stats
  *
- * Returns comprehensive statistics about a user's phonetic learning:
+ * Returns comprehensive statistics about the authenticated user's phonetic learning:
  * - All learned mappings with metadata
  * - Recent recognition logs
  * - Aggregate statistics
  *
- * ## Security Note
+ * ## Authentication
  *
- * This endpoint is intended for debugging/development use.
- * In production, consider adding authentication checks.
+ * Requires authentication. Users can only view their own stats.
+ * This protects user privacy and prevents data harvesting.
  *
  * @see lib/phonetic-learning/learning-engine.ts
  * @see hooks/use-phonetic-learning.ts
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { getCloudflareContext } from "@opennextjs/cloudflare"
 import {
   createDb,
   userPhoneticMappings,
@@ -28,7 +27,7 @@ import {
   sql,
   and,
 } from "@/db"
-import { handleApiError, Errors, type ApiErrorResponse } from "@/lib/api"
+import { requireAuth, handleApiError, Errors, type ApiErrorResponse } from "@/lib/api"
 
 // =============================================================================
 // TYPE DEFINITIONS
@@ -101,29 +100,27 @@ function toISOString(value: Date | number | null | undefined): string {
 /**
  * GET /api/phonetic-learning/stats
  *
- * Fetches comprehensive phonetic learning statistics for debugging.
+ * Fetches comprehensive phonetic learning statistics for the authenticated user.
+ * Requires authentication — users can only view their own stats.
  */
 export async function GET(
   request: NextRequest
 ): Promise<NextResponse<ApiResponse>> {
   try {
-    // Parse query parameters
+    // Require authentication — user can only view their own stats
+    const { user, db: d1Binding } = await requireAuth()
+    const db = createDb(d1Binding)
+
+    const userId = user.id
+
+    // Parse optional query parameters
     const { searchParams } = new URL(request.url)
-    const userId = searchParams.get("userId")
     const logsLimit = Math.min(
       parseInt(searchParams.get("logsLimit") || "50", 10),
       100
     )
 
-    if (!userId) {
-      throw Errors.invalidInput("userId", "Query parameter is required")
-    }
-
-    // Get D1 database binding
-    const { env } = await getCloudflareContext({ async: true })
-    const db = createDb(env.DB)
-
-    // Fetch all user mappings
+    // Fetch authenticated user's mappings
     const mappingsRows = await db
       .select()
       .from(userPhoneticMappings)

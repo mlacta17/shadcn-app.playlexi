@@ -724,7 +724,7 @@ export const gameRounds = sqliteTable('game_rounds', {
   // Timing
   startedAt: integer('started_at', { mode: 'timestamp' }),
   endedAt: integer('ended_at', { mode: 'timestamp' }),
-  timeLimit: integer('time_limit').notNull(), // seconds
+  timeTaken: integer('time_taken').notNull(), // seconds (how long player took)
 
   // Result
   answer: text('answer'),

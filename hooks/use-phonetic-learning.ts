@@ -99,11 +99,13 @@ export function usePhoneticLearning() {
    *
    * Called at game start to load personalized mappings.
    * Results are cached for the session.
+   *
+   * Note: API requires authentication - userId is derived from session.
    */
   const fetchMappings = React.useCallback(async () => {
     if (!userId || isAnonymous) {
       // Anonymous users don't have persistent mappings
-      // (mappings require authenticated user due to FK constraint)
+      // (API requires authentication)
       return
     }
 
@@ -113,9 +115,8 @@ export function usePhoneticLearning() {
     }
 
     try {
-      const response = await fetch(
-        `/api/phonetic-learning/mappings?userId=${encodeURIComponent(userId)}`
-      )
+      // Note: No userId in query params - API uses authenticated session
+      const response = await fetch("/api/phonetic-learning/mappings")
 
       if (!response.ok) {
         console.warn("[PhoneticLearning] Failed to fetch mappings")
@@ -150,18 +151,22 @@ export function usePhoneticLearning() {
    *
    * This analyzes the user's recent recognition logs and
    * creates new learned mappings if patterns are found.
+   *
+   * Note: API requires authentication - userId is derived from session.
    */
   const triggerLearning = React.useCallback(async () => {
     if (!userId || isAnonymous) {
       // Anonymous users can't have persistent mappings
+      // (API requires authentication)
       return
     }
 
     try {
+      // Note: No userId in body - API uses authenticated session
       const response = await fetch("/api/phonetic-learning/learn", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({}),
       })
 
       if (!response.ok) {

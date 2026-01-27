@@ -30,6 +30,7 @@ import { PlusIcon, TrashIcon, MoreVerticalIcon } from "@/lib/icons"
 import { ThemeSwitcher } from "@/components/kibo-ui/theme-switcher"
 import { Avatar, AvatarImage, AvatarFallback, AvatarBadge } from "@/components/ui/avatar"
 import { Progress } from "@/components/ui/progress"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   Combobox,
@@ -61,6 +62,19 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { CircleCheckIcon, AlertWarningIcon } from "@/lib/icons"
+import {
+  showErrorToast,
+  showSuccessToast,
+  showWarningToast,
+  showInfoToast,
+  showLoadingToast,
+  dismissToast,
+} from "@/lib/toast-utils"
+import {
+  FRIENDLY_MESSAGES,
+  SPEECH_ERRORS,
+  WORD_ERRORS,
+} from "@/lib/error-messages"
 import { SpeechInput } from "@/components/ui/speech-input"
 import { VoiceWaveform } from "@/components/ui/voice-waveform"
 import { Navbar } from "@/components/ui/navbar"
@@ -464,6 +478,17 @@ export default function ShowcasePage() {
         </div>
       </section>
 
+      {/* Toast Notifications Section */}
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold">Toast Notifications</h2>
+        <p className="text-sm text-muted-foreground">
+          Non-blocking feedback for user actions and error states. Built on Sonner, styled with PlayLexi design tokens.
+          <br />
+          Messages are defined in <code className="bg-muted px-1 py-0.5 rounded text-xs">lib/error-messages.ts</code>.
+        </p>
+        <ToastDemo />
+      </section>
+
       {/* Dropdown Menu Section */}
       <section className="space-y-4">
         <h2 className="text-2xl font-semibold">Dropdown Menu</h2>
@@ -583,6 +608,15 @@ export default function ShowcasePage() {
             <Progress value={100} />
           </div>
         </div>
+      </section>
+
+      {/* Skeleton Section */}
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold">Skeleton</h2>
+        <p className="text-sm text-muted-foreground">
+          Loading placeholder with animated pulse effect. Use while content is being fetched.
+        </p>
+        <SkeletonDemo />
       </section>
 
       {/* Hearts Display Section */}
@@ -1506,6 +1540,418 @@ function HeartsDisplayDemo() {
  * LeaderboardTable demo with mock player data.
  * Showcases placement badges, avatars, delta indicators, and pagination.
  */
+/**
+ * Skeleton loading placeholder demo.
+ */
+function SkeletonDemo() {
+  return (
+    <div className="space-y-6">
+      {/* Basic Shapes */}
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Basic Shapes</h3>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="space-y-1">
+            <Skeleton className="h-4 w-[200px]" />
+            <span className="text-xs text-muted-foreground">Text line</span>
+          </div>
+          <div className="space-y-1">
+            <Skeleton className="h-12 w-12 rounded-full" />
+            <span className="text-xs text-muted-foreground">Avatar</span>
+          </div>
+          <div className="space-y-1">
+            <Skeleton className="h-10 w-[100px]" />
+            <span className="text-xs text-muted-foreground">Button</span>
+          </div>
+          <div className="space-y-1">
+            <Skeleton className="h-24 w-24 rounded-lg" />
+            <span className="text-xs text-muted-foreground">Square</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Card Skeleton */}
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Card Loading State</h3>
+        <Card className="w-[350px]">
+          <CardHeader>
+            <div className="flex items-center gap-4">
+              <Skeleton className="h-12 w-12 rounded-full" />
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-[150px]" />
+                <Skeleton className="h-3 w-[100px]" />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+          </CardContent>
+          <CardFooter>
+            <Skeleton className="h-10 w-[100px]" />
+          </CardFooter>
+        </Card>
+      </div>
+
+      {/* Game Word Loading Skeleton */}
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Game Word Loading</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Example of what a loading state could look like while fetching a new word.
+        </p>
+        <div className="bg-card border rounded-lg p-6 max-w-md space-y-4">
+          {/* Word display area */}
+          <div className="text-center space-y-2">
+            <Skeleton className="h-8 w-3/4 mx-auto" />
+            <Skeleton className="h-4 w-1/2 mx-auto" />
+          </div>
+          {/* Timer skeleton */}
+          <Skeleton className="h-2 w-full rounded-full" />
+          {/* Input area skeleton */}
+          <div className="space-y-3">
+            <Skeleton className="h-16 w-full rounded-lg" />
+            <div className="flex justify-center gap-2">
+              <Skeleton className="h-10 w-10 rounded-full" />
+              <Skeleton className="h-10 w-10 rounded-full" />
+              <Skeleton className="h-10 w-10 rounded-full" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Leaderboard Skeleton */}
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Leaderboard Loading</h3>
+        <div className="border rounded-lg overflow-hidden max-w-2xl">
+          {/* Header */}
+          <div className="bg-muted/50 p-3 flex gap-4">
+            <Skeleton className="h-4 w-8" />
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-4 w-16 ml-auto" />
+            <Skeleton className="h-4 w-16" />
+          </div>
+          {/* Rows */}
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="p-3 flex items-center gap-4 border-t">
+              <Skeleton className="h-6 w-6 rounded" />
+              <Skeleton className="h-10 w-10 rounded-full" />
+              <div className="flex-1 space-y-1">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+              <Skeleton className="h-4 w-12" />
+              <Skeleton className="h-4 w-16" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Profile Skeleton */}
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Profile Loading</h3>
+        <div className="flex items-start gap-6 max-w-md">
+          <Skeleton className="h-20 w-20 rounded-full" />
+          <div className="flex-1 space-y-3">
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-4 w-32" />
+            <div className="flex gap-4">
+              <div className="space-y-1">
+                <Skeleton className="h-8 w-16" />
+                <Skeleton className="h-3 w-12" />
+              </div>
+              <div className="space-y-1">
+                <Skeleton className="h-8 w-16" />
+                <Skeleton className="h-3 w-12" />
+              </div>
+              <div className="space-y-1">
+                <Skeleton className="h-8 w-16" />
+                <Skeleton className="h-3 w-12" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Implementation */}
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Usage</h3>
+        <div className="bg-muted/50 p-4 rounded-lg font-mono text-xs space-y-2">
+          <p className="text-muted-foreground">{`// Text placeholder`}</p>
+          <p>{`<Skeleton className="h-4 w-[200px]" />`}</p>
+          <p className="text-muted-foreground mt-2">{`// Avatar placeholder`}</p>
+          <p>{`<Skeleton className="h-12 w-12 rounded-full" />`}</p>
+          <p className="text-muted-foreground mt-2">{`// Multiple lines`}</p>
+          <p>{`<div className="space-y-2">`}</p>
+          <p>{`  <Skeleton className="h-4 w-full" />`}</p>
+          <p>{`  <Skeleton className="h-4 w-3/4" />`}</p>
+          <p>{`</div>`}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Toast Notifications demo showcasing all toast variants and error messages.
+ */
+function ToastDemo() {
+  const [loadingToastId, setLoadingToastId] = useState<string | number | null>(null)
+
+  const handleLoadingToast = () => {
+    const id = showLoadingToast("Saving your progress...")
+    setLoadingToastId(id)
+
+    // Auto-complete after 2 seconds for demo
+    setTimeout(() => {
+      showSuccessToast("Progress saved!")
+      dismissToast(id)
+      setLoadingToastId(null)
+    }, 2000)
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Basic Toast Types */}
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Toast Types</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Click each button to trigger a toast notification. Toasts auto-dismiss after their configured duration.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={() => showSuccessToast("Action completed successfully!")}>
+            Success Toast
+          </Button>
+          <Button variant="destructive" onClick={() => showErrorToast("Something went wrong. Please try again.")}>
+            Error Toast
+          </Button>
+          <Button variant="secondary" onClick={() => showWarningToast("This action cannot be undone.")}>
+            Warning Toast
+          </Button>
+          <Button variant="outline" onClick={() => showInfoToast("New features are available!")}>
+            Info Toast
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleLoadingToast}
+            disabled={loadingToastId !== null}
+          >
+            Loading Toast
+          </Button>
+        </div>
+      </div>
+
+      {/* Error Toast with Action */}
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Error Toast with Retry Action</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Error toasts can include an action button for retry functionality.
+        </p>
+        <Button
+          variant="destructive"
+          onClick={() =>
+            showErrorToast("Failed to save changes", {
+              action: {
+                label: "Retry",
+                onClick: () => showSuccessToast("Retry successful!"),
+              },
+            })
+          }
+        >
+          Show Error with Retry
+        </Button>
+      </div>
+
+      {/* Category-Based Error Messages */}
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Error Categories</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          User-friendly messages by error category. These are the default messages shown when errors are classified.
+        </p>
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {Object.entries(FRIENDLY_MESSAGES).map(([category, config]) => (
+            <Card key={category} className="p-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Badge variant="outline">{category}</Badge>
+                  {config.canRetry && (
+                    <span className="text-xs text-muted-foreground">Can retry</span>
+                  )}
+                </div>
+                <p className="text-sm">{config.message}</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    showErrorToast(config.message, {
+                      action: config.canRetry && config.actionLabel
+                        ? {
+                            label: config.actionLabel,
+                            onClick: () => showSuccessToast("Retry clicked!"),
+                          }
+                        : undefined,
+                    })
+                  }
+                >
+                  Show Toast
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* Speech-Specific Error Messages */}
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Speech Recognition Errors</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Context-specific messages for voice input failures.
+        </p>
+        <div className="grid gap-3 md:grid-cols-2">
+          {Object.entries(SPEECH_ERRORS).map(([key, config]) => (
+            <Card key={key} className="p-4">
+              <div className="space-y-2">
+                <Badge variant="secondary">{key}</Badge>
+                <p className="text-sm">{config.message}</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    showErrorToast(config.message, {
+                      action: config.canRetry && config.actionLabel
+                        ? {
+                            label: config.actionLabel,
+                            onClick: () => showSuccessToast("Retry clicked!"),
+                          }
+                        : undefined,
+                    })
+                  }
+                >
+                  Show Toast
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* Word Fetch Error Messages */}
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Word Fetch Errors</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Context-specific messages for word loading failures.
+        </p>
+        <div className="grid gap-3 md:grid-cols-3">
+          {Object.entries(WORD_ERRORS).map(([key, config]) => (
+            <Card key={key} className="p-4">
+              <div className="space-y-2">
+                <Badge variant="secondary">{key}</Badge>
+                <p className="text-sm">{config.message}</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    showErrorToast(config.message, {
+                      action: config.canRetry && config.actionLabel
+                        ? {
+                            label: config.actionLabel,
+                            onClick: () => showSuccessToast("Retry clicked!"),
+                          }
+                        : undefined,
+                    })
+                  }
+                >
+                  Show Toast
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* Technical Error → User-Friendly Demo */}
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Error Classification Demo</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          See how technical errors get converted to user-friendly messages.
+          The raw error is logged to console, the friendly message is shown to users.
+        </p>
+        <div className="space-y-3">
+          <div className="flex items-center gap-4">
+            <code className="bg-muted px-2 py-1 rounded text-xs flex-1 overflow-x-auto">
+              14 UNAVAILABLE: Name resolution failed for target dns:speech.googleapis.com:443
+            </code>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                console.error("[Technical]", "14 UNAVAILABLE: Name resolution failed for target dns:speech.googleapis.com:443")
+                showErrorToast(SPEECH_ERRORS.connectionFailed.message, {
+                  action: {
+                    label: "Try again",
+                    onClick: () => showSuccessToast("Reconnecting..."),
+                  },
+                })
+              }}
+            >
+              Test
+            </Button>
+          </div>
+          <div className="flex items-center gap-4">
+            <code className="bg-muted px-2 py-1 rounded text-xs flex-1 overflow-x-auto">
+              NotAllowedError: Permission denied by system
+            </code>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                console.error("[Technical]", "NotAllowedError: Permission denied by system")
+                showErrorToast(SPEECH_ERRORS.microphoneDenied.message, {
+                  action: {
+                    label: "Try again",
+                    onClick: () => showSuccessToast("Please allow microphone access"),
+                  },
+                })
+              }}
+            >
+              Test
+            </Button>
+          </div>
+          <div className="flex items-center gap-4">
+            <code className="bg-muted px-2 py-1 rounded text-xs flex-1 overflow-x-auto">
+              TypeError: Failed to fetch (network error)
+            </code>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                console.error("[Technical]", "TypeError: Failed to fetch")
+                showErrorToast(WORD_ERRORS.networkError.message, {
+                  action: {
+                    label: "Retry",
+                    onClick: () => showSuccessToast("Retrying..."),
+                  },
+                })
+              }}
+            >
+              Test
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Implementation Notes */}
+      <div>
+        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Implementation</h3>
+        <div className="bg-muted/50 p-4 rounded-lg font-mono text-xs space-y-1">
+          <p className="text-muted-foreground">lib/error-messages.ts    // Error classification + friendly messages</p>
+          <p className="text-muted-foreground">lib/toast-utils.ts       // Toast helper functions</p>
+          <p className="text-muted-foreground">components/ui/sonner.tsx // Toast provider with Nucleo icons</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function LeaderboardTableDemo() {
   // Sample player data for demonstration
   const samplePlayers: LeaderboardPlayer[] = [

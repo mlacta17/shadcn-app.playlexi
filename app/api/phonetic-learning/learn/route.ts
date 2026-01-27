@@ -3,19 +3,21 @@
  *
  * POST /api/phonetic-learning/learn
  *
- * Analyzes a user's recognition logs and creates learned mappings.
+ * Analyzes the authenticated user's recognition logs and creates learned mappings.
  * This can be called:
  * 1. After a game session ends
- * 2. Periodically via a cron job
+ * 2. Periodically via a cron job (would need service-level auth)
  * 3. Manually from admin tools
+ *
+ * ## Authentication
+ *
+ * Requires authentication. The user ID is extracted from the session,
+ * NOT from the request body. This prevents malicious users from
+ * triggering learning (and potentially corrupting data) for other users.
  *
  * ## Request Body
  *
- * ```json
- * {
- *   "userId": "abc123"
- * }
- * ```
+ * No body required — user ID comes from authentication session.
  *
  * ## Response
  *
@@ -38,7 +40,6 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { getCloudflareContext } from "@opennextjs/cloudflare"
 import {
   createDb,
   recognitionLogs,
@@ -55,7 +56,7 @@ import {
   type RecognitionEvent,
 } from "@/lib/phonetic-learning"
 import { SPOKEN_LETTER_NAMES } from "@/lib/answer-validation"
-import { handleApiError, Errors, type ApiErrorResponse } from "@/lib/api"
+import { requireAuth, handleApiError, Errors, type ApiErrorResponse } from "@/lib/api"
 
 // =============================================================================
 // TYPE DEFINITIONS
@@ -83,24 +84,18 @@ type ApiResponse = SuccessResponse | ApiErrorResponse
 /**
  * POST /api/phonetic-learning/learn
  *
- * Triggers learning for a specific user.
+ * Triggers learning for the authenticated user.
+ * Requires authentication — users can only trigger learning for themselves.
  */
 export async function POST(
   request: NextRequest
 ): Promise<NextResponse<ApiResponse>> {
   try {
-    const body = (await request.json()) as { userId?: string }
+    // Require authentication — user can only trigger learning for themselves
+    const { user, db: d1Binding } = await requireAuth()
+    const db = createDb(d1Binding)
 
-    // Validate user ID
-    if (!body.userId || typeof body.userId !== "string") {
-      throw Errors.invalidInput("userId", "Required field missing or invalid type")
-    }
-
-    const userId = body.userId
-
-    // Get D1 database binding
-    const { env } = await getCloudflareContext({ async: true })
-    const db = createDb(env.DB)
+    const userId = user.id
 
     // Fetch user's existing mappings
     const existingMappings = await db

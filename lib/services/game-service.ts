@@ -110,13 +110,7 @@ export interface RoundResult {
   answer: string
   /** Whether the answer was correct */
   isCorrect: boolean
-  /**
-   * Time taken to answer this round (seconds).
-   *
-   * Note: The database column is named `time_limit` for historical reasons,
-   * but this value represents the actual time taken by the player.
-   * TODO: Add migration to rename column to `time_taken` for clarity.
-   */
+  /** Time taken to answer this round (seconds) */
   timeTaken: number
 }
 
@@ -303,9 +297,7 @@ export async function finalizeGame(
             wordId: round.wordId,
             answer: round.answer,
             isCorrect: round.isCorrect,
-            // Note: DB column is `time_limit` but we're storing `timeTaken`
-            // See RoundResult interface for details
-            timeLimit: round.timeTaken,
+            timeTaken: round.timeTaken,
             endedAt: new Date(),
           }))
         )

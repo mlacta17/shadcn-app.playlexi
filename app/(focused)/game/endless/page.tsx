@@ -20,6 +20,7 @@ import { usePhoneticLearning } from "@/hooks/use-phonetic-learning"
 import { useUserTier } from "@/hooks/use-user-tier"
 import { useGamePersistence } from "@/hooks/use-game-persistence"
 import { formatTranscriptForDisplay, extractLettersFromVoice } from "@/lib/answer-validation"
+import { showErrorToast, showWarningToast } from "@/lib/toast-utils"
 
 /**
  * Endless Mode Game Screen
@@ -96,7 +97,19 @@ export default function EndlessGamePage() {
     stopRecording, // Returns duration in ms for anti-cheat
     analyserNode,
     transcript,
-  } = useSpeechRecognition({ spellingMode: true })
+    error: speechError,
+  } = useSpeechRecognition({
+    spellingMode: true,
+    onError: (error) => {
+      // Show toast for speech recognition errors
+      showErrorToast(error.message || "Microphone error", {
+        action: {
+          label: "Retry",
+          onClick: () => startRecording(),
+        },
+      })
+    },
+  })
 
   // ---------------------------------------------------------------------------
   // Phonetic Learning Integration
@@ -417,6 +430,16 @@ export default function EndlessGamePage() {
     // Don't return cleanup - we WANT the navigation to complete
     // even if the component re-renders. The timeout is fire-and-forget.
   }, [gameState.phase, triggerLearning, saveGame, router])
+
+  // ---------------------------------------------------------------------------
+  // Error State Notifications
+  // ---------------------------------------------------------------------------
+  // Show warning toast when game ends due to an error (not regular game over)
+  React.useEffect(() => {
+    if (gameState.phase === "result" && gameState.error) {
+      showWarningToast("Game ended due to an error. Your progress has been saved.")
+    }
+  }, [gameState.phase, gameState.error])
 
   // Reset helper state when word changes
   React.useEffect(() => {
