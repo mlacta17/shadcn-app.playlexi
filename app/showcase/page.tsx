@@ -57,9 +57,11 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
+  AlertDialogMedia,
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { CircleCheckIcon, CircleWarningIcon } from "@/lib/icons"
 import {
   showErrorToast,
   showSuccessToast,
@@ -355,24 +357,101 @@ export default function ShowcasePage() {
           A modal dialog that interrupts the user with important content and expects a response.
         </p>
 
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="outline">Show Dialog</Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This action cannot be undone. This will permanently delete your
-                account and remove your data from our servers.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction>Continue</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <div className="space-y-4">
+          {/* Default */}
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Default</h3>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline">Show Dialog</Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete your
+                    account and remove your data from our servers.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction>Continue</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+
+          {/* Small Size */}
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">Small Size</h3>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline">Confirm Action</Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent size="sm">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Confirm</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to proceed?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction>Continue</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+
+          {/* With Icon (Success) */}
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">With Icon (Success)</h3>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="secondary">Show Success</Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogMedia className="bg-success-muted">
+                    <CircleCheckIcon className="text-success" />
+                  </AlertDialogMedia>
+                  <AlertDialogTitle>Success!</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Your changes have been saved successfully.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogAction>Close</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+
+          {/* With Icon (Destructive) */}
+          <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground">With Icon (Destructive)</h3>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive">Delete Item</Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogMedia className="bg-destructive/10">
+                    <CircleWarningIcon className="text-destructive" />
+                  </AlertDialogMedia>
+                  <AlertDialogTitle>Delete this item?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently remove the item from your account.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction variant="destructive">Delete</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </div>
       </section>
 
       {/* Toast Notifications Section */}
