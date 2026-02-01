@@ -462,7 +462,8 @@ export function useGameSession(
       console.error("[GameSession] Word fetch failed:", friendlyError.technicalDetails)
 
       // Show user-friendly toast
-      showErrorToast(friendlyError.message, {
+      showErrorToast(friendlyError.title, {
+        description: friendlyError.description,
         action: friendlyError.canRetry
           ? {
               label: friendlyError.actionLabel || "Retry",

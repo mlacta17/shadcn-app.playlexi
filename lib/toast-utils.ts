@@ -2,22 +2,38 @@
  * Toast Utilities — PlayLexi
  *
  * Centralized toast notifications for consistent UX across the app.
- * Built on Sonner, styled to match PlayLexi's design system.
+ * Built on Sonner, styled to match shadcn's radix-nova design.
  *
  * ## Usage
  *
  * ```typescript
  * import { showErrorToast, showSuccessToast, showLoadingToast } from "@/lib/toast-utils"
  *
- * // Simple error
+ * // Simple error (title only)
  * showErrorToast("Failed to save game")
+ *
+ * // Error with description (title + description)
+ * showErrorToast("Can't connect", {
+ *   description: "Please check your internet connection and try again."
+ * })
  *
  * // Error with retry action
  * showErrorToast("Couldn't load word", {
+ *   description: "Something went wrong on our end.",
  *   action: {
  *     label: "Retry",
  *     onClick: () => refetch()
  *   }
+ * })
+ *
+ * // Using FriendlyError from error-messages.ts
+ * const friendly = toFriendlyError(error)
+ * showErrorToast(friendly.title, {
+ *   description: friendly.description,
+ *   action: friendly.canRetry ? {
+ *     label: friendly.actionLabel,
+ *     onClick: () => retry()
+ *   } : undefined
  * })
  *
  * // Success toast
@@ -32,11 +48,13 @@
  * ## Design Decisions
  *
  * 1. **Non-blocking**: Toasts don't interrupt gameplay
- * 2. **Dismissible**: Users can swipe/click to dismiss
- * 3. **Action-oriented**: Error toasts can include retry buttons
- * 4. **Accessible**: Screen reader announcements via aria-live
+ * 2. **Dismissible**: Users can swipe to dismiss
+ * 3. **Title + Description**: Use description for longer context
+ * 4. **Action-oriented**: Error toasts can include retry buttons
+ * 5. **Accessible**: Screen reader announcements via aria-live
  *
  * @see components/ui/sonner.tsx for toast styling
+ * @see lib/error-messages.ts for FriendlyError with title/description
  * @see https://sonner.emilkowal.ski for full API
  */
 
@@ -51,6 +69,8 @@ import { toast, type ExternalToast } from "sonner"
  * Extends Sonner's ExternalToast type with PlayLexi-specific options.
  */
 export interface ToastOptions extends ExternalToast {
+  /** Additional description text shown below the title */
+  description?: string
   /** Action button configuration */
   action?: {
     label: string
@@ -70,17 +90,23 @@ export interface ToastOptions extends ExternalToast {
  * - Validation errors
  * - Network issues
  *
- * @param message - Error message to display
- * @param options - Optional toast configuration
+ * @param title - Short error title to display
+ * @param options - Optional toast configuration (including description)
  * @returns Toast ID for programmatic control
  *
  * @example
  * ```typescript
- * // Simple error
+ * // Simple error (title only)
  * showErrorToast("Failed to load word")
  *
- * // With retry action
+ * // Error with description
+ * showErrorToast("Can't connect", {
+ *   description: "Please check your internet connection."
+ * })
+ *
+ * // Error with description and retry action
  * showErrorToast("Connection lost", {
+ *   description: "We couldn't reach the server.",
  *   action: {
  *     label: "Retry",
  *     onClick: () => reconnect()
@@ -89,10 +115,10 @@ export interface ToastOptions extends ExternalToast {
  * ```
  */
 export function showErrorToast(
-  message: string,
+  title: string,
   options?: ToastOptions
 ): string | number {
-  return toast.error(message, {
+  return toast.error(title, {
     duration: 5000, // Longer for errors so users can read
     ...options,
   })
@@ -106,21 +132,24 @@ export function showErrorToast(
  * - Completed actions
  * - Positive feedback
  *
- * @param message - Success message to display
- * @param options - Optional toast configuration
+ * @param title - Short success title to display
+ * @param options - Optional toast configuration (including description)
  * @returns Toast ID for programmatic control
  *
  * @example
  * ```typescript
  * showSuccessToast("Game saved!")
- * showSuccessToast("Profile updated", { duration: 2000 })
+ * showSuccessToast("Profile updated", {
+ *   description: "Your changes have been saved.",
+ *   duration: 2000
+ * })
  * ```
  */
 export function showSuccessToast(
-  message: string,
+  title: string,
   options?: ToastOptions
 ): string | number {
-  return toast.success(message, {
+  return toast.success(title, {
     duration: 3000,
     ...options,
   })
@@ -134,15 +163,15 @@ export function showSuccessToast(
  * - Status updates
  * - Non-critical information
  *
- * @param message - Info message to display
- * @param options - Optional toast configuration
+ * @param title - Short info title to display
+ * @param options - Optional toast configuration (including description)
  * @returns Toast ID for programmatic control
  */
 export function showInfoToast(
-  message: string,
+  title: string,
   options?: ToastOptions
 ): string | number {
-  return toast.info(message, {
+  return toast.info(title, {
     duration: 4000,
     ...options,
   })
@@ -156,15 +185,15 @@ export function showInfoToast(
  * - Approaching limits
  * - Non-fatal issues
  *
- * @param message - Warning message to display
- * @param options - Optional toast configuration
+ * @param title - Short warning title to display
+ * @param options - Optional toast configuration (including description)
  * @returns Toast ID for programmatic control
  */
 export function showWarningToast(
-  message: string,
+  title: string,
   options?: ToastOptions
 ): string | number {
-  return toast.warning(message, {
+  return toast.warning(title, {
     duration: 4000,
     ...options,
   })
@@ -176,8 +205,8 @@ export function showWarningToast(
  * Returns a toast ID that can be used to update the toast when
  * the operation completes (success or error).
  *
- * @param message - Loading message to display
- * @param options - Optional toast configuration
+ * @param title - Loading title to display
+ * @param options - Optional toast configuration (including description)
  * @returns Toast ID for updating the toast later
  *
  * @example
@@ -193,10 +222,10 @@ export function showWarningToast(
  * ```
  */
 export function showLoadingToast(
-  message: string,
+  title: string,
   options?: ToastOptions
 ): string | number {
-  return toast.loading(message, {
+  return toast.loading(title, {
     duration: Infinity, // Loading toasts don't auto-dismiss
     ...options,
   })

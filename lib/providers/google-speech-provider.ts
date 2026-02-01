@@ -503,7 +503,7 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
               // Convert to user-friendly error
               const friendlyError = toSpeechFriendlyError(message.message || "Recognition error")
               console.error("[Google] Technical details:", friendlyError.technicalDetails)
-              onError?.(new Error(friendlyError.message))
+              onError?.(new Error(friendlyError.title))
               break
           }
         } catch (err) {
@@ -515,7 +515,7 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
         console.error("[Google] WebSocket error:", event)
         // User-friendly message for WebSocket errors
         const friendlyError = toSpeechFriendlyError("WebSocket connection failed")
-        onError?.(new Error(friendlyError.message))
+        onError?.(new Error(friendlyError.title))
       }
 
       ws.onclose = () => {
@@ -525,7 +525,7 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
         if (isActive) {
           // Unexpected close - user-friendly message
           const friendlyError = toSpeechFriendlyError("WebSocket connection closed unexpectedly")
-          onError?.(new Error(friendlyError.message))
+          onError?.(new Error(friendlyError.title))
         }
       }
 

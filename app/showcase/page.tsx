@@ -1753,12 +1753,16 @@ function ToastDemo() {
                     <span className="text-xs text-muted-foreground">Can retry</span>
                   )}
                 </div>
-                <p className="text-sm">{config.message}</p>
+                <p className="text-sm font-medium">{config.title}</p>
+                {config.description && (
+                  <p className="text-sm text-muted-foreground">{config.description}</p>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() =>
-                    showErrorToast(config.message, {
+                    showErrorToast(config.title, {
+                      description: config.description,
                       action: config.canRetry && config.actionLabel
                         ? {
                             label: config.actionLabel,
@@ -1787,12 +1791,16 @@ function ToastDemo() {
             <Card key={key} className="p-4">
               <div className="space-y-2">
                 <Badge variant="secondary">{key}</Badge>
-                <p className="text-sm">{config.message}</p>
+                <p className="text-sm font-medium">{config.title}</p>
+                {config.description && (
+                  <p className="text-sm text-muted-foreground">{config.description}</p>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() =>
-                    showErrorToast(config.message, {
+                    showErrorToast(config.title, {
+                      description: config.description,
                       action: config.canRetry && config.actionLabel
                         ? {
                             label: config.actionLabel,
@@ -1821,12 +1829,16 @@ function ToastDemo() {
             <Card key={key} className="p-4">
               <div className="space-y-2">
                 <Badge variant="secondary">{key}</Badge>
-                <p className="text-sm">{config.message}</p>
+                <p className="text-sm font-medium">{config.title}</p>
+                {config.description && (
+                  <p className="text-sm text-muted-foreground">{config.description}</p>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() =>
-                    showErrorToast(config.message, {
+                    showErrorToast(config.title, {
+                      description: config.description,
                       action: config.canRetry && config.actionLabel
                         ? {
                             label: config.actionLabel,
@@ -1861,7 +1873,8 @@ function ToastDemo() {
               variant="outline"
               onClick={() => {
                 console.error("[Technical]", "14 UNAVAILABLE: Name resolution failed for target dns:speech.googleapis.com:443")
-                showErrorToast(SPEECH_ERRORS.connectionFailed.message, {
+                showErrorToast(SPEECH_ERRORS.connectionFailed.title, {
+                  description: SPEECH_ERRORS.connectionFailed.description,
                   action: {
                     label: "Try again",
                     onClick: () => showSuccessToast("Reconnecting..."),
@@ -1881,7 +1894,8 @@ function ToastDemo() {
               variant="outline"
               onClick={() => {
                 console.error("[Technical]", "NotAllowedError: Permission denied by system")
-                showErrorToast(SPEECH_ERRORS.microphoneDenied.message, {
+                showErrorToast(SPEECH_ERRORS.microphoneDenied.title, {
+                  description: SPEECH_ERRORS.microphoneDenied.description,
                   action: {
                     label: "Try again",
                     onClick: () => showSuccessToast("Please allow microphone access"),
@@ -1901,7 +1915,8 @@ function ToastDemo() {
               variant="outline"
               onClick={() => {
                 console.error("[Technical]", "TypeError: Failed to fetch")
-                showErrorToast(WORD_ERRORS.networkError.message, {
+                showErrorToast(WORD_ERRORS.networkError.title, {
+                  description: WORD_ERRORS.networkError.description,
                   action: {
                     label: "Retry",
                     onClick: () => showSuccessToast("Retrying..."),

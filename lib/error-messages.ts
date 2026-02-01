@@ -42,8 +42,10 @@ export type ErrorCategory =
  * User-friendly error with metadata.
  */
 export interface FriendlyError {
-  /** User-facing message (shown in toast) */
-  message: string
+  /** Short title (shown as toast title) */
+  title: string
+  /** Longer description with helpful context (shown below title) */
+  description?: string
   /** Error category for styling/icons */
   category: ErrorCategory
   /** Whether retry is likely to help */
@@ -140,34 +142,39 @@ const AUTH_ERROR_PATTERNS = [
 
 /**
  * User-friendly messages by category.
- * Each category has a primary message and optional variants.
+ * Each category has a short title and helpful description.
  */
 export const FRIENDLY_MESSAGES: Record<
   ErrorCategory,
-  { message: string; canRetry: boolean; actionLabel?: string }
+  { title: string; description?: string; canRetry: boolean; actionLabel?: string }
 > = {
   network: {
-    message: "Can't connect. Please check your internet connection.",
+    title: "Can't connect",
+    description: "Please check your internet connection and try again.",
     canRetry: true,
     actionLabel: "Try again",
   },
   microphone: {
-    message: "Microphone access needed. Please allow microphone permissions.",
+    title: "Microphone access needed",
+    description: "Please allow microphone permissions in your browser settings.",
     canRetry: true,
     actionLabel: "Try again",
   },
   server: {
-    message: "Something went wrong on our end. Please try again.",
+    title: "Something went wrong",
+    description: "We're having trouble on our end. Please try again in a moment.",
     canRetry: true,
     actionLabel: "Retry",
   },
   auth: {
-    message: "Your session has expired. Please sign in again.",
+    title: "Session expired",
+    description: "Please sign in again to continue.",
     canRetry: false,
     actionLabel: "Sign in",
   },
   unknown: {
-    message: "Something went wrong. Please try again.",
+    title: "Something went wrong",
+    description: "Please try again.",
     canRetry: true,
     actionLabel: "Retry",
   },
@@ -207,16 +214,17 @@ export function classifyError(error: string | Error): ErrorCategory {
  * Convert a technical error to a user-friendly error.
  *
  * This is the main function to use throughout the app.
- * It classifies the error and returns a user-friendly message.
+ * It classifies the error and returns a user-friendly message with title + description.
  *
  * @param error - Technical error (string or Error object)
- * @returns FriendlyError with user-facing message
+ * @returns FriendlyError with title, description, and metadata
  *
  * @example
  * ```typescript
  * // In a catch block or error handler:
  * const friendly = toFriendlyError(error)
- * showErrorToast(friendly.message, {
+ * showErrorToast(friendly.title, {
+ *   description: friendly.description,
  *   action: friendly.canRetry ? {
  *     label: friendly.actionLabel,
  *     onClick: () => retry()
@@ -233,7 +241,8 @@ export function toFriendlyError(error: string | Error): FriendlyError {
   const friendly = FRIENDLY_MESSAGES[category]
 
   return {
-    message: friendly.message,
+    title: friendly.title,
+    description: friendly.description,
     category,
     canRetry: friendly.canRetry,
     actionLabel: friendly.actionLabel,
@@ -242,16 +251,16 @@ export function toFriendlyError(error: string | Error): FriendlyError {
 }
 
 /**
- * Get a user-friendly message for an error.
+ * Get a user-friendly title for an error.
  *
- * Convenience function that just returns the message string.
- * Use `toFriendlyError` if you need the full error object.
+ * Convenience function that just returns the title string.
+ * Use `toFriendlyError` if you need the full error object with description.
  *
  * @param error - Technical error
- * @returns User-friendly message string
+ * @returns User-friendly title string
  */
 export function getFriendlyMessage(error: string | Error): string {
-  return toFriendlyError(error).message
+  return toFriendlyError(error).title
 }
 
 // =============================================================================
@@ -262,39 +271,45 @@ export function getFriendlyMessage(error: string | Error): string {
  * Speech recognition specific error messages.
  *
  * These provide more context for speech-related failures.
+ * Each error has a short title and helpful description.
  */
 export const SPEECH_ERRORS = {
   /** WebSocket connection to speech server failed */
   connectionFailed: {
-    message: "Can't connect to voice service. Please check your connection.",
+    title: "Can't connect to voice service",
+    description: "Please check your internet connection and try again.",
     category: "network" as ErrorCategory,
     canRetry: true,
     actionLabel: "Try again",
   },
   /** Microphone permission was denied */
   microphoneDenied: {
-    message: "Microphone access needed to play. Please allow microphone in your browser settings.",
+    title: "Microphone access needed",
+    description: "To play, please allow microphone access in your browser settings.",
     category: "microphone" as ErrorCategory,
     canRetry: true,
     actionLabel: "Try again",
   },
   /** No microphone found on device */
   microphoneNotFound: {
-    message: "No microphone found. Please connect a microphone and try again.",
+    title: "No microphone found",
+    description: "Please connect a microphone to your device and try again.",
     category: "microphone" as ErrorCategory,
     canRetry: true,
     actionLabel: "Try again",
   },
   /** Speech recognition failed to process audio */
   recognitionFailed: {
-    message: "Couldn't understand that. Please try speaking more clearly.",
+    title: "Couldn't understand that",
+    description: "Please try speaking more clearly or move to a quieter place.",
     category: "unknown" as ErrorCategory,
     canRetry: true,
     actionLabel: "Try again",
   },
   /** Speech server is unavailable */
   serverUnavailable: {
-    message: "Voice service is temporarily unavailable. Please try again.",
+    title: "Voice service unavailable",
+    description: "We're having trouble with our servers. Please try again in a moment.",
     category: "server" as ErrorCategory,
     canRetry: true,
     actionLabel: "Retry",
@@ -312,16 +327,44 @@ export function toSpeechFriendlyError(error: string | Error): FriendlyError {
 
   // Check for specific speech error patterns
   if (/permission denied|not allowed|notallowederror/i.test(technicalMessage)) {
-    return { ...SPEECH_ERRORS.microphoneDenied, technicalDetails: technicalMessage }
+    return {
+      title: SPEECH_ERRORS.microphoneDenied.title,
+      description: SPEECH_ERRORS.microphoneDenied.description,
+      category: SPEECH_ERRORS.microphoneDenied.category,
+      canRetry: SPEECH_ERRORS.microphoneDenied.canRetry,
+      actionLabel: SPEECH_ERRORS.microphoneDenied.actionLabel,
+      technicalDetails: technicalMessage,
+    }
   }
   if (/notfounderror|no microphone|device not found/i.test(technicalMessage)) {
-    return { ...SPEECH_ERRORS.microphoneNotFound, technicalDetails: technicalMessage }
+    return {
+      title: SPEECH_ERRORS.microphoneNotFound.title,
+      description: SPEECH_ERRORS.microphoneNotFound.description,
+      category: SPEECH_ERRORS.microphoneNotFound.category,
+      canRetry: SPEECH_ERRORS.microphoneNotFound.canRetry,
+      actionLabel: SPEECH_ERRORS.microphoneNotFound.actionLabel,
+      technicalDetails: technicalMessage,
+    }
   }
   if (/websocket|connection.*closed|UNAVAILABLE|dns/i.test(technicalMessage)) {
-    return { ...SPEECH_ERRORS.connectionFailed, technicalDetails: technicalMessage }
+    return {
+      title: SPEECH_ERRORS.connectionFailed.title,
+      description: SPEECH_ERRORS.connectionFailed.description,
+      category: SPEECH_ERRORS.connectionFailed.category,
+      canRetry: SPEECH_ERRORS.connectionFailed.canRetry,
+      actionLabel: SPEECH_ERRORS.connectionFailed.actionLabel,
+      technicalDetails: technicalMessage,
+    }
   }
   if (/503|service unavailable/i.test(technicalMessage)) {
-    return { ...SPEECH_ERRORS.serverUnavailable, technicalDetails: technicalMessage }
+    return {
+      title: SPEECH_ERRORS.serverUnavailable.title,
+      description: SPEECH_ERRORS.serverUnavailable.description,
+      category: SPEECH_ERRORS.serverUnavailable.category,
+      canRetry: SPEECH_ERRORS.serverUnavailable.canRetry,
+      actionLabel: SPEECH_ERRORS.serverUnavailable.actionLabel,
+      technicalDetails: technicalMessage,
+    }
   }
 
   // Fall back to generic classification
@@ -334,24 +377,28 @@ export function toSpeechFriendlyError(error: string | Error): FriendlyError {
 
 /**
  * Word fetching specific error messages.
+ * Each error has a short title and helpful description.
  */
 export const WORD_ERRORS = {
   /** Network error fetching word */
   networkError: {
-    message: "Can't load word. Please check your connection.",
+    title: "Can't load word",
+    description: "Please check your internet connection and try again.",
     category: "network" as ErrorCategory,
     canRetry: true,
     actionLabel: "Retry",
   },
   /** No words available for the tier */
   noWordsAvailable: {
-    message: "No words available. Please try a different difficulty.",
+    title: "No words available",
+    description: "Try selecting a different difficulty level.",
     category: "server" as ErrorCategory,
     canRetry: false,
   },
   /** Generic fetch failure */
   fetchFailed: {
-    message: "Couldn't load the next word. Please try again.",
+    title: "Couldn't load word",
+    description: "Something went wrong. Please try again.",
     category: "unknown" as ErrorCategory,
     canRetry: true,
     actionLabel: "Retry",
@@ -369,12 +416,32 @@ export function toWordFriendlyError(error: string | Error): FriendlyError {
 
   // Check for specific patterns
   if (/no words|empty|not found for tier/i.test(technicalMessage)) {
-    return { ...WORD_ERRORS.noWordsAvailable, technicalDetails: technicalMessage }
+    return {
+      title: WORD_ERRORS.noWordsAvailable.title,
+      description: WORD_ERRORS.noWordsAvailable.description,
+      category: WORD_ERRORS.noWordsAvailable.category,
+      canRetry: WORD_ERRORS.noWordsAvailable.canRetry,
+      technicalDetails: technicalMessage,
+    }
   }
   if (NETWORK_ERROR_PATTERNS.some((p) => p.test(technicalMessage))) {
-    return { ...WORD_ERRORS.networkError, technicalDetails: technicalMessage }
+    return {
+      title: WORD_ERRORS.networkError.title,
+      description: WORD_ERRORS.networkError.description,
+      category: WORD_ERRORS.networkError.category,
+      canRetry: WORD_ERRORS.networkError.canRetry,
+      actionLabel: WORD_ERRORS.networkError.actionLabel,
+      technicalDetails: technicalMessage,
+    }
   }
 
   // Fall back to generic word error
-  return { ...WORD_ERRORS.fetchFailed, technicalDetails: technicalMessage }
+  return {
+    title: WORD_ERRORS.fetchFailed.title,
+    description: WORD_ERRORS.fetchFailed.description,
+    category: WORD_ERRORS.fetchFailed.category,
+    canRetry: WORD_ERRORS.fetchFailed.canRetry,
+    actionLabel: WORD_ERRORS.fetchFailed.actionLabel,
+    technicalDetails: technicalMessage,
+  }
 }

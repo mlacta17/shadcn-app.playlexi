@@ -509,3 +509,107 @@ button.destructive:focus-visible,
     opacity: 1;
   }
 }
+
+/*
+ * ============================================================================
+ * SONNER TOAST COMPONENT OVERRIDES
+ * ============================================================================
+ *
+ * Sonner toast styling customizations. These override Sonner's default styles
+ * to align with PlayLexi's design system.
+ *
+ * ## Specificity Strategy
+ *
+ * Sonner's nested element styles use:
+ *   [data-sonner-toast][data-styled='true'] [data-description] → specificity (0,3,0)
+ *
+ * To override without !important, we add 'playlexi-toast' class via
+ * toastOptions.classNames.toast in sonner.tsx, giving us:
+ *
+ *   [data-sonner-toast].playlexi-toast[data-styled='true'] [data-description] → (0,4,0)
+ *
+ * This naturally wins the cascade without hacks.
+ *
+ * ## Sonner's Internal Structure
+ *
+ * - [data-sonner-toast] - Main toast container (flex row)
+ * - [data-icon] - Icon container (16px, flex-shrink-0)
+ * - [data-content] - Content wrapper (flex column containing title + description)
+ * - [data-title] - Toast title text
+ * - [data-description] - Toast description text (optional)
+ *
+ * @see components/ui/sonner.tsx for the Toaster component
+ * @see https://sonner.emilkowal.ski for Sonner documentation
+ */
+
+/*
+ * Toast container layout overrides.
+ *
+ * Sonner's default: align-items: center (icon centered vertically in toast)
+ * PlayLexi override: align-items: flex-start (icon aligned with title)
+ *
+ * This ensures that when a description is present, the icon stays aligned
+ * with the title text rather than floating between title and description.
+ */
+[data-sonner-toast].playlexi-toast[data-styled="true"] {
+  align-items: flex-start;
+  border-color: var(--border);
+}
+
+/*
+ * Toast title styling.
+ */
+[data-sonner-toast].playlexi-toast[data-styled="true"] [data-title] {
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+/*
+ * Toast description - uses Sonner's default #3f3f3f.
+ *
+ * We don't override this because Sonner's default provides good hierarchy:
+ * lighter than title but still readable. Our tokens don't have an equivalent.
+ */
+
+/*
+ * Icon vertical alignment fine-tuning.
+ *
+ * With align-items: flex-start, the icon aligns to the top of the content.
+ * We add a small margin to vertically center it with the title text:
+ *
+ * - Title line height: ~20px (14px font × 1.4 line-height)
+ * - Icon height: 16px
+ * - Offset needed: (20 - 16) / 2 = 2px
+ */
+[data-sonner-toast].playlexi-toast[data-styled="true"] [data-icon] {
+  margin-top: 2px;
+}
+
+/*
+ * Action button styling.
+ *
+ * Matches PlayLexi's button design system:
+ * - Primary colors
+ * - Pill shape (rounded-full)
+ * - Medium font weight
+ */
+[data-sonner-toast].playlexi-toast[data-styled="true"] [data-button] {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+  font-weight: 500;
+  border-radius: 9999px;
+  border: none;
+}
+
+/*
+ * Cancel button styling.
+ *
+ * Uses muted colors for secondary action.
+ */
+[data-sonner-toast].playlexi-toast[data-styled="true"] [data-cancel] {
+  background-color: var(--muted);
+  color: var(--muted-foreground);
+  font-weight: 500;
+  border-radius: 9999px;
+  border: none;
+}
