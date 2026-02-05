@@ -67,6 +67,8 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+        env:
+          NUCLEO_LICENSE_KEY: ${{ secrets.NUCLEO_LICENSE_KEY }}
 
       # -----------------------------------------------------------------------
       # Quality Checks
@@ -111,6 +113,8 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+        env:
+          NUCLEO_LICENSE_KEY: ${{ secrets.NUCLEO_LICENSE_KEY }}
 
       - name: Check for pending migrations
         if: ${{ env.CLOUDFLARE_API_TOKEN != '' }}
