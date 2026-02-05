@@ -20,8 +20,12 @@
  * ```typescript
  * const { fetchRandomWord, isUsingDatabase } = useWordFetcher()
  *
- * // In the game hook
- * const word = await fetchRandomWord(tier, excludeIds)
+ * // In the game hook - with anti-repeat and adaptive mixing
+ * const word = await fetchRandomWord(tier, {
+ *   excludeIds: sessionWordIds,
+ *   lastWordId: currentWord?.id,
+ *   enableAdaptiveMixing: true
+ * })
  * if (word) {
  *   setState(prev => ({ ...prev, currentWord: word }))
  * }
@@ -59,17 +63,42 @@ export const USE_DATABASE = true
 // API RESPONSE TYPES
 // =============================================================================
 
+/**
+ * Success response format from /api/words/random
+ */
 interface ApiSuccessResponse {
   success: true
   word: Word
 }
 
+/**
+ * Error response format from centralized error handling.
+ * Uses the standard AppError response format from lib/api/errors.ts
+ */
 interface ApiErrorResponse {
-  success: false
   error: string
+  code: string
+  details?: Record<string, unknown>
 }
 
 type ApiResponse = ApiSuccessResponse | ApiErrorResponse
+
+// =============================================================================
+// FETCH OPTIONS
+// =============================================================================
+
+/**
+ * Options for fetching random words.
+ * Mirrors the RandomWordOptions in d1-word-data-source.ts.
+ */
+export interface FetchWordOptions {
+  /** Word IDs to exclude (session history, prevents repeats) */
+  excludeIds?: string[]
+  /** Last word ID to prevent immediate consecutive repeat */
+  lastWordId?: string
+  /** Enable adaptive tier mixing (10% chance of adjacent tier) */
+  enableAdaptiveMixing?: boolean
+}
 
 // =============================================================================
 // ASYNC WORD FETCHER
@@ -82,12 +111,21 @@ type ApiResponse = ApiSuccessResponse | ApiErrorResponse
  * When false, uses the synchronous mock data.
  *
  * @param tier - Word difficulty tier (1-7)
- * @param excludeIds - Word IDs to exclude (prevents repeats)
+ * @param options - Fetch options (excludeIds, lastWordId, adaptiveMixing)
  * @returns Promise resolving to WordResult
  *
  * @example
  * ```typescript
- * const result = await fetchRandomWord(3, ["abc", "def"])
+ * // Basic usage
+ * const result = await fetchRandomWord(3, { excludeIds: ["abc", "def"] })
+ *
+ * // With anti-repeat and adaptive mixing
+ * const result = await fetchRandomWord(3, {
+ *   excludeIds: sessionWordIds,
+ *   lastWordId: currentWord?.id,
+ *   enableAdaptiveMixing: true
+ * })
+ *
  * if (result.success) {
  *   console.log(result.word.word) // e.g., "castle"
  * } else {
@@ -97,10 +135,12 @@ type ApiResponse = ApiSuccessResponse | ApiErrorResponse
  */
 export async function fetchRandomWord(
   tier: WordTier,
-  excludeIds: string[] = []
+  options: FetchWordOptions = {}
 ): Promise<WordResult> {
+  const { excludeIds = [], lastWordId, enableAdaptiveMixing = false } = options
+
   if (!USE_DATABASE) {
-    // Use synchronous mock data
+    // Use synchronous mock data (doesn't support advanced options)
     return getRandomWordSync(tier, excludeIds)
   }
 
@@ -114,19 +154,48 @@ export async function fetchRandomWord(
       params.set("excludeIds", excludeIds.join(","))
     }
 
+    if (lastWordId) {
+      params.set("lastWordId", lastWordId)
+    }
+
+    if (enableAdaptiveMixing) {
+      params.set("adaptiveMixing", "true")
+    }
+
+    // Debug: Log what we're sending to the API
+    console.log(
+      `[WordFetcher] Fetching tier=${tier}, excludeIds=${excludeIds.length}, ` +
+      `lastWordId=${lastWordId ? "set" : "none"}, adaptiveMixing=${enableAdaptiveMixing}`
+    )
+
     const response = await fetch(`/api/words/random?${params.toString()}`)
     const data: ApiResponse = await response.json()
 
-    if (!data.success) {
+    // Check for error response (centralized error format: { error, code })
+    if ("error" in data && !("word" in data)) {
       return {
         success: false,
         error: data.error || "Failed to fetch word",
       }
     }
 
+    // Success response (has word property)
+    if (!("word" in data)) {
+      return {
+        success: false,
+        error: "Invalid response: missing word data",
+      }
+    }
+
+    // At this point we know data has a word property
+    const successData = data as ApiSuccessResponse
+
+    // Debug: Log the word we received
+    console.log(`[WordFetcher] Received word: "${successData.word.word}" (id=${successData.word.id}, tier=${successData.word.tier})`)
+
     return {
       success: true,
-      word: data.word,
+      word: successData.word,
     }
   } catch (error) {
     console.error("[WordFetcher] API call failed:", error)

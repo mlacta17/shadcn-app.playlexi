@@ -209,8 +209,42 @@ function parseCollegiateResponse(word: string, data: unknown[]): WordData | null
     }
   }
 
-  // Create generic example sentence (Collegiate often lacks good examples)
-  const exampleSentence = `Can you spell the word "${word}"?`
+  // Extract example sentence from def array (same structure as Learner's)
+  let exampleSentence = ""
+  const def = entry.def as Array<{ sseq?: unknown }> | undefined
+  if (def && def[0]?.sseq) {
+    const sseq = def[0].sseq as unknown[][][]
+    for (const sense of sseq) {
+      for (const item of sense) {
+        if (Array.isArray(item) && item[0] === "sense") {
+          const senseData = item[1] as { dt?: unknown[] }
+          if (senseData.dt) {
+            for (const dtItem of senseData.dt) {
+              if (Array.isArray(dtItem) && dtItem[0] === "vis") {
+                const examples = dtItem[1] as Array<{ t?: string }>
+                if (examples[0]?.t) {
+                  // Clean up the example (remove {it} tags, etc.)
+                  exampleSentence = examples[0].t
+                    .replace(/\{it\}/g, "")
+                    .replace(/\{\/it\}/g, "")
+                    .replace(/\{[^}]+\}/g, "")
+                    .trim()
+                  break
+                }
+              }
+            }
+          }
+        }
+        if (exampleSentence) break
+      }
+      if (exampleSentence) break
+    }
+  }
+
+  // Only use placeholder if no example found
+  if (!exampleSentence) {
+    exampleSentence = `Can you spell the word "${word}"?`
+  }
 
   return {
     word,

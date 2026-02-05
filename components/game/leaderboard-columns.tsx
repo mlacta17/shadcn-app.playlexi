@@ -3,7 +3,7 @@
 import { type ColumnDef } from "@tanstack/react-table"
 
 import { cn } from "@/lib/utils"
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
+import { PlayerAvatar } from "@/components/ui/player-avatar"
 import { Badge } from "@/components/ui/badge"
 
 /**
@@ -16,8 +16,8 @@ export interface LeaderboardPlayer {
   name: string
   /** Secondary text (bio, email, etc.) */
   description?: string
-  /** Avatar image URL */
-  avatarUrl?: string
+  /** PlayLexi avatar ID (1=dog, 2=person, 3=cat) */
+  avatarId?: number
   /** Current round/score */
   round: number
   /** Change from previous position (+/-) */
@@ -55,15 +55,15 @@ function getRankVariant(rank: number): "gold" | "silver" | "bronze" | "secondary
 /**
  * PlayerCell — Avatar with name and description.
  *
- * Follows Avatar component patterns from the design system.
+ * Uses PlayerAvatar for PlayLexi character display.
  */
 interface PlayerCellProps {
   name: string
   description?: string
-  avatarUrl?: string
+  avatarId?: number
 }
 
-function PlayerCell({ name, description, avatarUrl }: PlayerCellProps) {
+function PlayerCell({ name, description, avatarId }: PlayerCellProps) {
   // Get initials for fallback
   const initials = name
     .split(/[@\s]/) // Split on @ or space for emails
@@ -75,10 +75,11 @@ function PlayerCell({ name, description, avatarUrl }: PlayerCellProps) {
 
   return (
     <div data-slot="player-cell" className="flex items-center gap-3">
-      <Avatar size="lg">
-        {avatarUrl && <AvatarImage src={avatarUrl} alt={name} />}
-        <AvatarFallback>{initials || "?"}</AvatarFallback>
-      </Avatar>
+      <PlayerAvatar
+        avatarId={avatarId}
+        fallbackInitials={initials}
+        size="lg"
+      />
       <div className="flex flex-col">
         <span className="font-medium text-foreground">{name}</span>
         {description && (
@@ -168,7 +169,7 @@ export const leaderboardColumns: ColumnDef<LeaderboardPlayer>[] = [
       <PlayerCell
         name={row.original.name}
         description={row.original.description}
-        avatarUrl={row.original.avatarUrl}
+        avatarId={row.original.avatarId}
       />
     ),
   },

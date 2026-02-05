@@ -47,6 +47,7 @@ import type {
   WordTimingData,
 } from "../speech-recognition-service"
 import { cleanTranscript, float32ToInt16 } from "../speech-utils"
+import { toSpeechFriendlyError } from "../error-messages"
 
 // =============================================================================
 // CONSTANTS
@@ -240,6 +241,24 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
       ws.onmessage = (event) => {
         try {
           const message: ServerMessage = JSON.parse(event.data)
+
+          // CRITICAL: Guard against processing INTERIM messages after session is stopped.
+          // After stop() is called, isActive becomes false. We should not process
+          // interim results because:
+          // 1. The hook has already reset its state
+          // 2. Late interim results would corrupt the next session's state
+          // 3. The accumulated text would carry over incorrectly
+          //
+          // HOWEVER, we MUST still allow FINAL results through because:
+          // 1. FINAL results contain word-level timing data for anti-cheat
+          // 2. The hook is waiting (with timeout) for the FINAL result
+          // 3. Without FINAL data, anti-cheat cannot detect "saying vs spelling"
+          if (!isActive && message.type === "interim") {
+            if (process.env.NODE_ENV === "development") {
+              console.log("[Google] Ignoring interim message after session stopped")
+            }
+            return
+          }
 
           switch (message.type) {
             case "ready":
@@ -479,8 +498,12 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
               break
 
             case "error":
+              // Log technical error for debugging
               console.error("[Google] Server error:", message.message)
-              onError?.(new Error(message.message || "Recognition error"))
+              // Convert to user-friendly error
+              const friendlyError = toSpeechFriendlyError(message.message || "Recognition error")
+              console.error("[Google] Technical details:", friendlyError.technicalDetails)
+              onError?.(new Error(friendlyError.title))
               break
           }
         } catch (err) {
@@ -490,7 +513,9 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
 
       ws.onerror = (event) => {
         console.error("[Google] WebSocket error:", event)
-        onError?.(new Error("WebSocket error"))
+        // User-friendly message for WebSocket errors
+        const friendlyError = toSpeechFriendlyError("WebSocket connection failed")
+        onError?.(new Error(friendlyError.title))
       }
 
       ws.onclose = () => {
@@ -498,8 +523,9 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
           console.log("[Google] WebSocket closed")
         }
         if (isActive) {
-          // Unexpected close
-          onError?.(new Error("WebSocket connection closed unexpectedly"))
+          // Unexpected close - user-friendly message
+          const friendlyError = toSpeechFriendlyError("WebSocket connection closed unexpectedly")
+          onError?.(new Error(friendlyError.title))
         }
       }
 
@@ -564,8 +590,15 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
           if (!isActive) return
           isActive = false
 
+          // Reset accumulated state immediately to prevent carryover to next session
+          // This is critical: if we don't reset here, late-arriving messages
+          // (before the 500ms cleanup) could corrupt the accumulated text
+          accumulatedStableText = ""
+          lastStability = 0
+          lastTranscript = ""
+
           if (process.env.NODE_ENV === "development") {
-            console.log("[Google] Stopping session")
+            console.log("[Google] Stopping session (accumulated state reset)")
           }
 
           // Send stop message to get final results

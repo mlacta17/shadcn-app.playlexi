@@ -73,6 +73,8 @@ const tierFilter = tierArg ? parseInt(tierArg.split("=")[1], 10) : null
 const limitArg = args.find((a) => a.startsWith("--limit="))
 const limitPerTier = limitArg ? parseInt(limitArg.split("=")[1], 10) : null
 
+const skipExisting = args.includes("--skip-existing")
+
 // Paths
 const SEED_FILE = path.join(__dirname, "..", "data", "seed-words.json")
 const PROJECT_ROOT = path.join(__dirname, "..")
@@ -128,6 +130,43 @@ interface SeedResult {
 
 /**
  * Execute a D1 SQL command using Wrangler.
+ */
+function executeD1Query(sql: string, isRemote: boolean): string {
+  const remoteFlag = isRemote ? "--remote" : "--local"
+  const escapedSql = sql.replace(/"/g, '\\"')
+  const command = `npx wrangler d1 execute playlexi-db ${remoteFlag} --command="${escapedSql}" --json`
+
+  try {
+    return execSync(command, {
+      cwd: PROJECT_ROOT,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    })
+  } catch (error) {
+    const err = error as { stderr?: string; message?: string }
+    throw new Error(err.stderr || err.message || "D1 command failed")
+  }
+}
+
+/**
+ * Fetch existing words from the database.
+ */
+function fetchExistingWords(isRemote: boolean): Set<string> {
+  try {
+    const output = executeD1Query("SELECT word FROM words", isRemote)
+    const parsed = JSON.parse(output)
+    if (Array.isArray(parsed) && parsed[0]?.results) {
+      return new Set(parsed[0].results.map((r: { word: string }) => r.word.toLowerCase()))
+    }
+    return new Set()
+  } catch {
+    logWarning("Could not fetch existing words, will process all")
+    return new Set()
+  }
+}
+
+/**
+ * Execute a D1 SQL command using Wrangler (for inserts/updates).
  */
 function executeD1Sql(sql: string, isRemote: boolean): string {
   const remoteFlag = isRemote ? "--remote" : "--local"
@@ -260,6 +299,7 @@ async function main() {
   if (skipAudio) logWarning("Skipping audio download/upload")
   if (tierFilter) logInfo(`Filtering to tier ${tierFilter} only`)
   if (limitPerTier) logInfo(`Limiting to ${limitPerTier} words per tier`)
+  if (skipExisting) logInfo("Skipping words already in database")
   logInfo(`R2 configured: ${isR2Configured() ? "yes" : "no (using placeholder URLs)"}`)
   console.log("")
 
@@ -278,17 +318,42 @@ async function main() {
   const seedData: SeedWordFile = JSON.parse(fs.readFileSync(SEED_FILE, "utf-8"))
   const isRemote = isProduction
 
+  // Fetch existing words if skip-existing is enabled
+  let existingWords: Set<string> = new Set()
+  if (skipExisting) {
+    log("Fetching existing words from database...", colors.dim)
+    existingWords = fetchExistingWords(isRemote)
+    logInfo(`Found ${existingWords.size} existing words in database`)
+  }
+
   // Process each tier
   const results: SeedResult[] = []
+  let skippedCount = 0
   const tiers = Object.entries(seedData.tiers)
     .filter(([tier]) => !tierFilter || parseInt(tier, 10) === tierFilter)
     .sort(([a], [b]) => parseInt(a, 10) - parseInt(b, 10))
 
   for (const [tierStr, tierData] of tiers) {
     const tier = parseInt(tierStr, 10)
-    const words = limitPerTier ? tierData.words.slice(0, limitPerTier) : tierData.words
+    let words = limitPerTier ? tierData.words.slice(0, limitPerTier) : tierData.words
 
-    log(`\n━━━ Tier ${tier}: ${tierData.name} (${words.length} words) ━━━`, colors.blue)
+    // Filter out existing words if skip-existing is enabled
+    if (skipExisting) {
+      const originalCount = words.length
+      words = words.filter(w => !existingWords.has(w.toLowerCase()))
+      const tierSkipped = originalCount - words.length
+      skippedCount += tierSkipped
+      if (tierSkipped > 0) {
+        logInfo(`Tier ${tier}: Skipping ${tierSkipped} existing words`)
+      }
+    }
+
+    if (words.length === 0) {
+      log(`\n━━━ Tier ${tier}: ${tierData.name} (all words already exist) ━━━`, colors.dim)
+      continue
+    }
+
+    log(`\n━━━ Tier ${tier}: ${tierData.name} (${words.length} new words) ━━━`, colors.blue)
 
     for (const word of words) {
       process.stdout.write(`  Processing "${word}"... `)
@@ -315,6 +380,9 @@ async function main() {
   log("\n╔════════════════════════════════════════════════════════════╗")
   log("║                      SUMMARY                               ║")
   log("╚════════════════════════════════════════════════════════════╝")
+  if (skippedCount > 0) {
+    logInfo(`Skipped (already in DB): ${skippedCount}`)
+  }
   logSuccess(`Successful: ${successful.length}/${results.length}`)
   if (withAudio.length > 0) {
     logInfo(`With audio: ${withAudio.length}`)

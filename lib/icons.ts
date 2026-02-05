@@ -39,6 +39,10 @@ export { IconChevronDownOutline24 as ChevronDownIcon } from "nucleo-core-outline
 export { IconChevronUpOutline24 as ChevronUpIcon } from "nucleo-core-outline-24"
 export { IconChevronRightOutline24 as ChevronRightIcon } from "nucleo-core-outline-24"
 
+// Navigation/Arrows (Tutorial navigation, pagination)
+export { IconArrowLeftOutline24 as ArrowLeftIcon } from "nucleo-core-outline-24"
+export { IconArrowRightOutline24 as ArrowRightIcon } from "nucleo-core-outline-24"
+
 // Menu icons
 export { IconMenuOutline24 as MenuIcon } from "nucleo-core-outline-24"
 export { IconDotsVerticalOutline24 as MoreVerticalIcon } from "nucleo-core-outline-24"
@@ -66,13 +70,19 @@ export { IconMonitorOutline24 as MonitorIcon } from "nucleo-core-outline-24"
 // Game icons
 export { IconHeartOutline24 as HeartIcon } from "nucleo-core-outline-24"
 
+// Debug/Refresh icons
+export { IconArrowRotateClockwiseOutline24 as RefreshIcon } from "nucleo-core-outline-24"
+
 // SpeechInput helper buttons
 export { IconMessage2ContentOutline24 as SentenceIcon } from "nucleo-core-outline-24"
 export { IconBookOutline24 as DictionaryIcon } from "nucleo-core-outline-24"
 
-// Alert/Feedback icons (AlertDialog)
+// Alert/Feedback icons (AlertDialog, Toast notifications)
 export { IconAlertWarningOutline24 as AlertWarningIcon } from "nucleo-core-outline-24"
 export { IconCircleCheckOutline24 as CircleCheckIcon } from "nucleo-core-outline-24"
+export { IconCircleInfoOutline24 as CircleInfoIcon } from "nucleo-core-outline-24"
+export { IconTriangleWarningOutline24 as TriangleWarningIcon } from "nucleo-core-outline-24"
+export { IconCircleWarningOutline24 as CircleWarningIcon } from "nucleo-core-outline-24"
 
 // Search/Filter icons (Leaderboard, tables)
 export { IconMagnifierOutline24 as SearchIcon } from "nucleo-core-outline-24"

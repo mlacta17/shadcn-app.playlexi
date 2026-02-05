@@ -1,17 +1,26 @@
 /**
  * Random Word API — Serves random words from D1 database.
  *
- * GET /api/words/random?tier=3&excludeIds=abc,def
+ * GET /api/words/random?tier=3&excludeIds=abc,def&lastWordId=xyz&adaptiveMixing=true
  *
  * Returns a random word from the specified difficulty tier,
- * optionally excluding certain word IDs (to prevent repeats in a session).
+ * with smart fallback to adjacent tiers when primary tier is exhausted.
  *
  * ## Query Parameters
  *
  * | Param | Required | Description |
  * |-------|----------|-------------|
  * | tier | Yes | Difficulty tier 1-7 |
- * | excludeIds | No | Comma-separated word IDs to exclude |
+ * | excludeIds | No | Comma-separated word IDs to exclude (session history) |
+ * | lastWordId | No | ID of the last word served (prevents immediate repeat) |
+ * | adaptiveMixing | No | Enable 10% chance of adjacent tier (default: false) |
+ *
+ * ## Fallback Behavior
+ *
+ * When the requested tier is exhausted (all words in excludeIds):
+ * 1. Try adjacent tiers (tier+1, tier-1, tier+2, tier-2, etc.)
+ * 2. Allow repeats from primary tier (but not lastWordId)
+ * 3. Any word from any tier (last resort)
  *
  * ## Response
  *
@@ -47,7 +56,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { getCloudflareContext } from "@opennextjs/cloudflare"
 import type { WordTier, Word } from "@/lib/word-service"
 import { createDb } from "@/db"
-import { createD1WordDataSource } from "@/lib/services/d1-word-data-source"
+import { createD1WordDataSource, type RandomWordOptions } from "@/lib/services/d1-word-data-source"
+import { handleApiError, Errors, type ApiErrorResponse } from "@/lib/api"
 
 // =============================================================================
 // CLOUDFLARE ENV AUGMENTATION
@@ -74,7 +84,7 @@ interface ErrorResponse {
   error: string
 }
 
-type ApiResponse = SuccessResponse | ErrorResponse
+type ApiResponse = SuccessResponse | ApiErrorResponse
 
 // =============================================================================
 // VALIDATION
@@ -107,6 +117,15 @@ function parseExcludeIds(excludeParam: string | null): string[] {
     .slice(0, 100) // Limit to prevent abuse
 }
 
+/**
+ * Parse boolean query parameter.
+ * Returns true only for explicit "true" or "1" values.
+ */
+function parseBoolean(param: string | null): boolean {
+  if (!param) return false
+  return param.toLowerCase() === "true" || param === "1"
+}
+
 // =============================================================================
 // ROUTE HANDLER
 // =============================================================================
@@ -114,7 +133,7 @@ function parseExcludeIds(excludeParam: string | null): string[] {
 /**
  * GET /api/words/random
  *
- * Fetches a random word from the D1 database.
+ * Fetches a random word from the D1 database with smart tier fallback.
  */
 export async function GET(request: NextRequest): Promise<NextResponse<ApiResponse>> {
   try {
@@ -122,53 +141,51 @@ export async function GET(request: NextRequest): Promise<NextResponse<ApiRespons
     const { searchParams } = new URL(request.url)
     const tier = parseTier(searchParams.get("tier"))
     const excludeIds = parseExcludeIds(searchParams.get("excludeIds"))
+    const lastWordId = searchParams.get("lastWordId") || undefined
+    const enableAdaptiveMixing = parseBoolean(searchParams.get("adaptiveMixing"))
 
     // Validate tier parameter
     if (tier === null) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid or missing 'tier' parameter. Must be 1-7.",
-        },
-        { status: 400 }
-      )
+      throw Errors.invalidInput("tier", "Must be 1-7", [1, 2, 3, 4, 5, 6, 7])
     }
 
+    // Debug: Log incoming request
+    console.log(
+      `[API] /api/words/random - tier=${tier}, excludeIds=${excludeIds.length}, ` +
+      `lastWordId=${lastWordId ? "set" : "none"}, adaptiveMixing=${enableAdaptiveMixing}`
+    )
+
     // Get D1 database binding from Cloudflare context via OpenNext
+    // This works in both production AND local development thanks to
+    // initOpenNextCloudflareForDev() in next.config.ts
     const { env } = await getCloudflareContext({ async: true })
 
     // Create database connection and data source
     const db = createDb(env.DB)
     const dataSource = createD1WordDataSource(db)
 
-    // Fetch random word
-    const word = await dataSource.getRandomWord(tier, excludeIds)
+    // Build options for enhanced word fetching
+    const options: RandomWordOptions = {
+      excludeIds,
+      lastWordId,
+      enableAdaptiveMixing,
+    }
+
+    // Fetch random word with fallback logic
+    const word = await dataSource.getRandomWord(tier, options)
 
     if (!word) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `No words available for tier ${tier}.`,
-        },
-        { status: 404 }
-      )
+      throw Errors.notFound("Word", `tier ${tier}`)
     }
+
+    // Debug: Log returned word
+    console.log(`[API] Returning word: "${word.word}" (id=${word.id}, tier=${word.tier})`)
 
     return NextResponse.json({
       success: true,
       word,
     })
   } catch (error) {
-    // Log error for debugging
-    console.error("[API] Error fetching random word:", error)
-
-    // Return generic error (don't expose internal details)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Internal server error. Please try again.",
-      },
-      { status: 500 }
-    )
+    return handleApiError(error, "[GetRandomWord]")
   }
 }

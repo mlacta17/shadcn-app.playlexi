@@ -6,6 +6,42 @@ import { AlertDialog as AlertDialogPrimitive } from "radix-ui"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
+// =============================================================================
+// ALERT DIALOG
+// =============================================================================
+// A modal dialog that interrupts the user with important content and expects
+// a response. Built on Radix UI primitives with radix-nova styling.
+//
+// Features:
+// - Size variants: "default" | "sm"
+// - Optional media/icon slot
+// - Accessible by default (focus trap, escape to close)
+// - Smooth center-pop animation
+//
+// Usage:
+// ```tsx
+// <AlertDialog>
+//   <AlertDialogTrigger asChild>
+//     <Button>Open</Button>
+//   </AlertDialogTrigger>
+//   <AlertDialogContent>
+//     <AlertDialogHeader>
+//       <AlertDialogTitle>Title</AlertDialogTitle>
+//       <AlertDialogDescription>Description</AlertDialogDescription>
+//     </AlertDialogHeader>
+//     <AlertDialogFooter>
+//       <AlertDialogCancel>Cancel</AlertDialogCancel>
+//       <AlertDialogAction>Continue</AlertDialogAction>
+//     </AlertDialogFooter>
+//   </AlertDialogContent>
+// </AlertDialog>
+// ```
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// Root & Trigger
+// -----------------------------------------------------------------------------
+
 function AlertDialog({
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
@@ -19,6 +55,10 @@ function AlertDialogTrigger({
     <AlertDialogPrimitive.Trigger data-slot="alert-dialog-trigger" {...props} />
   )
 }
+
+// -----------------------------------------------------------------------------
+// Portal & Overlay
+// -----------------------------------------------------------------------------
 
 function AlertDialogPortal({
   ...props
@@ -35,17 +75,32 @@ function AlertDialogOverlay({
   return (
     <AlertDialogPrimitive.Overlay
       data-slot="alert-dialog-overlay"
-      className={cn("data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 bg-black/80 duration-100 supports-backdrop-filter:backdrop-blur-xs fixed inset-0 z-50", className)}
+      className={cn(
+        // Position & appearance
+        "fixed inset-0 z-50 bg-black/10",
+        // Backdrop blur (with fallback for unsupported browsers)
+        "supports-[backdrop-filter]:backdrop-blur-xs",
+        // Animation (100ms - matches radix-nova)
+        "data-[state=open]:animate-in data-[state=closed]:animate-out",
+        "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+        "duration-100",
+        className
+      )}
       {...props}
     />
   )
 }
+
+// -----------------------------------------------------------------------------
+// Content
+// -----------------------------------------------------------------------------
 
 function AlertDialogContent({
   className,
   size = "default",
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Content> & {
+  /** Dialog size variant */
   size?: "default" | "sm"
 }) {
   return (
@@ -55,7 +110,25 @@ function AlertDialogContent({
         data-slot="alert-dialog-content"
         data-size={size}
         className={cn(
-          "data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 bg-background ring-foreground/5 gap-6 rounded-4xl p-6 ring-1 duration-100 data-[size=default]:max-w-xs data-[size=sm]:max-w-xs data-[size=default]:sm:max-w-md group/alert-dialog-content fixed top-1/2 left-1/2 z-50 grid w-full -translate-x-1/2 -translate-y-1/2 outline-none",
+          // Position (centered)
+          "fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2",
+          // Layout
+          "grid w-full gap-4 p-4",
+          // Size variants (matches radix-nova exactly)
+          "data-[size=default]:max-w-xs",
+          "data-[size=sm]:max-w-xs",
+          "data-[size=default]:sm:max-w-sm",
+          // Appearance
+          "rounded-2xl bg-background ring-1 ring-foreground/10",
+          // Animation (100ms zoom + fade - matches radix-nova exactly, NO slide)
+          "data-[state=open]:animate-in data-[state=closed]:animate-out",
+          "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+          "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+          "duration-100",
+          // Focus
+          "outline-none",
+          // Group identifier for child styling
+          "group/alert-dialog-content",
           className
         )}
         {...props}
@@ -64,6 +137,10 @@ function AlertDialogContent({
   )
 }
 
+// -----------------------------------------------------------------------------
+// Header, Footer & Media
+// -----------------------------------------------------------------------------
+
 function AlertDialogHeader({
   className,
   ...props
@@ -71,7 +148,18 @@ function AlertDialogHeader({
   return (
     <div
       data-slot="alert-dialog-header"
-      className={cn("grid grid-rows-[auto_1fr] place-items-center gap-1.5 text-center has-data-[slot=alert-dialog-media]:grid-rows-[auto_auto_1fr] has-data-[slot=alert-dialog-media]:gap-x-6 sm:group-data-[size=default]/alert-dialog-content:place-items-start sm:group-data-[size=default]/alert-dialog-content:text-left sm:group-data-[size=default]/alert-dialog-content:has-data-[slot=alert-dialog-media]:grid-rows-[auto_1fr]", className)}
+      className={cn(
+        // Base: centered, stacked layout with grid rows
+        "grid grid-rows-[auto_1fr] place-items-center gap-1.5 text-center",
+        // With media icon: add extra row for icon
+        "has-data-[slot=alert-dialog-media]:grid-rows-[auto_auto_1fr]",
+        "has-data-[slot=alert-dialog-media]:gap-x-4",
+        // Responsive: left-align on larger screens (default size only)
+        "sm:group-data-[size=default]/alert-dialog-content:place-items-start",
+        "sm:group-data-[size=default]/alert-dialog-content:text-left",
+        "sm:group-data-[size=default]/alert-dialog-content:has-data-[slot=alert-dialog-media]:grid-rows-[auto_1fr]",
+        className
+      )}
       {...props}
     />
   )
@@ -85,7 +173,13 @@ function AlertDialogFooter({
     <div
       data-slot="alert-dialog-footer"
       className={cn(
-        "flex flex-col-reverse gap-2 group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2 sm:flex-row sm:justify-end",
+        // Base: stacked (mobile-first)
+        "flex flex-col-reverse gap-2",
+        // Small size: side-by-side grid
+        "group-data-[size=sm]/alert-dialog-content:grid",
+        "group-data-[size=sm]/alert-dialog-content:grid-cols-2",
+        // Responsive: horizontal on larger screens
+        "sm:flex-row sm:justify-end",
         className
       )}
       {...props}
@@ -100,11 +194,23 @@ function AlertDialogMedia({
   return (
     <div
       data-slot="alert-dialog-media"
-      className={cn("bg-muted mb-2 inline-flex size-16 items-center justify-center rounded-full sm:group-data-[size=default]/alert-dialog-content:row-span-2 *:[svg:not([class*='size-'])]:size-8", className)}
+      className={cn(
+        // Icon container (matches radix-nova: rounded-md, not rounded-lg)
+        "bg-muted mb-2 inline-flex size-10 items-center justify-center rounded-md",
+        // Responsive: span both rows when in grid layout
+        "sm:group-data-[size=default]/alert-dialog-content:row-span-2",
+        // Default icon size (can be overridden via className)
+        "*:[svg:not([class*='size-'])]:size-6",
+        className
+      )}
       {...props}
     />
   )
 }
+
+// -----------------------------------------------------------------------------
+// Title & Description
+// -----------------------------------------------------------------------------
 
 function AlertDialogTitle({
   className,
@@ -113,7 +219,12 @@ function AlertDialogTitle({
   return (
     <AlertDialogPrimitive.Title
       data-slot="alert-dialog-title"
-      className={cn("text-lg font-medium sm:group-data-[size=default]/alert-dialog-content:group-has-data-[slot=alert-dialog-media]/alert-dialog-content:col-start-2", className)}
+      className={cn(
+        "text-base font-medium",
+        // When media is present, start in column 2 on desktop
+        "sm:group-data-[size=default]/alert-dialog-content:group-has-data-[slot=alert-dialog-media]/alert-dialog-content:col-start-2",
+        className
+      )}
       {...props}
     />
   )
@@ -126,11 +237,22 @@ function AlertDialogDescription({
   return (
     <AlertDialogPrimitive.Description
       data-slot="alert-dialog-description"
-      className={cn("text-muted-foreground *:[a]:hover:text-foreground text-sm text-balance md:text-pretty *:[a]:underline *:[a]:underline-offset-3", className)}
+      className={cn(
+        "text-sm text-muted-foreground",
+        // Text wrapping
+        "text-balance md:text-pretty",
+        // Link styling within description
+        "*:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-foreground",
+        className
+      )}
       {...props}
     />
   )
 }
+
+// -----------------------------------------------------------------------------
+// Action Buttons
+// -----------------------------------------------------------------------------
 
 function AlertDialogAction({
   className,
@@ -167,6 +289,10 @@ function AlertDialogCancel({
     </Button>
   )
 }
+
+// -----------------------------------------------------------------------------
+// Exports
+// -----------------------------------------------------------------------------
 
 export {
   AlertDialog,

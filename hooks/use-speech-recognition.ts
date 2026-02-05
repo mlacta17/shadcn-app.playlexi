@@ -1,5 +1,55 @@
 "use client"
 
+/**
+ * Speech Recognition Hook — PlayLexi
+ *
+ * Manages voice input with real-time transcription and anti-cheat detection.
+ *
+ * ## File Structure (801 lines)
+ *
+ * | Lines | Section | Purpose |
+ * |-------|---------|---------|
+ * | 1-72 | Types | LetterTiming, AudioWordTiming, Options interfaces |
+ * | 73-142 | More Types | StopRecordingMetrics with anti-cheat fields |
+ * | 143-197 | Return Type | useSpeechRecognitionReturn interface |
+ * | 198-260 | Hook JSDoc | Provider selection, usage examples |
+ * | 261-350 | State Setup | Refs and state variables for tracking |
+ * | 351-550 | Recording Logic | startRecording, audio pipeline setup |
+ * | 551-700 | Anti-Cheat | Letter timing analysis, audio gap detection |
+ * | 701-801 | Cleanup + Return | stopRecording, clearTranscript, exports |
+ *
+ * ## Why One Large File?
+ *
+ * This hook handles complex anti-cheat detection that requires:
+ *
+ * 1. **Timing correlation**: Letter appearance times must match audio timestamps
+ * 2. **Provider abstraction**: Google Cloud vs Web Speech API differences
+ * 3. **Audio pipeline state**: MediaStream, AudioContext, AnalyserNode lifecycle
+ * 4. **Metrics calculation**: Multiple timing signals computed at stop time
+ *
+ * Splitting would require passing timing refs between files, adding complexity
+ * without improving clarity. The anti-cheat logic is best understood in context.
+ *
+ * ## Anti-Cheat Detection
+ *
+ * Two methods to detect if user spelled or said the word:
+ *
+ * 1. **Transcript timing** (less reliable): When letters appear in transcript
+ * 2. **Audio word timing** (more reliable): Google's word-level timestamps
+ *
+ * Spelling "C-A-T": Multiple word segments with ~200ms gaps
+ * Saying "cat": Single continuous word segment, no gaps
+ *
+ * ## Related Files
+ *
+ * - lib/speech-recognition-service.ts — Provider abstraction layer
+ * - lib/providers/google-speech-provider.ts — Google Cloud implementation
+ * - lib/answer-validation.ts — extractLettersFromVoice, validateAnswer
+ * - speech-server/ — WebSocket server for Google Speech streaming
+ *
+ * @see ADR-011 — Speech Recognition Provider Selection
+ */
+
 import * as React from "react"
 import {
   getSpeechProvider,
@@ -353,24 +403,30 @@ export function useSpeechRecognition(
     }
 
     // Wait for FINAL result to arrive (with timeout)
-    // The final result callback will resolve this promise
-    const MAX_WAIT_MS = 2000 // Maximum time to wait for final result
+    // The final result callback will resolve this promise.
+    //
+    // PERFORMANCE: Reduced timeout from 2000ms to 500ms because:
+    // 1. Google typically sends FINAL within 200-400ms after we send "stop"
+    // 2. If FINAL doesn't arrive in 500ms, something is wrong anyway
+    // 3. The interim transcript is usually accurate enough for validation
+    // 4. Anti-cheat falls back to transcript-based timing if no audio data
+    const MAX_WAIT_MS = 500 // Reduced from 2000ms for better responsiveness
     const finalResultReceived = providerBasedIsSpelledOutRef.current !== null
 
     if (!finalResultReceived) {
       if (process.env.NODE_ENV === "development") {
-        console.log("[Speech] Waiting for FINAL result before returning metrics...")
+        console.log("[Speech] Waiting for FINAL result (max 500ms)...")
       }
 
       await new Promise<void>((resolve) => {
         // Store the resolver so the onWordTiming callback can resolve it
         finalResultResolverRef.current = resolve
 
-        // Timeout: don't wait forever
+        // Timeout: don't wait too long - responsiveness is more important
         setTimeout(() => {
           if (finalResultResolverRef.current) {
             if (process.env.NODE_ENV === "development") {
-              console.log("[Speech] Timeout waiting for FINAL result, proceeding with available data")
+              console.log("[Speech] Timeout waiting for FINAL, using interim data")
             }
             finalResultResolverRef.current = null
             resolve()

@@ -36,6 +36,10 @@ export interface UseGameSoundsReturn {
   play: (sound: SoundName) => void
   /** Whether sounds are ready to play */
   isReady: boolean
+  /** Whether sounds have been unlocked by user interaction */
+  isUnlocked: boolean
+  /** Unlock sounds (call on first user interaction) */
+  unlock: () => void
   /** Enable/disable sounds */
   setEnabled: (enabled: boolean) => void
   /** Set master volume (0-1) */
@@ -86,6 +90,7 @@ function useGameSounds(options: UseGameSoundsOptions = {}): UseGameSoundsReturn 
 
   // State
   const [isReady, setIsReady] = React.useState(false)
+  const [isUnlocked, setIsUnlocked] = React.useState(false)
   const [enabled, setEnabled] = React.useState(initialEnabled)
   const [volume, setVolume] = React.useState(initialVolume)
 
@@ -168,6 +173,38 @@ function useGameSounds(options: UseGameSoundsOptions = {}): UseGameSoundsReturn 
   const playCorrect = React.useCallback(() => play("correct"), [play])
   const playWrong = React.useCallback(() => play("wrong"), [play])
 
+  /**
+   * Unlock audio playback by triggering a silent play on user interaction.
+   *
+   * Modern browsers block audio until there's been a user interaction (click, tap, etc.).
+   * This function should be called on the first user interaction in the game
+   * (e.g., clicking the record button, starting the game).
+   *
+   * It plays each sound at volume 0 to "unlock" the audio context.
+   */
+  const unlock = React.useCallback(() => {
+    if (isUnlocked) return
+
+    // Try to play all sounds at volume 0 to unlock them
+    audioCache.current.forEach((audio) => {
+      const originalVolume = audio.volume
+      audio.volume = 0
+      audio.play()
+        .then(() => {
+          // Pause immediately and reset
+          audio.pause()
+          audio.currentTime = 0
+          audio.volume = originalVolume
+        })
+        .catch(() => {
+          // Still blocked - that's okay, we tried
+          audio.volume = originalVolume
+        })
+    })
+
+    setIsUnlocked(true)
+  }, [isUnlocked])
+
   // Memoize the return object to provide stable reference
   // This prevents unnecessary effect re-runs in consuming components
   return React.useMemo(
@@ -176,10 +213,12 @@ function useGameSounds(options: UseGameSoundsOptions = {}): UseGameSoundsReturn 
       playWrong,
       play,
       isReady,
+      isUnlocked,
+      unlock,
       setEnabled,
       setVolume,
     }),
-    [playCorrect, playWrong, play, isReady, setEnabled, setVolume]
+    [playCorrect, playWrong, play, isReady, isUnlocked, unlock, setEnabled, setVolume]
   )
 }
 

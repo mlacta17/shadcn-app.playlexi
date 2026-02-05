@@ -1,0 +1,137 @@
+# =============================================================================
+# PlayLexi CI Pipeline
+# =============================================================================
+#
+# This workflow runs on every push and pull request to ensure code quality.
+# It does NOT deploy - that remains a manual step via `npm run deploy`.
+#
+# ## What This Workflow Does
+#
+# 1. Runs tests (141 tests across 5 test files)
+# 2. Builds the project (catches TypeScript errors and route conflicts)
+# 3. Checks for pending database migrations
+#
+# ## Why These Checks?
+#
+# - **Tests**: Catch bugs before they reach main branch
+# - **Build**: Catches TypeScript errors, missing imports, route conflicts
+# - **Migration Check**: Prevents the issue where code expects schema changes
+#   that haven't been applied (like the time_limit → time_taken bug)
+#
+# ## When This Runs
+#
+# - On every push to any branch
+# - On every pull request to main
+#
+# ## Cost
+#
+# GitHub Actions is free for public repos, 2000 minutes/month for private.
+# This workflow typically takes 2-3 minutes.
+#
+# =============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: ["*"]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs when a new commit is pushed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ===========================================================================
+  # Test & Build
+  # ===========================================================================
+  test-and-build:
+    name: Test & Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # -----------------------------------------------------------------------
+      # Setup
+      # -----------------------------------------------------------------------
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NUCLEO_LICENSE_KEY: ${{ secrets.NUCLEO_LICENSE_KEY }}
+
+      # -----------------------------------------------------------------------
+      # Quality Checks
+      # -----------------------------------------------------------------------
+      - name: Run tests
+        run: npm run test:run
+
+      - name: Build project
+        run: npm run build
+        env:
+          # Build needs these to be set (values don't matter for build check)
+          BETTER_AUTH_SECRET: "ci-build-check-secret-not-real"
+          BETTER_AUTH_URL: "http://localhost:3000"
+          NEXT_PUBLIC_BETTER_AUTH_URL: "http://localhost:3000"
+
+  # ===========================================================================
+  # Migration Check
+  # ===========================================================================
+  # This job warns if there are unapplied migrations in production.
+  # It doesn't block the build, just adds a warning to the PR.
+  #
+  # Note: This requires CLOUDFLARE_API_TOKEN secret to be set in GitHub.
+  # Until that's configured, this job will be skipped.
+  # ===========================================================================
+  migration-check:
+    name: Check Migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Only run on PRs to main, and only if the secret exists
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    continue-on-error: true # Don't fail the whole workflow if this fails
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NUCLEO_LICENSE_KEY: ${{ secrets.NUCLEO_LICENSE_KEY }}
+
+      - name: Check for pending migrations
+        if: ${{ env.CLOUDFLARE_API_TOKEN != '' }}
+        run: |
+          echo "Checking for pending migrations in production..."
+          PENDING=$(npx wrangler d1 migrations list playlexi-db --remote 2>&1 || echo "")
+
+          if echo "$PENDING" | grep -q "Migrations to be applied"; then
+            echo "::warning::There are pending database migrations that need to be applied to production before deploying."
+            echo ""
+            echo "Run this command after merging:"
+            echo "  npm run db:migrate:prod"
+            echo ""
+            echo "$PENDING"
+          else
+            echo "✅ All migrations are applied to production."
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

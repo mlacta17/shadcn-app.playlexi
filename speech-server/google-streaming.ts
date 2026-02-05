@@ -34,17 +34,79 @@ import type {
 /**
  * Speech context for letter recognition.
  * Boosts recognition of individual letters and their phonetic names.
+ *
+ * ## Relationship to lib/speech-utils.ts
+ *
+ * The base letter and phonetic phrases are duplicated from lib/speech-utils.ts.
+ * This file is kept separate because:
+ *
+ * 1. **Separate deployment**: The speech-server deploys independently to
+ *    Railway/Cloud Run with its own package.json and node_modules.
+ *
+ * 2. **Extended phrases**: This file includes additional disambiguation
+ *    phrases (like "B as in boy") that the client-side code doesn't need.
+ *
+ * 3. **No build-time sharing**: Adding npm workspaces or build scripts to
+ *    share code would add complexity without proportional benefit.
+ *
+ * **If you modify the base 26 letters or phonetic names, update both:**
+ * - lib/speech-utils.ts (LETTER_PHRASES, PHONETIC_LETTER_NAMES)
+ * - speech-server/google-streaming.ts (SPEECH_CONTEXT.phrases)
+ *
+ * ## Confusable Letter Groups
+ *
+ * These letters are acoustically similar and often confused by speech recognition:
+ * - B/D/P/V: Plosive consonants with similar mouth positions
+ * - M/N: Nasal consonants
+ * - S/F: Fricatives
+ * - C/G: Velar consonants
+ *
+ * We include explicit phrases to help Google distinguish between them.
  */
 const SPEECH_CONTEXT = {
   phrases: [
-    // Individual letters
+    // Individual letters (all 26)
     "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
     "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+
     // Phonetic names (how letters sound when spoken)
     "ay", "bee", "cee", "dee", "ee", "eff", "gee", "aitch",
     "eye", "jay", "kay", "ell", "em", "en", "oh", "pee",
     "cue", "are", "ess", "tee", "you", "vee",
     "double you", "double-u", "ex", "why", "zee", "zed",
+
+    // === CONFUSABLE LETTER DISAMBIGUATION ===
+    // Repeat commonly confused letters with higher frequency to boost recognition
+    // B/D/P/V group (most commonly confused)
+    "B", "bee", "D", "dee", "P", "pee", "V", "vee",
+    "B", "bee", "D", "dee", "P", "pee", "V", "vee",
+
+    // Explicit disambiguation phrases
+    "letter B", "letter D", "letter P", "letter V",
+    "B as in boy", "D as in dog", "P as in Paul", "V as in Victor",
+
+    // M/N confusion (commonly confused nasal consonants)
+    "M", "em", "N", "en",
+    "M", "em", "N", "en",
+    "letter M", "letter N",
+    "M as in Mary", "N as in Nancy",
+
+    // C/S/G confusion
+    "C", "cee", "S", "ess", "G", "gee",
+    "letter C", "letter S", "letter G",
+
+    // T/C confusion (commonly confused due to similar-sounding names "tee"/"cee")
+    "T", "tee", "C", "cee",
+    "T", "tee", "C", "cee",
+    "letter T", "letter C",
+    "T as in Tom", "C as in cat",
+
+    // F/S confusion
+    "F", "eff", "S", "ess",
+
+    // Single letter utterances (helps when user says just one letter)
+    "just B", "just D", "just P", "just V",
+    "the letter B", "the letter D", "the letter P", "the letter V",
   ],
   boost: 20,
 }

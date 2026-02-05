@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
+import { PlayerAvatar } from "@/components/ui/player-avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -88,6 +89,8 @@ export interface NavbarProps {
     email: string
     avatarUrl?: string
     initials?: string
+    /** PlayLexi avatar ID (1=dog, 2=person, 3=cat) */
+    avatarId?: number
   }
   /** Notification count */
   notificationCount?: number
@@ -230,10 +233,11 @@ function Navbar({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="hidden md:block rounded-full">
-                  <Avatar>
-                    {user.avatarUrl && <AvatarImage src={user.avatarUrl} />}
-                    <AvatarFallback>{user.initials || user.name.slice(0, 2).toUpperCase()}</AvatarFallback>
-                  </Avatar>
+                  <PlayerAvatar
+                    avatarId={user.avatarId}
+                    avatarUrl={user.avatarUrl}
+                    fallbackInitials={user.initials || user.name.slice(0, 2).toUpperCase()}
+                  />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
@@ -287,10 +291,11 @@ function Navbar({
               <>
                 {/* User Info */}
                 <div className="flex items-center gap-3 p-2">
-                  <Avatar>
-                    {user.avatarUrl && <AvatarImage src={user.avatarUrl} />}
-                    <AvatarFallback>{user.initials || user.name.slice(0, 2).toUpperCase()}</AvatarFallback>
-                  </Avatar>
+                  <PlayerAvatar
+                    avatarId={user.avatarId}
+                    avatarUrl={user.avatarUrl}
+                    fallbackInitials={user.initials || user.name.slice(0, 2).toUpperCase()}
+                  />
                   <div className="flex flex-col">
                     <span className="text-base font-medium text-foreground">{user.name}</span>
                     <span className="text-sm text-muted-foreground">{user.email}</span>

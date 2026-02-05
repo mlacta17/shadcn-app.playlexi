@@ -135,39 +135,306 @@ Safari's WebKit engine handles Web Audio API differently than Chrome's Blink:
 
 ---
 
-### Phase 4: Phonetic Calibration (Future)
+### Phase 4: Adaptive Phonetic Learning System
 
-**Goal:** Improve accuracy for users with accents or non-standard pronunciation.
+> **Branch:** `feature/google-speech-api`
+> **Status:** Phase 4.1 Complete, Phase 4.2 Ready for Testing
+> **Last Updated:** January 18, 2026
 
-**Concept:** During onboarding, have users spell A-Z. Capture how Google transcribes their pronunciation of each letter. Store a mapping per user.
+**Goal:** Automatically improve speech recognition accuracy for users with accents or non-standard pronunciation by learning from their gameplay.
 
-**Example:**
-```json
-{
-  "userId": "abc123",
-  "phoneticMap": {
-    "are": "R",
-    "double you": "W",
-    "zed": "Z",
-    "aitch": "H"
-  }
-}
+---
+
+#### The Problem
+
+The current system uses 366 hardcoded phonetic mappings (e.g., "tee" → "T", "oh" → "O"). This works for ~80% of users but fails for:
+
+1. **Regional accents** - British "zed" vs American "zee"
+2. **Non-native speakers** - Different vowel sounds
+3. **Google Speech artifacts** - "ohs" instead of "oh", extra "s" added
+4. **Unpredictable mishearings** - We can't anticipate every variation
+
+**Example failure:**
+```
+User spells: "T-O"
+User says: "tee oh"
+Google hears: "tee ohs"  ← Unexpected artifact
+System extracts: "tos"   ← Wrong!
+Correct answer: "to"
+Result: WRONG ❌ (frustrating for user)
 ```
 
-**Benefits:**
-- Dramatically better accuracy for accented users
-- Natural fit in onboarding flow
-- Could be made fun ("Teach the bee your voice!")
+---
 
-**Technical Considerations:**
-- Database storage for user phonetic profiles
-- Integration with answer-validation.ts
-- Google Speech's [speech adaptation](https://cloud.google.com/speech-to-text/docs/adaptation) API
+#### The Solution: Three-Tier Mapping System
 
-**Definition of Done:**
-- Users can calibrate their pronunciation
-- System uses calibration data to improve recognition
-- Measurably better accuracy for non-standard accents
+```
+┌─────────────────────────────────────────────────────────────┐
+│  TIER 1: Global Defaults (SPOKEN_LETTER_NAMES)              │
+│  - 366 hardcoded mappings in answer-validation.ts           │
+│  - Works for ~80% of users                                  │
+│  - Maintained in code                                       │
+├─────────────────────────────────────────────────────────────┤
+│  TIER 2: Auto-Learned Mappings (per user)                   │
+│  - System learns from user's gameplay patterns              │
+│  - Stored in database                                       │
+│  - No user action required                                  │
+├─────────────────────────────────────────────────────────────┤
+│  TIER 3: Manual Calibration (optional, future)              │
+│  - User explicitly corrects mappings                        │
+│  - "When I say O, you hear 'ohs' - fix that"               │
+│  - Only if auto-learning isn't enough                       │
+└─────────────────────────────────────────────────────────────┘
+
+Lookup order: Tier 3 → Tier 2 → Tier 1
+```
+
+---
+
+#### How Auto-Learning Works
+
+**Key insight:** We know the correct answer beforehand, so we can deduce unknown mappings.
+
+```
+Word to spell: "TO"
+Google hears: ["tee", "ohs"]
+
+Step 1: Look up known mappings
+  - "tee" → "t" (known ✅)
+  - "ohs" → ??? (unknown ❓)
+
+Step 2: Deduce the unknown
+  - Correct word = "to" (2 letters: t, o)
+  - Known so far = "t" (1 letter)
+  - Remaining = "o"
+  - Therefore: "ohs" must equal "o"
+
+Step 3: Store learned mapping (after 2+ occurrences)
+  - { userId, heard: "ohs", intended: "o", confidence: 0.8 }
+
+Step 4: Next time this user says "ohs"
+  - System maps it to "o" automatically
+  - User's answer is now correct ✅
+```
+
+**Constraints for learning:**
+- Only learn when exactly ONE unknown exists (can't deduce multiple)
+- Require 2+ occurrences before creating a mapping (prevents one-off errors)
+- Per-user mappings only (Maria's "ohs" → "o" doesn't affect other users)
+
+---
+
+#### Implementation Phases
+
+**Phase 4.1: Data Collection (Logging)** ✅ COMPLETE
+
+Recognition event logging is now integrated into the game:
+
+- **Database migration**: `migrations/0001_add_phonetic_learning.sql`
+- **Hooks created**:
+  - `hooks/use-user-id.ts` - Anonymous device ID for pre-auth logging
+  - `hooks/use-phonetic-learning.ts` - Fire-and-forget logging integration
+- **Game integration**: `app/game/endless/page.tsx` now logs all voice answers
+- **Learning trigger**: `triggerLearning()` called when game ends
+
+What gets logged:
+- What word the user was trying to spell
+- What Google transcribed (raw)
+- What letters we extracted
+- Whether the answer was correct
+- Rejection reason (if any)
+
+**Anonymous Logging Design Decision:**
+
+The `recognition_logs` table intentionally has NO foreign key constraint on `user_id`. This allows:
+- Logging from anonymous users (device-based ID stored in localStorage)
+- Seamless transition when auth is integrated later
+- No data loss - anonymous logs can be linked to authenticated users post-auth
+
+The `user_phonetic_mappings` table DOES have a FK constraint - mappings require authenticated users.
+
+**Phase 4.2: Auto-Learning Engine** ✅ IMPLEMENTED (Ready for Testing)
+
+The learning engine is implemented and ready:
+- `lib/phonetic-learning/learning-engine.ts` - Inference algorithm
+- `lib/phonetic-learning/mapping-store.ts` - Database operations
+- **Safety mechanism**: Protected mappings prevent learning incorrect patterns
+- **CRITICAL: Protect against learning incorrect mappings**
+
+**Safety Mechanism (Implemented)**
+
+The system includes safeguards to prevent learning WRONG mappings:
+
+```
+Problem scenario:
+- User says "B" but Google mishears as "vee"
+- Without safeguards: system learns "vee" → "b" (WRONG!)
+- This would corrupt legitimate "V" inputs
+
+Solution:
+- All 366 global mappings are "protected"
+- If a "heard" value exists in SPOKEN_LETTER_NAMES, it can NEVER be overridden
+- Example: "vee" → "v" is protected, so we can't learn "vee" → "b"
+```
+
+See `lib/phonetic-learning/learning-engine.ts`:
+- `isProtectedMapping()` - Checks if a "heard" value is protected
+- `validatePotentialMapping()` - Full validation before creating mappings
+
+**Phase 4.3: Manual Calibration (Future, if needed)**
+
+Only build if auto-learning proves insufficient:
+- Settings page: "Train your voice"
+- User explicitly corrects problematic mappings
+
+---
+
+#### Database Schema
+
+```sql
+-- Recognition event logs (for pattern detection)
+CREATE TABLE recognition_logs (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  word_to_spell TEXT NOT NULL,
+  google_transcript TEXT NOT NULL,
+  extracted_letters TEXT NOT NULL,
+  was_correct INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+-- Learned phonetic mappings (per user)
+CREATE TABLE user_phonetic_mappings (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  heard TEXT NOT NULL,           -- What Google heard (e.g., "ohs")
+  intended TEXT NOT NULL,        -- What it should map to (e.g., "o")
+  source TEXT NOT NULL,          -- "auto_learned" or "manual"
+  confidence REAL DEFAULT 1.0,   -- For auto-learned mappings
+  occurrence_count INTEGER DEFAULT 1,
+  times_applied INTEGER DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  UNIQUE(user_id, heard)
+);
+```
+
+---
+
+#### File Structure
+
+```
+lib/
+├── phonetic-learning/
+│   ├── index.ts              # Public exports
+│   ├── types.ts              # TypeScript interfaces
+│   ├── recognition-logger.ts # Phase 4.1: Event logging ✅
+│   ├── learning-engine.ts    # Phase 4.2: Inference algorithm ✅
+│   └── mapping-store.ts      # Database operations ✅
+│
+├── answer-validation.ts      # Will be modified to use learned mappings (Phase 4.2b)
+
+hooks/
+├── use-user-id.ts            # Anonymous device ID hook ✅
+├── use-phonetic-learning.ts  # Learning integration hook ✅
+
+app/
+├── game/endless/page.tsx     # Integrated with phonetic learning ✅
+
+migrations/
+├── 0001_add_phonetic_learning.sql  # Database tables ✅
+```
+
+---
+
+#### Integration Points
+
+1. **answer-validation.ts** - Merge user mappings with global defaults
+2. **app/game/endless/page.tsx** - Logs recognition events during feedback phase
+3. **hooks/use-phonetic-learning.ts** - Hook that manages logging and learning triggers
+4. **API routes** - Endpoints for reading/writing phonetic data:
+   - `POST /api/phonetic-learning/log` - Log recognition events
+   - `GET /api/phonetic-learning/mappings` - Fetch user mappings
+   - `POST /api/phonetic-learning/learn` - Trigger learning analysis
+
+#### Speech Server Architecture
+
+The phonetic learning system integrates with the existing speech server architecture:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  LOCAL DEVELOPMENT                                               │
+│                                                                  │
+│  ┌─────────────┐    WebSocket     ┌──────────────────┐          │
+│  │  Next.js    │ ◄──────────────► │  speech-server/  │          │
+│  │  (port 3000)│  ws://localhost  │  (port 3002)     │          │
+│  └─────────────┘       :3002      └────────┬─────────┘          │
+│        │                                   │                     │
+│        │                                   │ gRPC                │
+│        ▼                                   ▼                     │
+│  ┌─────────────┐              ┌──────────────────────┐          │
+│  │ Phonetic    │              │ Google Cloud Speech  │          │
+│  │ Learning    │              │ (streaming API)      │          │
+│  │ (logs to DB)│              └──────────────────────┘          │
+│  └─────────────┘                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│  PRODUCTION                                                      │
+│                                                                  │
+│  ┌─────────────┐    WebSocket     ┌──────────────────┐          │
+│  │  Vercel     │ ◄──────────────► │ speech.playlexi  │          │
+│  │  (Next.js)  │  wss://speech    │    .com          │          │
+│  └─────────────┘   .playlexi.com  └────────┬─────────┘          │
+│        │                                   │                     │
+│        │                                   │ gRPC                │
+│        ▼                                   ▼                     │
+│  ┌─────────────┐              ┌──────────────────────┐          │
+│  │ Phonetic    │              │ Google Cloud Speech  │          │
+│  │ Learning    │              │ (streaming API)      │          │
+│  │ (logs to DB)│              └──────────────────────┘          │
+│  └─────────────┘                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Key points:**
+- Speech transcription flows through the WebSocket server (speech-server/)
+- Phonetic learning logs the RESULTS of transcription (not the audio)
+- Learning analysis runs async, doesn't block gameplay
+- Local dev: `npm run dev:speech` starts the WebSocket server
+- Production: `speech.playlexi.com` handles WebSocket connections
+
+---
+
+#### Success Metrics
+
+| Metric | Before | Target |
+|--------|--------|--------|
+| First-attempt accuracy (all users) | ~80% | ~90% |
+| Accuracy after 10 games (with learning) | ~80% | ~95% |
+| User-reported phonetic issues | Common | Rare |
+
+---
+
+#### Decisions Made
+
+| Decision | Rationale |
+|----------|-----------|
+| Auto-learn first, manual calibration later | Simpler UX, no user effort required |
+| Per-user mappings (not global) | Accents vary; one user's fix might break another |
+| Require 2+ occurrences to learn | Prevents learning from one-off Google errors |
+| Database storage (not localStorage) | Syncs across devices, enables analytics |
+| Keep existing 366 mappings as fallback | Don't break what works for 80% of users |
+
+---
+
+#### Risks and Mitigations
+
+| Risk | Mitigation |
+|------|------------|
+| Learning wrong mappings | Require multiple occurrences, confidence scoring |
+| Database bloat from logs | Retention policy (delete logs older than 30 days) |
+| Performance impact | Index on user_id, lazy-load mappings |
+| Cheating via learned mappings | Anti-cheat runs BEFORE phonetic mapping |
 
 ---
 
@@ -178,6 +445,12 @@ Safari's WebKit engine handles Web Audio API differently than Chrome's Blink:
 | 2026-01-18 | Reverted Web Audio API game sounds to HTMLAudioElement | Web Audio API caused freezing in Chrome |
 | 2026-01-18 | Reverted Safari-specific audio fixes | Fixes made Chrome unstable |
 | 2026-01-18 | Safari voice mode deprioritized vs typing mode | Pragmatic approach: ship working game first |
+| 2026-01-18 | Chose adaptive learning over static phonetic mapping | Can't predict all accent variations; system should learn |
+| 2026-01-18 | Auto-learning first, manual calibration optional | Simpler UX; users shouldn't need to train the system manually |
+| 2026-01-18 | Per-user mappings stored in database | Syncs across devices; enables analytics; isolates user-specific patterns |
+| 2026-01-18 | Require 2+ occurrences before learning a mapping | Prevents learning from one-off Google Speech errors |
+| 2026-01-18 | Keep existing 366 hardcoded mappings as Tier 1 | Works for ~80% of users; don't break what works |
+| 2026-01-18 | Created feature/phonetic-calibration branch | Isolate experimental work from main branch |
 
 ---
 

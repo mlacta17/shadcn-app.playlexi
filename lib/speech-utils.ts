@@ -3,6 +3,21 @@
  *
  * Shared functions and constants used across speech providers.
  * Centralizes common operations to ensure consistency and reduce duplication.
+ *
+ * ## Relationship to speech-server/google-streaming.ts
+ *
+ * The LETTER_PHRASES and PHONETIC_LETTER_NAMES constants are also defined
+ * in speech-server/google-streaming.ts for the standalone speech server.
+ *
+ * **Why two copies?** The speech-server deploys independently to Railway/Cloud Run
+ * with its own package.json. It can't import from this file because:
+ * 1. The @/lib path alias doesn't exist in its tsconfig
+ * 2. It has extended disambiguation phrases not needed client-side
+ *
+ * **If you modify LETTER_PHRASES or PHONETIC_LETTER_NAMES, also update:**
+ * - speech-server/google-streaming.ts (SPEECH_CONTEXT.phrases)
+ *
+ * @see speech-server/google-streaming.ts for the server-side version
  */
 
 // =============================================================================

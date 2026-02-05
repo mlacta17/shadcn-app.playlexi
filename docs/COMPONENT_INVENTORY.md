@@ -117,7 +117,7 @@ For user profile and settings.
 | Component | Description | Design Status | Implementation Status | Notes |
 |-----------|-------------|---------------|----------------------|-------|
 | **ProfileHeader** | Avatar, username, bio, stats | Not Started | Not Started | Edit button for own profile |
-| **AvatarSelector** | 3-preset avatar picker | Not Started | Not Started | Radio group with images |
+| **AvatarSelector** | 3-preset avatar picker | Done | Done | **Presentational.** `AvatarOption` (small selectable) + `AvatarPreview` (large display). Hover/selected states with colored backgrounds. Located at `components/ui/avatar-selector.tsx`. Configuration in `lib/avatar-utils.ts`, shared SVGs in `lib/avatar-icons.tsx`. |
 | **MatchHistoryTable** | Table of past games | Not Started | Not Started | Placement, mode, XP, accuracy |
 | **SettingsSection** | Grouped settings with header | Not Started | Not Started | Collapsible sections |
 | **ThemeToggle** | Light/Dark mode switch | Not Started | Not Started | May already exist |
@@ -133,9 +133,9 @@ For new user flow.
 
 | Component | Description | Design Status | Implementation Status | Notes |
 |-----------|-------------|---------------|----------------------|-------|
-| **TutorialCard** | Step card with illustration | Not Started | Not Started | Progress bar, skip link |
-| **TutorialStep** | Individual step content | Not Started | Not Started | Title, description, illustration |
-| **ProfileCompletionForm** | Username, age, avatar form | Not Started | Not Started | Validation, unique username check |
+| ~~**TutorialCard**~~ | ~~Step card with illustration~~ | N/A | N/A | **Not needed.** Use `Card` + `Badge size="number"` + content. See Architecture Decision #5 below. |
+| ~~**TutorialStep**~~ | ~~Individual step content~~ | N/A | N/A | **Not needed.** Just content inside Card — title, image, description. |
+| **ProfileCompletionForm** | Username, birth year, avatar form | Done | Done | **Implemented as page.** Two-step form: Step 1 (username + optional age range), Step 2 (avatar selection). Debounced username validation, age stored as birth year. Located at `app/(focused)/onboarding/profile/page.tsx`. Uses `useUsernameCheck` hook. |
 
 ---
 
@@ -182,7 +182,7 @@ Components that already exist and can be used directly or with minor customizati
 | Card | shadcn/ui | None |
 | Input | shadcn/ui | None |
 | Avatar | shadcn/ui | None |
-| Badge | shadcn/ui | Add rank-specific variants |
+| Badge | shadcn/ui | Done. Added `size="number"` for circular step indicators, placement variants (gold/silver/bronze). |
 | Progress | shadcn/ui | Add timer styling variants |
 | Tabs | shadcn/ui | None |
 | Table | shadcn/ui | None |
@@ -260,6 +260,7 @@ Hooks that manage state and side effects for components.
 | **useGameTimer** | Countdown timer with state management | Done | Single source of truth for timer. Returns `totalSeconds`, `remainingSeconds`, `state`, `isRunning`, `isExpired`, `start`, `pause`, `reset`, `restart`. Located at `hooks/use-game-timer.ts`. Supports callbacks for `onTimeUp` and `onTick`. |
 | **useGameFeedback** | Feedback overlay state management | Done | Owns overlay state and timing. Returns `feedbackType`, `isShowing`, `showCorrect`, `showWrong`, `clear`. Auto-clears after animation (400ms). Located at `hooks/use-game-feedback.ts`. |
 | **useGameSounds** | Audio playback for game sounds | Done | Preloads and plays game sounds. Returns `playCorrect`, `playWrong`, `play`, `isReady`, `setEnabled`, `setVolume`. Graceful fallback if files missing. Located at `hooks/use-game-sounds.ts`. Expects MP3 files in `public/sounds/`. |
+| **useUsernameCheck** | Debounced username validation | Done | Checks username availability with debounce (500ms). Returns `status`, `error`, `checkUsername`. Uses AbortController for cleanup. Located at `hooks/use-username-check.ts`. Calls `/api/users/check-username`. |
 | **useGameState** | WebSocket connection and game state | Not Started | Connects to Durable Object, syncs player state. |
 | **useMatchmaking** | Matchmaking queue state | Not Started | Handles queue join/leave, tier expansion. |
 
@@ -375,85 +376,55 @@ const { isRecording, startRecording, stopRecording, analyserNode, transcript } =
 - Reduces indirection in the codebase
 - Keeps the component inventory focused on meaningful abstractions
 
----
+### 5. Don't Create Components for Content Arrangements
 
-## Design System Notes
+**Decision:** Don't create components that are just primitives with specific content inside.
 
-When designing new components, **always reference these source files**:
+**Example:** Tutorial "card" is just a Card with a step badge, title, image, and description — NOT a component.
 
-1. **[STYLE_GUIDE.md](../STYLE_GUIDE.md)** — Component patterns, icon imports, border radius scale
-2. **[app/globals.css](../app/globals.css)** — CSS variables, color tokens, focus ring system
-3. **[lib/icons.ts](../lib/icons.ts)** — Centralized icon imports (never import directly from lucide/nucleo)
+```tsx
+// GOOD: Use existing primitives with content
+<Card>
+  <CardContent className="flex flex-col gap-3">
+    <Badge variant="secondary" size="number">1</Badge>
+    <p className="text-base font-semibold">
+      Press Start, then listen carefully to the word
+    </p>
+  </CardContent>
+  <CardFooter className="flex flex-col gap-2">
+    <img src="/images/tutorial-step-1.png" className="rounded-lg w-full" alt="..." />
+    <p className="text-sm text-muted-foreground">
+      You can replay the word as many times as you'd like...
+    </p>
+  </CardFooter>
+</Card>
 
-### Colors (OKLCH System)
+// BAD: Component that just wraps Card with content
+<TutorialCard
+  step={1}
+  title="Press Start..."
+  image="/images/tutorial-step-1.png"
+  description="You can replay..."
+/>
+```
 
-The project uses **OKLCH color space** for perceptually uniform colors. Key tokens:
+**This applies to:**
+- `TutorialCard` → Use `Card` + content
+- `LoginCard` → Use `Card` + content
+- `ProfileCard` → Use `Card` + content
+- Any "Card" variant that just has different content
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| `--primary` | `oklch(0.852 0.199 91.936)` | PlayLexi yellow, primary buttons |
-| `--primary-hover` | `oklch(0.78 0.16 91.936)` | Button hover states |
-| `--destructive` | `oklch(0.58 0.22 27)` | Hearts, errors, danger actions |
-| `--foreground` | `oklch(0.145 0 0)` / `oklch(0.985 0 0)` | Text (light/dark mode) |
-| `--muted-foreground` | `oklch(0.556 0 0)` | Secondary text |
-| `--focus-ring-color` | `oklch(0.5 0.25 252)` | Focus ring (blue) |
+**When to create a component instead:**
+- The arrangement has complex logic (conditional rendering, animations)
+- It needs its own state or hooks
+- The same exact arrangement is used in 3+ different files
+- It requires significant accessibility handling
 
-**Rule:** Never use arbitrary hex/rgb colors. Always use semantic tokens via CSS variables.
-
-### Typography
-- Font: **Poppins** (via `--font-sans` CSS variable)
-- Weights: 400 (normal), 500 (medium), 600 (semibold), 700 (bold)
-- See STYLE_GUIDE.md Section 1
-
-### Border Radius Scale
-| Utility | Size | Usage |
-|---------|------|-------|
-| `rounded-md` | 6px | Tab triggers, badges |
-| `rounded-lg` | 8px | Inputs, dropdowns, menu items |
-| `rounded-3xl` | 24px | Cards |
-| `rounded-4xl` | 26px | Combobox chips |
-| `rounded-full` | pill | Buttons |
-
-### Spacing
-- Use Tailwind spacing scale (4, 8, 12, 16, 24, 32, etc.)
-- Consistent padding within cards
-
-### Animations
-- Respect `prefers-reduced-motion`
-- Keep animations subtle and purposeful
-- 150-300ms duration for micro-interactions
-
-### Accessibility
-- All interactive elements must be focusable
-- Visible focus rings (automatic via globals.css)
-- Proper ARIA labels (see `data-slot`, `data-state` patterns in STYLE_GUIDE.md)
-- Color contrast 4.5:1 minimum
+**Key insight:** In Figma, designers use the Card component and swap content. Code should mirror this — use the primitive, change the content.
 
 ---
 
-## Changelog
-
-| Date | Change | Author |
-|------|--------|--------|
-| 2025-12-21 | Initial inventory created | Claude |
-| 2025-12-21 | Marked VoiceWaveform as Done (already exists); Updated GameTimer notes to clarify it wraps Progress | Claude |
-| 2025-12-21 | Added Section 11 (Custom Hooks) and Architecture Decisions section. Documented wrapper pattern for GameTimer, single-hook pattern for voice input, presentational vs. smart component distinction. Updated VoiceWaveform and VoiceInput notes to reflect architecture. | Claude |
-| 2025-12-21 | Updated Design System Notes to reference OKLCH color system from globals.css, added explicit references to STYLE_GUIDE.md and lib/icons.ts, added border radius scale table. | Claude |
-| 2025-12-22 | Implemented HeartsDisplay component. Added HeartIcon to lib/icons.ts. Added heart-loss animation to globals.css. | Claude |
-| 2025-12-22 | Integrated VoiceWaveform into SpeechInput. Renamed VoiceInput to SpeechInput in inventory (already existed). Added `analyserNode` prop for optional waveform rendering. Updated useSpeechRecognition status to Done. Updated Architecture Decisions to reflect integration pattern. | Claude |
-| 2025-12-26 | Implemented GameTimer component and useGameTimer hook. Uses wrapper pattern around Progress. Two states: normal (--primary) and critical (--destructive, ≤5 seconds). Added demo to showcase page. | Claude |
-| 2025-12-26 | Implemented GameFeedbackOverlay component, useGameFeedback hook, and useGameSounds hook. Combines CorrectAnswerFeedback and WrongAnswerFeedback into single overlay component. Created public/sounds/ folder for audio files. Added demo to showcase page. | Claude |
-| 2025-12-26 | Removed RoundIndicator from inventory — it's just inline text, not a component. Added Architecture Decision #4: "When NOT to Create a Component" with guidelines on avoiding over-abstraction. | Claude |
-| 2025-12-26 | Created RankBadge component structure with placeholder SVG paths. 7 tiers × 2 modes = 14 variants. Auto theme switching, size presets (sm/md/lg/xl). Expects files in `public/badges/`. | Claude |
-| 2025-12-30 | Added keyboard mode to SpeechInput. New `mode="keyboard"` prop with "Type to start"/"Enter to stop" buttons. Uses discriminated union types for type-safe mode-specific props. Added InputMode, InputState types and INPUT_MODE_PLACEHOLDERS constant for reusability. Improved accessibility with ARIA live regions. KeyboardInput now marked as Done (implemented within SpeechInput). | Claude |
-| 2026-01-02 | Removed PlacementGameIntro from inventory — tutorial steps 3-4 explain placement (no hearts) + hearts mechanic, no separate intro screen needed. | Claude |
-| 2026-01-02 | Removed RankReveal from component inventory — it's a full-screen page, not a reusable component. Only used once for initial placement flow. Implemented as `/onboarding/rank-result/page.tsx` instead. Follows Architecture Decision #4 (avoid over-abstraction for single-use UI). Figma: node `2610:6076`. | Claude |
-| 2026-01-08 | Added HexPattern component for decorative hexagonal backgrounds. Created as component (not static SVG) for future dynamic theming. Includes commented code for future color/scale/opacity props. Added TopNavbar to inventory (was missing). Updated STYLE_GUIDE.md with HexPattern documentation. Figma: node `2641:7585`. | Claude |
-| 2026-01-08 | Implemented Leaderboard components: LeaderboardTable (TanStack React Table + pagination), Pagination (composable nav), SearchInput (InputGroup composite). Added SearchIcon and FilterIcon to lib/icons.ts. Created Leaderboard page at `/leaderboard`. Marked LeaderboardRow, LeaderboardFilters, LeaderboardTabs as N/A (merged/existing components used). Figma: node `2435:33026`. | Claude |
-| 2026-01-08 | Refactored Leaderboard to follow shadcn data table patterns. Created reusable `DataTable` component in `components/ui/`. Separated column definitions to `leaderboard-columns.tsx`. Added semantic `--placement-gold/silver/bronze` color tokens to globals.css (replacing hardcoded Tailwind colors). Added `data-slot` attributes to all cell components. | Claude |
-| 2026-01-10 | Implemented speech recognition provider abstraction. Created `lib/speech-recognition-service.ts`. Created `useSpeechRecognition` hook. Deprecated old `useVoiceRecorder` hook. Added phonetic mapping and `formatTranscriptForDisplay()` for real-time letter display. | Claude |
-| 2026-01-17 | Updated tutorial from 3 steps to 4 steps. Step 3 now frames placement as "calibration", Step 4 teaches hearts mechanic. Placement test has NO hearts (by design) — see ADR-013 in ARCHITECTURE.md. This ensures: (1) tutorial teaches mechanics, (2) placement measures skill, (3) no fake mechanics introduced. | Claude |
-| 2026-01-17 | Replaced speech providers: Removed Azure/Deepgram, implemented Google Cloud Speech-to-Text as primary provider via dedicated WebSocket server (`speech-server/`). Web Speech API remains as fallback. Google provides word-level timestamps for anti-cheat. See ADR-009 in ARCHITECTURE.md. | Claude |
+> **Design System Reference:** For colors, typography, spacing, and accessibility guidelines, see [STYLE_GUIDE.md](STYLE_GUIDE.md) and [app/globals.css](../app/globals.css).
 
 ---
 

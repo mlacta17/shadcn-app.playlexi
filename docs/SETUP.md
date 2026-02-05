@@ -123,6 +123,20 @@ npm run db:generate
 npm run db:migrate
 ```
 
+> **How Local D1 Works**
+>
+> The local D1 database is stored in `.wrangler/state/v3/d1/`. Both `npm run dev` (via
+> `initOpenNextCloudflareForDev()` in `next.config.ts`) and wrangler CLI commands
+> (like `npm run db:migrate`) use the **same** local SQLite file, identified by the
+> `database_id` in `wrangler.jsonc`.
+>
+> This means you can:
+> - Run migrations with `npm run db:migrate`
+> - Seed data with `npm run db:seed`
+> - Then immediately use that data in `npm run dev`
+>
+> All commands share the same local database.
+
 ### 5. Create R2 Bucket (Optional for Local)
 
 ```bash
@@ -312,12 +326,35 @@ This script:
 
 ## Troubleshooting
 
-### "D1 database not found"
+### "D1 database not found" or "no such table"
 
 Make sure you've:
 1. Created the database with `wrangler d1 create`
 2. Updated `wrangler.jsonc` with the correct `database_id`
 3. Run migrations with `npm run db:migrate`
+4. Seed the database with `npm run db:seed`
+
+**If you still get errors after migrations:**
+
+The local D1 database files are stored in `.wrangler/state/v3/d1/miniflare-D1DatabaseObject/`.
+If you see multiple `.sqlite` files there, you may have orphan databases from older setups.
+
+To fix:
+```bash
+# Check what files exist
+ls -la .wrangler/state/v3/d1/miniflare-D1DatabaseObject/
+
+# Remove ALL local D1 state (will need to re-run migrations)
+rm -rf .wrangler/state/v3/d1
+
+# Re-apply migrations
+npm run db:migrate
+
+# Re-seed the database
+npm run db:seed
+```
+
+This ensures a clean slate with a single database file.
 
 ### "Google Speech API error"
 
@@ -342,6 +379,55 @@ For production:
 
 For development:
 - The app falls back to browser Speech Synthesis when audio files are unavailable
+
+---
+
+## CI/CD Pipeline
+
+PlayLexi uses GitHub Actions for continuous integration. The pipeline runs automatically on every push.
+
+### What CI Does
+
+| Check | Purpose |
+|-------|---------|
+| **Tests** | Runs all 141 tests to catch bugs early |
+| **Build** | Catches TypeScript errors, missing imports, route conflicts |
+| **Migration Check** | Warns if database migrations need to be applied |
+
+### Workflow File
+
+The CI configuration is in `.github/workflows/ci.yml`.
+
+### How It Works
+
+1. **Push code to GitHub** → CI runs automatically
+2. **CI passes** → Safe to merge/deploy
+3. **CI fails** → Fix the issue before merging
+
+### Migration Check
+
+The CI pipeline checks for pending database migrations. If you see a warning like:
+
+```
+⚠️ There are pending database migrations that need to be applied to production
+```
+
+Run this command **after merging** but **before deploying**:
+
+```bash
+npm run db:migrate:prod
+```
+
+This prevents the bug where code expects schema changes that haven't been applied yet.
+
+### Optional: Enable Migration Check for PRs
+
+To enable the migration check on pull requests, add these secrets in GitHub:
+1. Go to your repo → Settings → Secrets and variables → Actions
+2. Add `CLOUDFLARE_API_TOKEN` (create one at Cloudflare Dashboard → API Tokens)
+3. Add `CLOUDFLARE_ACCOUNT_ID` (found in Cloudflare Dashboard URL)
+
+Without these secrets, the migration check is skipped (tests and build still run).
 
 ---
 
@@ -398,6 +484,35 @@ For development:
 **Speech Server Platform Strategy:**
 - **Phase 1 (0-1K DAU):** Railway ($5-50/month) - simple, no cold starts
 - **Phase 2 (1K+ DAU):** Cloud Run ($65+/month) - auto-scaling, lower latency
+
+---
+
+## Optional: Developer Tooling
+
+### Figma MCP Integration (for Claude Code users)
+
+If you use [Claude Code](https://claude.ai/code) and want to fetch designs directly from Figma during development:
+
+#### Setup
+
+1. **Get a Figma Personal Access Token**
+   - Go to https://www.figma.com/settings
+   - Scroll to **Personal access tokens**
+   - Click **Generate new token**
+   - Name it (e.g., "Claude Code") and copy the token
+
+2. **Add the Figma MCP server**
+   ```bash
+   claude mcp add figma --scope project -- npx -y figma-developer-mcp --figma-api-key="YOUR_TOKEN"
+   ```
+
+3. **Restart Claude Code** for the MCP to take effect
+
+#### Notes
+
+- `.mcp.json` is gitignored — each developer needs their own token
+- Tokens expire after 90 days; regenerate when needed
+- This is optional tooling; the app runs fine without it
 
 ---
 
