@@ -382,6 +382,55 @@ For development:
 
 ---
 
+## CI/CD Pipeline
+
+PlayLexi uses GitHub Actions for continuous integration. The pipeline runs automatically on every push.
+
+### What CI Does
+
+| Check | Purpose |
+|-------|---------|
+| **Tests** | Runs all 141 tests to catch bugs early |
+| **Build** | Catches TypeScript errors, missing imports, route conflicts |
+| **Migration Check** | Warns if database migrations need to be applied |
+
+### Workflow File
+
+The CI configuration is in `.github/workflows/ci.yml`.
+
+### How It Works
+
+1. **Push code to GitHub** → CI runs automatically
+2. **CI passes** → Safe to merge/deploy
+3. **CI fails** → Fix the issue before merging
+
+### Migration Check
+
+The CI pipeline checks for pending database migrations. If you see a warning like:
+
+```
+⚠️ There are pending database migrations that need to be applied to production
+```
+
+Run this command **after merging** but **before deploying**:
+
+```bash
+npm run db:migrate:prod
+```
+
+This prevents the bug where code expects schema changes that haven't been applied yet.
+
+### Optional: Enable Migration Check for PRs
+
+To enable the migration check on pull requests, add these secrets in GitHub:
+1. Go to your repo → Settings → Secrets and variables → Actions
+2. Add `CLOUDFLARE_API_TOKEN` (create one at Cloudflare Dashboard → API Tokens)
+3. Add `CLOUDFLARE_ACCOUNT_ID` (found in Cloudflare Dashboard URL)
+
+Without these secrets, the migration check is skipped (tests and build still run).
+
+---
+
 ## npm Scripts Reference
 
 | Script | Description |
