@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Poppins } from "next/font/google";
 import "./globals.css";
+import { Providers } from "@/components/providers";
 import { Toaster } from "@/components/ui/sonner";
 
 const poppins = Poppins({
@@ -25,12 +26,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${poppins.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
-        <Toaster />
+        <Providers>
+          {children}
+          <Toaster />
+        </Providers>
       </body>
     </html>
   );

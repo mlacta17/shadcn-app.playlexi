@@ -78,6 +78,27 @@ export interface UserStatus {
   user?: typeof schema.users.$inferSelect
 }
 
+/**
+ * Data that can be updated for an existing user.
+ * All fields are optional - only provided fields will be updated.
+ */
+export interface UpdateUserInput {
+  /** User-chosen display name */
+  username?: string
+  /** User bio/description */
+  bio?: string
+  /** Selected avatar preset (1-3) */
+  avatarId?: number
+  /** Theme preference */
+  theme?: "light" | "dark"
+  /** Receive social notification emails */
+  emailSocial?: boolean
+  /** Receive security notification emails */
+  emailSecurity?: boolean
+  /** Receive marketing emails */
+  emailMarketing?: boolean
+}
+
 // =============================================================================
 // SERVICE FUNCTIONS
 // =============================================================================
@@ -262,6 +283,46 @@ export async function isUsernameAvailable(
   })
 
   return !existing
+}
+
+/**
+ * Update an existing user's profile and settings.
+ *
+ * @param d1 - D1 database binding
+ * @param userId - User ID to update
+ * @param input - Fields to update (only provided fields will be changed)
+ * @returns Updated user record
+ *
+ * @example
+ * ```typescript
+ * const user = await updateUser(env.DB, userId, {
+ *   bio: "I love spelling!",
+ *   theme: "dark",
+ * })
+ * ```
+ */
+export async function updateUser(
+  d1: D1Database,
+  userId: string,
+  input: UpdateUserInput
+): Promise<typeof schema.users.$inferSelect> {
+  const db = drizzle(d1, { schema })
+
+  const [updatedUser] = await db
+    .update(schema.users)
+    .set({
+      ...(input.username !== undefined && { username: input.username }),
+      ...(input.bio !== undefined && { bio: input.bio }),
+      ...(input.avatarId !== undefined && { avatarId: input.avatarId }),
+      ...(input.theme !== undefined && { theme: input.theme }),
+      ...(input.emailSocial !== undefined && { emailSocial: input.emailSocial }),
+      ...(input.emailSecurity !== undefined && { emailSecurity: input.emailSecurity }),
+      ...(input.emailMarketing !== undefined && { emailMarketing: input.emailMarketing }),
+    })
+    .where(eq(schema.users.id, userId))
+    .returning()
+
+  return updatedUser
 }
 
 // =============================================================================

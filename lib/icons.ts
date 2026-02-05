@@ -105,6 +105,8 @@ export { IconChevronLeftOutline24 as ChevronLeftIcon } from "nucleo-core-outline
 // export { IconMessage2ContentOutline24 as MessageIcon } from "nucleo-core-outline-24"
 
 // Profile/Settings features (P3)
+export { IconShield2Outline24 as ShieldIcon } from "nucleo-core-outline-24"
+export { IconColorPaletteOutline24 as PaletteIcon } from "nucleo-core-outline-24"
 // export { IconEyeOutline24 as EyeIcon } from "nucleo-core-outline-24"
 // export { IconCreditCardOutline24 as CreditCardIcon } from "nucleo-core-outline-24"
 // export { IconCircleQuestionOutline24 as HelpCircleIcon } from "nucleo-core-outline-24"

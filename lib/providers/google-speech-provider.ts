@@ -147,12 +147,27 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
     let scriptProcessor: ScriptProcessorNode | null = null
     let lastTranscript = ""
 
-    // Accumulated transcript tracking
-    // Google sends interim results in chunks. High-stability results (>= 0.8)
-    // represent "committed" portions that won't change. We need to accumulate
-    // these to avoid losing parts of the transcript.
-    let accumulatedStableText = ""
-    let lastStability = 0
+    // Accumulated transcript tracking using OVERLAP DETECTION.
+    //
+    // Key insight: Google's streaming API sends CUMULATIVE hypotheses, not
+    // discrete segments. When spelling "W-I-L", Google might send:
+    //   - "w"     (heard first letter)
+    //   - "w i"   (heard two letters - INCLUDES the "w"!)
+    //   - "w i l" (heard three letters - INCLUDES "w i"!)
+    //
+    // We must detect when Google's new result EXTENDS our accumulated text
+    // (it already includes it) vs. when it's a genuinely NEW segment.
+    //
+    // Strategy:
+    // 1. If rawText starts with accumulated (or vice versa), Google is extending
+    //    → Use the LONGER one, don't double-accumulate
+    // 2. If rawText is completely different and there's a timing gap,
+    //    it's a new audio segment → Accumulate
+    //
+    // This prevents the "w w i w i l" duplication bug while still accumulating
+    // genuinely separate utterances.
+    let accumulatedText = ""        // Best transcript seen so far
+    let lastInterimTime = -Infinity // For detecting timing gaps
 
     /**
      * Cleanup all resources safely.
@@ -269,44 +284,101 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
 
             case "interim":
               if (message.transcript) {
+                const now = Date.now()
+                const timeSinceLastInterim = now - lastInterimTime
+                lastInterimTime = now
+
                 const stability = message.stability || 0
                 const rawText = cleanTranscript(message.transcript)
 
-                // When stability drops from high (>= 0.8) to low, it means Google
-                // has "committed" the previous high-stability portion and is now
-                // processing new audio. We need to accumulate the stable parts.
-                if (lastStability >= 0.8 && stability < 0.5) {
-                  // Previous result was stable, current is unstable = new chunk starting
-                  // The stable text should be accumulated
-                  accumulatedStableText = lastTranscript
-                }
+                // ===============================================================
+                // OVERLAP DETECTION FOR CUMULATIVE HYPOTHESES
+                // ===============================================================
+                // Google sends results in two patterns:
+                //
+                // 1. CUMULATIVE (extending from start):
+                //    - "w" → "w i" → "w i l" (each includes all previous letters)
+                //
+                // 2. PARTIAL (recent audio window):
+                //    - "w" → "w i" → "i l" (just last 2 letters heard)
+                //
+                // We handle both by checking:
+                // - Prefix match: raw extends accumulated → use raw
+                // - Tail overlap: end of accumulated overlaps start of raw → merge
+                //
+                // Work with space-separated letters for accurate comparison
+                const accLetters = accumulatedText.split(/\s+/).filter(Boolean)
+                const rawLetters = rawText.split(/\s+/).filter(Boolean)
 
-                // Build the full transcript: accumulated stable + current
                 let fullText: string
-                if (accumulatedStableText && stability < 0.8) {
-                  // We have accumulated stable text and current is unstable
-                  // Combine them (avoiding duplication)
-                  fullText = accumulatedStableText + " " + rawText
-                } else if (stability >= 0.8) {
-                  // High stability = this might become the new accumulated base
-                  // But only if it's longer than what we have
-                  if (rawText.length >= accumulatedStableText.length) {
-                    fullText = rawText
-                  } else {
-                    fullText = accumulatedStableText + " " + rawText
-                  }
-                } else {
+
+                if (!accumulatedText) {
+                  // First result - just use it
+                  accumulatedText = rawText
                   fullText = rawText
+                } else {
+                  // Check for prefix extension (cumulative mode)
+                  const normalizedRaw = rawLetters.join("").toLowerCase()
+                  const normalizedAcc = accLetters.join("").toLowerCase()
+
+                  if (normalizedRaw.startsWith(normalizedAcc)) {
+                    // Google's result EXTENDS our accumulated (cumulative)
+                    // Example: accumulated="w i", raw="w i l" → use "w i l"
+                    accumulatedText = rawText
+                    fullText = rawText
+                  } else if (normalizedAcc.startsWith(normalizedRaw)) {
+                    // Google's result is SHORTER (might be refining)
+                    // Keep accumulated unless stability is very high
+                    if (stability >= 0.9 && rawLetters.length >= accLetters.length * 0.8) {
+                      accumulatedText = rawText
+                      fullText = rawText
+                    } else {
+                      fullText = accumulatedText
+                    }
+                  } else {
+                    // Check for TAIL OVERLAP (partial mode)
+                    // Example: accumulated="w i", raw="i l" → overlap "i" → "w i l"
+                    let overlapLen = 0
+                    const maxOverlap = Math.min(accLetters.length, rawLetters.length)
+
+                    for (let len = maxOverlap; len > 0; len--) {
+                      const accTail = accLetters.slice(-len).map(s => s.toLowerCase()).join("")
+                      const rawHead = rawLetters.slice(0, len).map(s => s.toLowerCase()).join("")
+                      if (accTail === rawHead) {
+                        overlapLen = len
+                        break
+                      }
+                    }
+
+                    if (overlapLen > 0) {
+                      // Merge with overlap: accumulated + non-overlapping part of raw
+                      const merged = [...accLetters, ...rawLetters.slice(overlapLen)]
+                      accumulatedText = merged.join(" ")
+                      fullText = accumulatedText
+                    } else if (timeSinceLastInterim > 500) {
+                      // Significant timing gap AND no overlap
+                      // Might be a genuinely new segment - append
+                      accumulatedText = accumulatedText + " " + rawText
+                      fullText = accumulatedText
+                    } else {
+                      // No overlap, no gap - use the longer one
+                      if (rawLetters.length > accLetters.length) {
+                        accumulatedText = rawText
+                        fullText = rawText
+                      } else {
+                        fullText = accumulatedText
+                      }
+                    }
+                  }
                 }
 
                 fullText = cleanTranscript(fullText)
-                lastStability = stability
 
                 if (fullText !== lastTranscript) {
                   lastTranscript = fullText
                   if (process.env.NODE_ENV === "development") {
                     console.log(
-                      `[Google] interim: "${fullText}" (stability: ${stability.toFixed(2)}, accumulated: "${accumulatedStableText}")`
+                      `[Google] interim: "${fullText}" (stability: ${stability.toFixed(2)}, gap: ${timeSinceLastInterim}ms, raw: "${rawText}")`
                     )
                   }
                   onInterimResult?.(fullText)
@@ -593,8 +665,8 @@ export class GoogleSpeechProvider implements ISpeechRecognitionProvider {
           // Reset accumulated state immediately to prevent carryover to next session
           // This is critical: if we don't reset here, late-arriving messages
           // (before the 500ms cleanup) could corrupt the accumulated text
-          accumulatedStableText = ""
-          lastStability = 0
+          accumulatedText = ""
+          lastInterimTime = -Infinity
           lastTranscript = ""
 
           if (process.env.NODE_ENV === "development") {

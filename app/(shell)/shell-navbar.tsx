@@ -25,17 +25,20 @@
 
 "use client"
 
+import * as React from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { useSession, signOut } from "@/lib/auth/client"
 import { usePlayLexiUser } from "@/hooks/use-playlexi-user"
 import { Logo } from "@/components/ui/logo"
 import { Navbar } from "@/components/ui/navbar"
+import { AccountSettingsDialog } from "@/components/settings/account-settings-dialog"
 
 export function ShellNavbar() {
   const router = useRouter()
   const pathname = usePathname()
   const { data: session, isPending: isSessionPending } = useSession()
   const { user: playLexiUser, isLoading: isUserLoading } = usePlayLexiUser()
+  const [settingsOpen, setSettingsOpen] = React.useState(false)
 
   // Navigation links with active state based on current path
   const navLinks = [
@@ -96,7 +99,7 @@ export function ShellNavbar() {
   }
 
   const handleSettingsClick = () => {
-    router.push("/settings")
+    setSettingsOpen(true)
   }
 
   // Loading state: show skeleton to prevent layout shift
@@ -112,17 +115,23 @@ export function ShellNavbar() {
   }
 
   return (
-    <Navbar
-      logo={<Logo />}
-      navLinks={navLinks}
-      isLoggedIn={!!session}
-      user={user}
-      notificationCount={0}
-      onSignUp={handleSignUp}
-      onSignOut={handleSignOut}
-      onNotificationClick={handleNotificationClick}
-      onProfileClick={handleProfileClick}
-      onSettingsClick={handleSettingsClick}
-    />
+    <>
+      <Navbar
+        logo={<Logo />}
+        navLinks={navLinks}
+        isLoggedIn={!!session}
+        user={user}
+        notificationCount={0}
+        onSignUp={handleSignUp}
+        onSignOut={handleSignOut}
+        onNotificationClick={handleNotificationClick}
+        onProfileClick={handleProfileClick}
+        onSettingsClick={handleSettingsClick}
+      />
+      <AccountSettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+      />
+    </>
   )
 }

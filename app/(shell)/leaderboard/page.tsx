@@ -148,11 +148,6 @@ function RankHeader({ userRank, isLoading }: RankHeaderProps) {
             {xp}/{xpForNextTier}
           </span>
         </div>
-        {position > 0 && (
-          <div className="text-center text-xs text-muted-foreground">
-            Rank #{position} of {totalPlayers.toLocaleString()}
-          </div>
-        )}
       </div>
     </div>
   )

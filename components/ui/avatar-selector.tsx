@@ -37,15 +37,18 @@ interface AvatarOptionProps {
   avatar: AvatarConfig
   isSelected: boolean
   onSelect: (id: number) => void
+  /** Size in pixels. Defaults to 62 (profile creation). Settings dialog uses 48. */
+  size?: number
 }
 
 /**
  * Small avatar option for selection grid.
  * Shows hover and selected states.
  *
- * Size: 62px (matches Figma)
+ * Default size: 62px (profile creation per Figma)
+ * Settings dialog: 48px (per Figma node 2582:6142)
  */
-function AvatarOption({ avatar, isSelected, onSelect }: AvatarOptionProps) {
+function AvatarOption({ avatar, isSelected, onSelect, size = 62 }: AvatarOptionProps) {
   const [isHovered, setIsHovered] = React.useState(false)
 
   // Use active (colored) image when hovered or selected
@@ -58,8 +61,9 @@ function AvatarOption({ avatar, isSelected, onSelect }: AvatarOptionProps) {
       onClick={() => onSelect(avatar.id)}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      style={{ width: size, height: size }}
       className={cn(
-        "relative size-[62px] rounded-full overflow-hidden transition-shadow duration-200",
+        "relative rounded-full overflow-hidden transition-shadow duration-200",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
         isSelected && "shadow-[0px_0px_0px_2px_white,0px_0px_0px_4px_#3b82f6]"
       )}
@@ -69,8 +73,8 @@ function AvatarOption({ avatar, isSelected, onSelect }: AvatarOptionProps) {
       <Image
         src={imageSrc}
         alt={`${avatar.name} avatar`}
-        width={62}
-        height={62}
+        width={size}
+        height={size}
         className="size-full object-cover"
         priority
       />

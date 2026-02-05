@@ -75,6 +75,9 @@
   --color-placement-silver-foreground: var(--placement-silver-foreground);
   --color-placement-bronze: var(--placement-bronze);
   --color-placement-bronze-foreground: var(--placement-bronze-foreground);
+
+  /* Shadows (elevated surfaces) */
+  --shadow-dialog: var(--shadow-dialog);
 }
 
 /*
@@ -164,6 +167,21 @@
 
   /* ===== BORDER RADIUS ===== */
   --radius: 0.625rem;                      /* Base radius - 10px (components use rounded-4xl = radius + 16px) */
+
+  /* ===== SHADOWS ===== */
+  /*
+   * Layered shadow system for elevated surfaces (dialogs, modals, popovers)
+   * Per Figma design specifications:
+   * - First layer: 1px inset border at 4% opacity
+   * - Additional layers: Soft depth shadows at varying distances
+   */
+  --shadow-dialog: 0px 0px 0px 1px rgba(51,51,51,0.04),
+                   0px 1px 1px 0.5px rgba(51,51,51,0.04),
+                   0px 3px 3px -1.5px rgba(51,51,51,0.02),
+                   0px 6px 6px -3px rgba(51,51,51,0.04),
+                   0px 12px 12px -6px rgba(51,51,51,0.04),
+                   0px 24px 24px -12px rgba(51,51,51,0.04),
+                   0px 48px 48px -24px rgba(51,51,51,0.04);
 
   /* ===== SIDEBAR COLORS ===== */
   /* Used by: Sidebar component (if you use it) */
@@ -305,6 +323,19 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);      /* Very light - text on hover */
   --sidebar-border: oklch(1 0 0 / 10%);               /* White at 10% - sidebar borders */
   --sidebar-ring: oklch(0.556 0 0);                   /* Medium gray - sidebar focus ring */
+
+  /* ===== SHADOWS (Dark Mode) ===== */
+  /*
+   * Dark mode shadow uses white with low opacity for glow effect on dark backgrounds
+   * First layer: 1px border at 8% white opacity (more visible than light mode)
+   */
+  --shadow-dialog: 0px 0px 0px 1px rgba(255,255,255,0.08),
+                   0px 1px 1px 0.5px rgba(0,0,0,0.2),
+                   0px 3px 3px -1.5px rgba(0,0,0,0.15),
+                   0px 6px 6px -3px rgba(0,0,0,0.2),
+                   0px 12px 12px -6px rgba(0,0,0,0.2),
+                   0px 24px 24px -12px rgba(0,0,0,0.2),
+                   0px 48px 48px -24px rgba(0,0,0,0.2);
 
   /* ===== CUSTOM INTERACTIVE COLORS (Dark Mode) ===== */
   /* Lighter blue for better visibility on dark backgrounds */

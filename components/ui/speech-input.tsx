@@ -366,13 +366,14 @@ function SpeechInput(props: SpeechInputProps) {
         )}
 
         {/* Input text display - serves as live region for screen readers */}
+        {/* Allow wrapping and scrolling for long spelled words (e.g., "Q U A D R U P L E") */}
         <p
           id={statusId}
           role="status"
           aria-live="polite"
           aria-atomic="true"
           className={cn(
-            "w-full grow overflow-hidden text-ellipsis text-nowrap text-center text-xl leading-7 italic",
+            "w-full grow overflow-y-auto text-center text-xl leading-7 italic break-words",
             hasInput ? "text-foreground" : "text-muted-foreground"
           )}
         >
