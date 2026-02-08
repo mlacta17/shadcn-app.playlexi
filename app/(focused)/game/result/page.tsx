@@ -2,17 +2,17 @@
 
 import * as React from "react"
 import { Suspense } from "react"
+import Image from "next/image"
 import { useRouter, useSearchParams } from "next/navigation"
 
 import { TopNavbar } from "@/components/ui/top-navbar"
 import { SearchInput } from "@/components/ui/search-input"
-import { Button } from "@/components/ui/button"
-import { PlayerAvatar } from "@/components/ui/player-avatar"
 import {
   LeaderboardTable,
   type LeaderboardPlayer,
 } from "@/components/game/leaderboard-table"
 import { usePlayLexiUser } from "@/hooks/use-playlexi-user"
+import { cn } from "@/lib/utils"
 import type { GameMode, InputMethod } from "@/db/schema"
 
 // =============================================================================
@@ -34,24 +34,10 @@ interface GameHistoryEntry {
 }
 
 /**
- * Game statistics from API.
- */
-interface GameStats {
-  totalGames: number
-  totalRounds: number
-  totalCorrect: number
-  totalXp: number
-  averageAccuracy: number
-  bestRound: number
-  bestStreak: number
-}
-
-/**
  * Game history API response.
  */
 interface GameHistoryResponse {
   games: GameHistoryEntry[]
-  stats: GameStats
 }
 
 /**
@@ -111,36 +97,78 @@ function historyToLeaderboard(
   }))
 }
 
+// =============================================================================
+// ACTION CARD COMPONENT
+// =============================================================================
+//
+// A clickable card with illustration, title, and description.
+// Uses secondary button colors with card-like layout.
+//
+// NOTE: If this pattern is needed elsewhere (e.g., game mode selection,
+// onboarding choices), consider extracting to components/ui/action-card.tsx
+//
+// =============================================================================
+
+interface ActionCardProps {
+  imageSrc: string
+  imageAlt: string
+  title: string
+  description: string
+  onClick?: () => void
+  disabled?: boolean
+}
+
 /**
- * Determine if current game is a personal best.
+ * Action card for game result actions (Review, Play Again, Share).
+ *
+ * Follows secondary button design system:
+ * - Background: bg-secondary
+ * - Hover: hover:bg-[var(--secondary-hover)]
+ *
+ * @see Figma node 2880:30127 (Game result action cards)
  */
-function getPersonalBestStatus(
-  currentRound: number,
-  bestRound: number,
-  currentStreak: number,
-  bestStreak: number,
-  historyLength: number
-): { type: "new-round-best" | "new-streak-best" | "top-3" | null; message: string } {
-  if (historyLength === 0) {
-    return { type: "new-round-best", message: "First Game Complete!" }
-  }
-
-  // Check for new round record
-  if (currentRound > bestRound) {
-    return { type: "new-round-best", message: "New Personal Best!" }
-  }
-
-  // Check for new streak record
-  if (currentStreak > bestStreak) {
-    return { type: "new-streak-best", message: "New Best Streak!" }
-  }
-
-  // Check if in top 3 range
-  if (currentRound >= bestRound - 2) {
-    return { type: "top-3", message: "Great Game!" }
-  }
-
-  return { type: null, message: "" }
+function ActionCard({
+  imageSrc,
+  imageAlt,
+  title,
+  description,
+  onClick,
+  disabled = false,
+}: ActionCardProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        // Layout
+        "flex flex-col items-start gap-3 p-6 w-full text-left",
+        // Styling (matches secondary button, shadow-xs per Figma)
+        "bg-secondary rounded-xl shadow-xs",
+        "transition-colors",
+        // Hover state (matches secondary button hover)
+        "hover:bg-[var(--secondary-hover)]",
+        // Disabled state
+        "disabled:opacity-50 disabled:pointer-events-none"
+      )}
+    >
+      {/* Illustration */}
+      <div className="size-11 flex items-center justify-center">
+        <Image
+          src={imageSrc}
+          alt={imageAlt}
+          width={44}
+          height={44}
+          className="object-contain"
+        />
+      </div>
+      {/* Text content */}
+      <div className="flex flex-col gap-0.5">
+        <p className="text-base font-semibold text-foreground">{title}</p>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </div>
+    </button>
+  )
 }
 
 // =============================================================================
@@ -164,7 +192,6 @@ function GameResultContent() {
 
   const [searchQuery, setSearchQuery] = React.useState("")
   const [gameHistory, setGameHistory] = React.useState<LeaderboardPlayer[]>([])
-  const [stats, setStats] = React.useState<GameStats | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
 
   // ---------------------------------------------------------------------------
@@ -200,16 +227,13 @@ function GameResultContent() {
           const historyData = (await historyResponse.json()) as GameHistoryResponse
           // Pass user's avatarId for consistent avatar display
           setGameHistory(historyToLeaderboard(historyData.games, playLexiUser?.avatarId))
-          setStats(historyData.stats)
         } else {
           // No history available (not logged in or no games)
           setGameHistory([])
-          setStats(null)
         }
       } catch (err) {
         console.error("[GameResult] Error fetching data:", err)
         setGameHistory([])
-        setStats(null)
       } finally {
         setIsLoading(false)
       }
@@ -230,18 +254,6 @@ function GameResultContent() {
     )
   }, [searchQuery, gameHistory])
 
-  // Determine personal best status
-  const personalBestStatus = React.useMemo(() => {
-    if (!stats) return { type: null, message: "" }
-    return getPersonalBestStatus(
-      currentGame.roundsCompleted,
-      stats.bestRound,
-      currentGame.longestStreak,
-      stats.bestStreak,
-      stats.totalGames
-    )
-  }, [currentGame.roundsCompleted, currentGame.longestStreak, stats])
-
   // ---------------------------------------------------------------------------
   // Event Handlers
   // ---------------------------------------------------------------------------
@@ -252,6 +264,36 @@ function GameResultContent() {
 
   const handlePlayAgain = () => {
     router.push(`/game/${mode}`)
+  }
+
+  const handleReviewGame = () => {
+    // TODO: Navigate to game review page when implemented
+    // router.push(`/game/review?gameId=${gameId}`)
+    console.log("[GameResult] Review game clicked")
+  }
+
+  const handleShareGame = async () => {
+    // Use Web Share API if available, fallback to clipboard
+    const shareData = {
+      title: "PlayLexi Game Results",
+      text: `I just completed ${currentGame.roundsCompleted} rounds with ${currentGame.accuracy}% accuracy on PlayLexi!`,
+      url: window.location.href,
+    }
+
+    try {
+      if (navigator.share && navigator.canShare?.(shareData)) {
+        await navigator.share(shareData)
+      } else {
+        // Fallback: copy to clipboard
+        await navigator.clipboard.writeText(
+          `${shareData.text}\n${shareData.url}`
+        )
+        // TODO: Show toast notification "Copied to clipboard!"
+        console.log("[GameResult] Share copied to clipboard")
+      }
+    } catch (err) {
+      console.error("[GameResult] Share failed:", err)
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -285,142 +327,53 @@ function GameResultContent() {
       {/* Main Content */}
       <main className="flex flex-1 flex-col items-center px-4 py-6 sm:px-6">
         <div className="flex w-full max-w-3xl flex-col gap-6">
-          {/* Current Game Stats Section */}
+          {/* Page Title */}
+          <h1 className="text-2xl font-semibold text-foreground">
+            Game Results
+          </h1>
+
+          {/* Action Cards - Review, Play Again, Share */}
           <section
-            data-slot="current-game-stats"
-            className="flex flex-col items-center gap-4 text-center"
+            data-slot="action-cards"
+            className="grid grid-cols-1 gap-5 sm:grid-cols-3"
           >
-            {/* Personal Best Badge */}
-            {personalBestStatus.type === "new-round-best" && (
-              <div className="rounded-full bg-yellow-500/10 px-4 py-1 text-sm font-medium text-yellow-600 dark:text-yellow-400">
-                {personalBestStatus.message}
-              </div>
-            )}
-            {personalBestStatus.type === "new-streak-best" && (
-              <div className="rounded-full bg-orange-500/10 px-4 py-1 text-sm font-medium text-orange-600 dark:text-orange-400">
-                {personalBestStatus.message}
-              </div>
-            )}
-            {personalBestStatus.type === "top-3" && (
-              <div className="rounded-full bg-blue-500/10 px-4 py-1 text-sm font-medium text-blue-600 dark:text-blue-400">
-                {personalBestStatus.message}
-              </div>
-            )}
-
-            {/* Player Avatar - Consistent with navbar */}
-            {playLexiUser?.avatarId && (
-              <PlayerAvatar
-                avatarId={playLexiUser.avatarId}
-                size="lg"
-                className="size-20"
-              />
-            )}
-
-            {/* Main Stat: Rounds Completed */}
-            <div className="flex flex-col items-center">
-              <span className="text-6xl font-bold text-foreground">
-                {currentGame.roundsCompleted}
-              </span>
-              <span className="text-lg text-muted-foreground">
-                {currentGame.roundsCompleted === 1 ? "Round" : "Rounds"} Completed
-              </span>
-            </div>
-
-            {/* Secondary Stats: Accuracy, Best Round, Streak */}
-            <div className="flex gap-6 text-sm sm:gap-8">
-              <div className="flex flex-col items-center">
-                <span className="text-2xl font-bold text-foreground">
-                  {currentGame.accuracy}%
-                </span>
-                <span className="text-muted-foreground">Accuracy</span>
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="text-2xl font-bold text-foreground">
-                  {stats?.bestRound ?? currentGame.roundsCompleted}
-                </span>
-                <span className="text-muted-foreground">Best</span>
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="text-2xl font-bold text-foreground">
-                  {currentGame.longestStreak}
-                </span>
-                <span className="text-muted-foreground">Streak</span>
-              </div>
-            </div>
+            <ActionCard
+              imageSrc="/illustrations/review-game.svg"
+              imageAlt="Review game illustration"
+              title="Review game"
+              description="See what words you spelled correctly vs wrong."
+              onClick={handleReviewGame}
+            />
+            <ActionCard
+              imageSrc="/illustrations/play-again.svg"
+              imageAlt="Play again illustration"
+              title="Play again"
+              description="Don't want to stop the fun? Let's play again!"
+              onClick={handlePlayAgain}
+            />
+            <ActionCard
+              imageSrc="/illustrations/share-game.svg"
+              imageAlt="Share game illustration"
+              title="Share game"
+              description="Share this with your friends to let them know how you did!"
+              onClick={handleShareGame}
+            />
           </section>
 
-          {/* Lifetime Progress (if available) */}
-          {stats && stats.totalGames > 0 && (
-            <section
-              data-slot="lifetime-stats"
-              className="rounded-lg border border-border bg-card p-4"
-            >
-              <h2 className="mb-3 text-sm font-medium text-muted-foreground">
-                YOUR PROGRESS
-              </h2>
-              <div className="grid grid-cols-2 gap-4 text-center sm:grid-cols-4">
-                <div>
-                  <span className="block text-xl font-bold text-foreground">
-                    {stats.bestStreak}
-                  </span>
-                  <span className="text-xs text-muted-foreground">Best Streak</span>
-                </div>
-                <div>
-                  <span className="block text-xl font-bold text-foreground">
-                    {stats.averageAccuracy}%
-                  </span>
-                  <span className="text-xs text-muted-foreground">Avg Accuracy</span>
-                </div>
-                <div>
-                  <span className="block text-xl font-bold text-foreground">
-                    {stats.totalGames}
-                  </span>
-                  <span className="text-xs text-muted-foreground">Games Played</span>
-                </div>
-                <div>
-                  <span className="block text-xl font-bold text-foreground">
-                    {stats.totalCorrect}
-                  </span>
-                  <span className="text-xs text-muted-foreground">Words Spelled</span>
-                </div>
-              </div>
-            </section>
-          )}
-
           {/* Game History Section */}
-          {gameHistory.length > 0 ? (
-            <section data-slot="game-history">
-              {/* Section Title */}
-              <h2 className="mb-3 text-lg font-semibold text-foreground">
-                Your Game History
-              </h2>
+          <section data-slot="game-history">
+            {/* Search Input */}
+            <SearchInput
+              placeholder="Search games"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              containerClassName="max-w-sm mb-4"
+            />
 
-              {/* Search Input */}
-              <SearchInput
-                placeholder="Search games"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                containerClassName="max-w-sm mb-4"
-              />
+            {/* History Table */}
+            <LeaderboardTable data={filteredHistory} pageSize={7} />
+          </section>
 
-              {/* History Table */}
-              <LeaderboardTable data={filteredHistory} pageSize={7} />
-            </section>
-          ) : (
-            /* Empty State */
-            <div className="flex flex-col items-center gap-4 py-8 text-center">
-              <p className="text-muted-foreground">
-                This was your first game! Keep playing to build your history.
-              </p>
-            </div>
-          )}
-
-          {/* Play Again Button */}
-          <div className="sticky bottom-4 mt-4 flex justify-center sm:relative sm:bottom-auto">
-            <Button onClick={handlePlayAgain} size="lg" className="w-full sm:w-auto">
-              Play Again
-            </Button>
-          </div>
         </div>
       </main>
     </div>
@@ -430,26 +383,17 @@ function GameResultContent() {
 /**
  * Solo Game Result Screen
  *
- * Displays the player's personal performance stats for solo games.
- * Focused on self-improvement with key metrics that matter to players.
+ * Displays game result actions and history for solo games.
  *
- * ## Design Philosophy
+ * ## Features
  *
- * Solo mode is practice mode focused on self-improvement. The stats shown
- * are carefully chosen to provide actionable feedback:
- *
- * - **Rounds Completed**: Primary score metric (how far you got)
- * - **Accuracy**: Precision metric (how consistent you are)
- * - **Streak**: Momentum metric (consecutive correct answers)
- * - **Best Round/Streak**: Personal bests to beat
+ * - **Action Cards**: Review game, Play again, Share game
+ * - **Game History**: Searchable table of past game sessions
  *
  * ## Avatar Consistency
  *
- * The player's selected avatar (from onboarding) is shown:
- * - At the top of the results (hero section)
- * - In every row of game history (using same avatarId)
- *
- * This creates visual consistency with the navbar and profile.
+ * The player's selected avatar (from onboarding) is shown in every row
+ * of game history, creating visual consistency with the navbar and profile.
  *
  * ## URL Parameters (Input)
  * - `mode`: "endless" or "blitz" (default: "endless")

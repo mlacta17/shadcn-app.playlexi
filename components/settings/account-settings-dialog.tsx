@@ -550,7 +550,7 @@ function ProfileTabContent({
         </div>
       </SettingsRow>
 
-      <Separator />
+      <Separator variant="dashed" />
 
       {/* Username */}
       <SettingsRow
@@ -565,7 +565,7 @@ function ProfileTabContent({
         />
       </SettingsRow>
 
-      <Separator />
+      <Separator variant="dashed" />
 
       {/* Bio */}
       <div className="flex flex-col gap-3">
@@ -612,7 +612,7 @@ function PrivacyTabContent({ email }: PrivacyTabContentProps) {
         </Button>
       </SettingsRow>
 
-      <Separator />
+      <Separator variant="dashed" />
 
       {/* 2FA */}
       <SettingsRow
@@ -799,7 +799,7 @@ function NotificationsTabContent({
         onCheckedChange={(checked) => onToggle("emailSocial", checked)}
       />
 
-      <Separator />
+      <Separator variant="dashed" />
 
       <NotificationToggle
         title="Security emails"
@@ -808,7 +808,7 @@ function NotificationsTabContent({
         onCheckedChange={(checked) => onToggle("emailSecurity", checked)}
       />
 
-      <Separator />
+      <Separator variant="dashed" />
 
       <NotificationToggle
         title="Marketing emails"

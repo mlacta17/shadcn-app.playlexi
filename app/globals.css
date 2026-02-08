@@ -412,6 +412,46 @@ button.destructive:focus-visible,
  */
 
 @layer utilities {
+  /*
+   * Dashed separator pattern (4px dash, 4px gap per Figma)
+   *
+   * Used by: Separator component variant="dashed"
+   * @see Figma node 2582:6142 (Settings Dialog)
+   *
+   * Uses repeating linear gradient for precise dash control while
+   * respecting theme colors via var(--border).
+   *
+   * Why gradient instead of border-dashed?
+   * CSS border-dashed doesn't allow custom dash/gap sizes.
+   *
+   * Why gradient instead of SVG data URI?
+   * SVG data URIs require hardcoded colors. Gradients use CSS variables,
+   * so the separator automatically respects light/dark theme changes.
+   */
+  .separator-dashed-horizontal {
+    height: 1px;
+    width: 100%;
+    background: repeating-linear-gradient(
+      to right,
+      var(--border) 0,
+      var(--border) 4px,
+      transparent 4px,
+      transparent 8px
+    );
+  }
+
+  .separator-dashed-vertical {
+    width: 1px;
+    height: 100%;
+    background: repeating-linear-gradient(
+      to bottom,
+      var(--border) 0,
+      var(--border) 4px,
+      transparent 4px,
+      transparent 8px
+    );
+  }
+
   /* Manual focus ring (rarely needed) */
   .focus-ring:focus-visible {
     outline: var(--focus-ring-width) solid var(--focus-ring-color);
