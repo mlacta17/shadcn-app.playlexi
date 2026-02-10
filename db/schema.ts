@@ -850,3 +850,251 @@ export const userPhoneticMappings = sqliteTable(
     userIdIdx: index("idx_phonetic_mappings_user_id").on(table.userId),
   })
 )
+
+// =============================================================================
+// 9. DAILY SPELL (Daily Challenge Mode)
+// =============================================================================
+
+/**
+ * Daily Spell puzzles — pre-generated daily challenges.
+ *
+ * Each day has exactly one puzzle with 5 words in fixed order.
+ * All players worldwide get the same words on the same day.
+ * Puzzles should be pre-generated in advance (e.g., 30 days ahead).
+ *
+ * ## Design Philosophy
+ * - Same experience for everyone (like Wordle)
+ * - Fixed difficulty curve: Easy → Medium → Hard → Hard → Hardest
+ * - Voice input only (no keyboard option)
+ *
+ * @see Daily Spell feature spec
+ */
+export const dailySpellPuzzles = sqliteTable(
+  "daily_spell_puzzles",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    /**
+     * Date for this puzzle (YYYY-MM-DD format in UTC).
+     * Only one puzzle per date allowed.
+     */
+    puzzleDate: text("puzzle_date").notNull().unique(),
+    /**
+     * Ordered array of word IDs (JSON string).
+     * Always exactly 5 words: [easy, medium, hard, hard, hardest]
+     */
+    wordIds: text("word_ids").notNull(), // JSON array of word IDs
+    /**
+     * Puzzle number (sequential, starting from 1).
+     * Used for display: "Daily Spell #47"
+     */
+    puzzleNumber: integer("puzzle_number").notNull().unique(),
+    /**
+     * When this puzzle was generated/created.
+     */
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    puzzleDateIdx: index("idx_daily_spell_puzzles_date").on(table.puzzleDate),
+  })
+)
+
+/**
+ * Daily Spell results — player completions for daily puzzles.
+ *
+ * Each player can only have one result per puzzle (one attempt per day).
+ * Stores individual word results for the breakdown table.
+ *
+ * @see Daily Spell results screen
+ */
+export const dailySpellResults = sqliteTable(
+  "daily_spell_results",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    puzzleId: text("puzzle_id")
+      .notNull()
+      .references(() => dailySpellPuzzles.id, { onDelete: "cascade" }),
+    /**
+     * User ID - can be authenticated user or anonymous session ID.
+     * Anonymous users store a UUID in localStorage.
+     */
+    userId: text("user_id").notNull(),
+    /**
+     * Whether this user is authenticated (has an account).
+     */
+    isAuthenticated: integer("is_authenticated", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    /**
+     * Score: number of correct answers (0-5).
+     */
+    score: integer("score").notNull(),
+    /**
+     * Results for each word as JSON array.
+     * Format: [{ wordId, answer, correct, timeTaken }]
+     */
+    wordResults: text("word_results").notNull(), // JSON array
+    /**
+     * Emoji representation for sharing (e.g., "✅❌✅✅✅").
+     */
+    emojiRow: text("emoji_row").notNull(),
+    /**
+     * Percentile rank (e.g., 28 means top 28%).
+     * Calculated after enough players complete the puzzle.
+     */
+    percentile: integer("percentile"),
+    /**
+     * When the player completed the puzzle.
+     */
+    completedAt: integer("completed_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    puzzleUserUnique: unique().on(table.puzzleId, table.userId),
+    puzzleIdIdx: index("idx_daily_spell_results_puzzle").on(table.puzzleId),
+    userIdIdx: index("idx_daily_spell_results_user").on(table.userId),
+    // For percentile calculation queries
+    puzzleScoreIdx: index("idx_daily_spell_results_puzzle_score").on(
+      table.puzzleId,
+      table.score
+    ),
+  })
+)
+
+/**
+ * Daily Spell streaks — tracks consecutive day streaks per user.
+ *
+ * Streak increments when a player completes the daily (any score).
+ * Streak resets if a day is missed (no completion before midnight UTC).
+ *
+ * @see Daily Spell streak screen
+ */
+export const dailySpellStreaks = sqliteTable(
+  "daily_spell_streaks",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id").notNull().unique(),
+    /**
+     * Current streak count (consecutive days).
+     */
+    currentStreak: integer("current_streak").notNull().default(0),
+    /**
+     * Best streak ever achieved.
+     */
+    bestStreak: integer("best_streak").notNull().default(0),
+    /**
+     * Last date the user completed a daily (YYYY-MM-DD UTC).
+     * Used to determine if streak should reset.
+     */
+    lastPlayedDate: text("last_played_date"),
+    /**
+     * Total games played (all time).
+     */
+    totalGamesPlayed: integer("total_games_played").notNull().default(0),
+    /**
+     * Total wins (games with score >= 3).
+     */
+    totalWins: integer("total_wins").notNull().default(0),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    userIdIdx: index("idx_daily_spell_streaks_user").on(table.userId),
+  })
+)
+
+/**
+ * Challenge links — referral links for viral sharing.
+ *
+ * Each user has one reusable challenge link.
+ * Tracks clicks and conversions (people who actually played).
+ *
+ * @see "Challenge a Friend" modal
+ */
+export const challengeLinks = sqliteTable(
+  "challenge_links",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    /**
+     * User who created/owns this challenge link.
+     */
+    userId: text("user_id")
+      .notNull()
+      .unique()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /**
+     * Unique code for the link (e.g., "abc123").
+     * URL format: playlexi.com/daily?ref={code}
+     */
+    code: text("code").notNull().unique(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    codeIdx: index("idx_challenge_links_code").on(table.code),
+  })
+)
+
+/**
+ * Challenge referrals — tracks people who clicked challenge links.
+ *
+ * Records the full funnel: click → play → sign up.
+ *
+ * @see "Accepted invitations" counter
+ */
+export const challengeReferrals = sqliteTable(
+  "challenge_referrals",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    /**
+     * The challenge link that was clicked.
+     */
+    linkId: text("link_id")
+      .notNull()
+      .references(() => challengeLinks.id, { onDelete: "cascade" }),
+    /**
+     * Anonymous visitor identifier (from localStorage).
+     * Used to link click → play → signup.
+     */
+    visitorId: text("visitor_id").notNull(),
+    /**
+     * When the link was clicked.
+     */
+    clickedAt: integer("clicked_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    /**
+     * When the visitor played the daily (NULL if didn't play).
+     */
+    playedAt: integer("played_at", { mode: "timestamp" }),
+    /**
+     * User ID if the visitor signed up (NULL if didn't sign up).
+     */
+    signedUpUserId: text("signed_up_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (table) => ({
+    linkIdIdx: index("idx_challenge_referrals_link").on(table.linkId),
+    visitorIdIdx: index("idx_challenge_referrals_visitor").on(table.visitorId),
+    // For counting accepted invitations (played_at IS NOT NULL)
+    linkPlayedIdx: index("idx_challenge_referrals_link_played").on(
+      table.linkId,
+      table.playedAt
+    ),
+  })
+)

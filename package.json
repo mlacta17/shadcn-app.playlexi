@@ -21,10 +21,14 @@
     "db:seed": "npx ts-node --project scripts/tsconfig.json scripts/seed-words.ts",
     "db:seed:prod": "npx ts-node --project scripts/tsconfig.json scripts/seed-words.ts --production",
     "db:seed:dry": "npx ts-node --project scripts/tsconfig.json scripts/seed-words.ts --dry-run",
+    "db:seed:daily": "npx ts-node --project scripts/tsconfig.json scripts/seed-daily-spell.ts",
+    "db:seed:daily:prod": "npx ts-node --project scripts/tsconfig.json scripts/seed-daily-spell.ts --production",
+    "db:seed:daily:dry": "npx ts-node --project scripts/tsconfig.json scripts/seed-daily-spell.ts --dry-run",
     "tts:generate": "npx ts-node --project scripts/tsconfig.json scripts/generate-tts.ts",
     "tts:generate:prod": "npx ts-node --project scripts/tsconfig.json scripts/generate-tts.ts --production",
     "tts:generate:dry": "npx ts-node --project scripts/tsconfig.json scripts/generate-tts.ts --dry-run",
-    "tts:estimate": "npx ts-node --project scripts/tsconfig.json scripts/generate-tts.ts --estimate"
+    "tts:estimate": "npx ts-node --project scripts/tsconfig.json scripts/generate-tts.ts --estimate",
+    "daily:reset": "npx wrangler d1 execute playlexi-db --local --command \"DELETE FROM daily_spell_results WHERE puzzle_id IN (SELECT id FROM daily_spell_puzzles WHERE puzzle_date = date('now')); DELETE FROM daily_spell_streaks;\""
   },
   "dependencies": {
     "@base-ui/react": "^1.0.0",

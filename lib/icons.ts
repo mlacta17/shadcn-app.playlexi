@@ -107,7 +107,11 @@ export { IconChevronLeftOutline24 as ChevronLeftIcon } from "nucleo-core-outline
 // Profile/Settings features (P3)
 export { IconShield2Outline24 as ShieldIcon } from "nucleo-core-outline-24"
 export { IconColorPaletteOutline24 as PaletteIcon } from "nucleo-core-outline-24"
-// export { IconEyeOutline24 as EyeIcon } from "nucleo-core-outline-24"
+export { IconEyeOutline24 as EyeIcon } from "nucleo-core-outline-24"
+export { IconEyeClosedOutline24 as EyeOffIcon } from "nucleo-core-outline-24"
 // export { IconCreditCardOutline24 as CreditCardIcon } from "nucleo-core-outline-24"
 // export { IconCircleQuestionOutline24 as HelpCircleIcon } from "nucleo-core-outline-24"
+
+// Daily Spell / Streak icons
+export { IconBoltOutline24 as ZapIcon } from "nucleo-core-outline-24"
 

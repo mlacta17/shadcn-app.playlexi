@@ -1,0 +1,30 @@
+<svg preserveAspectRatio="none" width="100%" height="100%" overflow="visible" style="display: block;" viewBox="0 0 164 164" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g id="Chart Up">
+    <!-- Border/Shadow layer - positioned at inset 6.25% 9.38% -->
+    <g transform="translate(10.25, 15.38)">
+      <path id="Border" fill-rule="evenodd" clip-rule="evenodd" d="M15.375 0H117.875C126.366 0 133.25 6.88362 133.25 15.375V128.125C133.25 136.616 126.366 143.5 117.875 143.5H15.375C6.88363 143.5 0 136.616 0 128.125V15.375C0 6.88363 6.88362 0 15.375 0Z" fill="#4B3980"/>
+    </g>
+    <!-- Depth fill layer - positioned at inset 12.5% 15.63% -->
+    <g transform="translate(20.5, 25.63)">
+      <path id="Fill" d="M0 5.125C0 2.29454 2.29454 0 5.125 0H107.625C110.455 0 112.75 2.29454 112.75 5.125V117.875C112.75 120.705 110.455 123 107.625 123H5.125C2.29454 123 0 120.705 0 117.875V5.125Z" fill="#7558C6"/>
+    </g>
+    <!-- Gradient layer - same position as fill -->
+    <g transform="translate(20.5, 25.63)">
+      <defs>
+        <linearGradient id="chartGradient" x1="56.375" y1="0" x2="56.375" y2="112.75" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#D5CCFF"/>
+          <stop offset="1" stop-color="#AD9CFF"/>
+        </linearGradient>
+      </defs>
+      <rect x="0" y="0" width="112.75" height="112.75" rx="1" fill="url(#chartGradient)"/>
+    </g>
+    <!-- Line shadow layer -->
+    <g transform="translate(33.31, 35.27)">
+      <path id="LineShadow" d="M105.062 0L51.25 53.8125L33.6234 36.1859C30.6212 33.1837 25.7538 33.1837 22.7516 36.1859L12.8037 46.1338C11.4447 44.9212 9.65214 44.1843 7.6875 44.1843C3.44181 44.1843 0 47.6261 0 51.8718V62.1218C0 65.2311 1.873 68.0342 4.74562 69.2241C7.61824 70.414 10.9248 69.7563 13.1234 67.5576L28.1875 52.4935L45.8141 70.1201C48.8163 73.1223 53.6837 73.1223 56.6859 70.1201L105.062 21.7435V0Z" fill="#7558C6"/>
+    </g>
+    <!-- Line white layer -->
+    <g transform="translate(33.31, 25.01)">
+      <path id="LineWhite" d="M105.062 0L51.25 53.8125L33.6234 36.1859C30.6212 33.1837 25.7538 33.1837 22.7516 36.1859L2.25162 56.6859C-0.750539 59.688 -0.750539 64.5555 2.25162 67.5576C5.25377 70.5598 10.1212 70.5598 13.1234 67.5576L28.1875 52.4935L45.8141 70.1201C48.8163 73.1223 53.6837 73.1223 56.6859 70.1201L105.062 21.7435V0Z" fill="white"/>
+    </g>
+  </g>
+</svg>

@@ -5,21 +5,23 @@
  * Shows play options, current rank, and quick stats.
  *
  * ## What Users See Here
- * - Play buttons (Endless, Blitz)
+ * - Daily Spell (featured, first position)
+ * - Game mode cards (Endless, Blitz)
  * - Current rank badge and progress
- * - Recent activity / stats
  *
- * ## Future Enhancements
- * - Daily challenges
- * - Friends activity feed
- * - Achievement notifications
+ * ## Card Order
+ * 1. Daily Spell - Primary retention/virality mechanic
+ * 2. Endless Mode - Core practice mode
+ * 3. Blitz Mode - Time-based challenge
  *
  * @see PRD Section 2.3 — Existing User Flow
+ * @see Daily Spell feature spec
  */
 
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { DailySpellCard } from "@/components/daily-spell/daily-spell-card"
 
 export default function DashboardPage() {
   return (
@@ -37,6 +39,9 @@ export default function DashboardPage() {
       {/* Game Mode Cards */}
       <section className="container mx-auto max-w-4xl px-6 pb-12">
         <div className="grid gap-6 md:grid-cols-2">
+          {/* Daily Spell - Featured first */}
+          <DailySpellCard />
+
           {/* Endless Mode */}
           <Card>
             <CardHeader>

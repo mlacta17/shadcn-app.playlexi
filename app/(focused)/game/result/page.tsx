@@ -2,17 +2,16 @@
 
 import * as React from "react"
 import { Suspense } from "react"
-import Image from "next/image"
 import { useRouter, useSearchParams } from "next/navigation"
 
 import { TopNavbar } from "@/components/ui/top-navbar"
 import { SearchInput } from "@/components/ui/search-input"
+import { ActionCard } from "@/components/ui/action-card"
 import {
   LeaderboardTable,
   type LeaderboardPlayer,
 } from "@/components/game/leaderboard-table"
 import { usePlayLexiUser } from "@/hooks/use-playlexi-user"
-import { cn } from "@/lib/utils"
 import type { GameMode, InputMethod } from "@/db/schema"
 
 // =============================================================================
@@ -95,80 +94,6 @@ function historyToLeaderboard(
     accuracy: game.accuracy,
     points: game.roundsCompleted, // Use rounds as the "score" metric
   }))
-}
-
-// =============================================================================
-// ACTION CARD COMPONENT
-// =============================================================================
-//
-// A clickable card with illustration, title, and description.
-// Uses secondary button colors with card-like layout.
-//
-// NOTE: If this pattern is needed elsewhere (e.g., game mode selection,
-// onboarding choices), consider extracting to components/ui/action-card.tsx
-//
-// =============================================================================
-
-interface ActionCardProps {
-  imageSrc: string
-  imageAlt: string
-  title: string
-  description: string
-  onClick?: () => void
-  disabled?: boolean
-}
-
-/**
- * Action card for game result actions (Review, Play Again, Share).
- *
- * Follows secondary button design system:
- * - Background: bg-secondary
- * - Hover: hover:bg-[var(--secondary-hover)]
- *
- * @see Figma node 2880:30127 (Game result action cards)
- */
-function ActionCard({
-  imageSrc,
-  imageAlt,
-  title,
-  description,
-  onClick,
-  disabled = false,
-}: ActionCardProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        // Layout
-        "flex flex-col items-start gap-3 p-6 w-full text-left",
-        // Styling (matches secondary button, shadow-xs per Figma)
-        "bg-secondary rounded-xl shadow-xs",
-        "transition-colors",
-        // Hover state (matches secondary button hover)
-        "hover:bg-[var(--secondary-hover)]",
-        // Disabled state
-        "disabled:opacity-50 disabled:pointer-events-none"
-      )}
-    >
-      {/* Illustration */}
-      <div className="size-11 flex items-center justify-center">
-        <Image
-          src={imageSrc}
-          alt={imageAlt}
-          width={44}
-          height={44}
-          className="object-contain"
-        />
-      </div>
-      {/* Text content */}
-      <div className="flex flex-col gap-0.5">
-        <p className="text-base font-semibold text-foreground">{title}</p>
-        <p className="text-sm text-muted-foreground">{description}</p>
-      </div>
-    </button>
-  )
 }
 
 // =============================================================================
@@ -292,6 +217,10 @@ function GameResultContent() {
         console.log("[GameResult] Share copied to clipboard")
       }
     } catch (err) {
+      // AbortError is expected when user cancels the share sheet - ignore it
+      if (err instanceof Error && err.name === "AbortError") {
+        return
+      }
       console.error("[GameResult] Share failed:", err)
     }
   }
