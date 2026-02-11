@@ -24,8 +24,7 @@
 
 import * as React from "react"
 
-import { cn } from "@/lib/utils"
-import { CopyIcon, CircleUserIcon } from "@/lib/icons"
+import { CopyIcon, CheckIcon, CircleUserIcon } from "@/lib/icons"
 import { showSuccessToast, showErrorToast } from "@/lib/toast-utils"
 
 import {
@@ -179,7 +178,7 @@ export function ChallengeDialog({ open, onOpenChange }: ChallengeDialogProps) {
                 disabled={isLoading || !shareUrl}
                 aria-label={isCopied ? "Copied" : "Copy link"}
               >
-                <CopyIcon className={cn(isCopied && "text-green-600")} />
+                {isCopied ? <CheckIcon /> : <CopyIcon />}
               </Button>
             </div>
           </div>

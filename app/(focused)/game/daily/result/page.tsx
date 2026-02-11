@@ -41,8 +41,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
-import { showSuccessToast } from "@/lib/toast-utils"
 import { ChallengeDialog } from "@/components/game/challenge-dialog"
+import { ShareResultDialog } from "@/components/game/share-result-dialog"
 
 // =============================================================================
 // TYPES
@@ -153,6 +153,7 @@ function ResultContent() {
     new Set()
   )
   const [isChallengeDialogOpen, setIsChallengeDialogOpen] = React.useState(false)
+  const [isShareDialogOpen, setIsShareDialogOpen] = React.useState(false)
 
   // Fetch full result on mount
   React.useEffect(() => {
@@ -195,30 +196,9 @@ function ResultContent() {
     })
   }
 
-  // Share result
-  const handleShare = async () => {
-    const displayNumber = result?.puzzleNumber || puzzleNumber
-    const displayScore = result?.score ?? score
-    const displayEmoji = result?.emojiRow || emojiRow
-
-    const shareText = `Daily Spell #${displayNumber}\n${displayEmoji}\nScore: ${displayScore}/5\n\nPlay at playlexi.com`
-
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: `Daily Spell #${displayNumber}`,
-          text: shareText,
-        })
-      } else {
-        await navigator.clipboard.writeText(shareText)
-        showSuccessToast("Copied to clipboard!")
-      }
-    } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") {
-        return
-      }
-      console.error("[ResultPage] Share failed:", err)
-    }
+  // Share result - opens ShareResultDialog
+  const handleShare = () => {
+    setIsShareDialogOpen(true)
   }
 
   // Challenge a friend - opens ChallengeDialog
@@ -394,6 +374,18 @@ function ResultContent() {
       <ChallengeDialog
         open={isChallengeDialogOpen}
         onOpenChange={setIsChallengeDialogOpen}
+      />
+
+      {/* Share Result Dialog */}
+      <ShareResultDialog
+        open={isShareDialogOpen}
+        onOpenChange={setIsShareDialogOpen}
+        resultData={{
+          puzzleNumber: result?.puzzleNumber || puzzleNumber,
+          score: result?.score ?? score,
+          emojiRow: result?.emojiRow || emojiRow,
+          percentile: result?.percentile,
+        }}
       />
     </div>
   )

@@ -117,4 +117,5 @@ export { IconBoltOutline24 as ZapIcon } from "nucleo-core-outline-24"
 
 // Share/Copy icons (Challenge dialog)
 export { IconCopyOutline24 as CopyIcon } from "nucleo-core-outline-24"
+export { IconDownloadOutline24 as DownloadIcon } from "nucleo-core-outline-24"
 
