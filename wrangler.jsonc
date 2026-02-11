@@ -5,6 +5,11 @@
   "compatibility_date": "2024-12-30",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
 
+  // Fix for "__name is not defined" error
+  // esbuild's keep_names option introduces __name helper that breaks when scripts are stringified
+  // See: https://opennext.js.org/cloudflare/howtos/keep_names
+  "keep_names": false,
+
   // Static assets configuration for OpenNext
   "assets": {
     "directory": ".open-next/assets",

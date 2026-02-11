@@ -126,8 +126,12 @@ export async function requireAuth(): Promise<AuthResult> {
   const requestHeaders = await headers()
 
   // Create auth instance and get session
+  // Note: disableCookieCache forces DB lookup, avoiding Better Auth 1.4.x cookie cache issues
   const auth = createAuth(env.DB)
-  const session = await auth.api.getSession({ headers: requestHeaders })
+  const session = await auth.api.getSession({
+    headers: requestHeaders,
+    query: { disableCookieCache: true },
+  })
 
   // Check authentication
   if (!session?.user) {
@@ -175,8 +179,12 @@ export async function optionalAuth(): Promise<OptionalAuthResult> {
   const requestHeaders = await headers()
 
   // Create auth instance and get session
+  // Note: disableCookieCache forces DB lookup, avoiding Better Auth 1.4.x cookie cache issues
   const auth = createAuth(env.DB)
-  const session = await auth.api.getSession({ headers: requestHeaders })
+  const session = await auth.api.getSession({
+    headers: requestHeaders,
+    query: { disableCookieCache: true },
+  })
 
   return {
     user: session?.user ? (session.user as AuthUser) : null,

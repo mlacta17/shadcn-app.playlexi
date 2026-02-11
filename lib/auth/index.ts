@@ -83,10 +83,11 @@ export function createAuth(d1: D1Database) {
       expiresIn: 60 * 60 * 24 * 7,
       // Refresh session if more than 1 day old
       updateAge: 60 * 60 * 24,
-      // Use secure cookies in production
+      // Cookie cache disabled - caused issues with Better Auth 1.4.x encrypted strategy
+      // Sessions are looked up from D1 database on each request
+      // This is fine for our use case since D1 queries are fast
       cookieCache: {
-        enabled: true,
-        maxAge: 60 * 5, // 5 minutes cache
+        enabled: false,
       },
     },
 

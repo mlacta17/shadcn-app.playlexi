@@ -32,9 +32,11 @@ export default async function AuthCallbackPage() {
   const auth = createAuth(env.DB)
 
   // Get current session from Better Auth
+  // Note: disableCookieCache forces DB lookup, avoiding Better Auth 1.4.x cookie cache issues
   const requestHeaders = await headers()
   const session = await auth.api.getSession({
     headers: requestHeaders,
+    query: { disableCookieCache: true },
   })
 
   // If no session, redirect to login
