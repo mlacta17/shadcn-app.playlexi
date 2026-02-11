@@ -29,7 +29,9 @@
   ],
 
   // Environment variables (non-secrets)
+  // NODE_ENV is the standard Node.js convention for environment detection
+  // All code should use NODE_ENV for consistency
   "vars": {
-    "ENVIRONMENT": "production"
+    "NODE_ENV": "production"
   }
 }

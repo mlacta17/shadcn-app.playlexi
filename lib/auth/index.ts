@@ -90,6 +90,16 @@ export function createAuth(d1: D1Database) {
       },
     },
 
+    // Advanced cookie configuration for production
+    advanced: {
+      // Use secure cookies in production (required for HTTPS)
+      useSecureCookies: process.env.NODE_ENV === "production",
+      // Cross-site cookie settings
+      crossSubDomainCookies: {
+        enabled: false, // app.playlexi.com only, not *.playlexi.com
+      },
+    },
+
     // Base URL for OAuth callbacks
     baseURL: process.env.BETTER_AUTH_URL,
 
