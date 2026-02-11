@@ -115,3 +115,6 @@ export { IconEyeClosedOutline24 as EyeOffIcon } from "nucleo-core-outline-24"
 // Daily Spell / Streak icons
 export { IconBoltOutline24 as ZapIcon } from "nucleo-core-outline-24"
 
+// Share/Copy icons (Challenge dialog)
+export { IconCopyOutline24 as CopyIcon } from "nucleo-core-outline-24"
+

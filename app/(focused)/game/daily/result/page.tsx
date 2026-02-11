@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import { showSuccessToast } from "@/lib/toast-utils"
+import { ChallengeDialog } from "@/components/game/challenge-dialog"
 
 // =============================================================================
 // TYPES
@@ -151,6 +152,7 @@ function ResultContent() {
   const [revealedWords, setRevealedWords] = React.useState<Set<number>>(
     new Set()
   )
+  const [isChallengeDialogOpen, setIsChallengeDialogOpen] = React.useState(false)
 
   // Fetch full result on mount
   React.useEffect(() => {
@@ -219,10 +221,9 @@ function ResultContent() {
     }
   }
 
-  // Challenge a friend
+  // Challenge a friend - opens ChallengeDialog
   const handleChallenge = () => {
-    // TODO: Open challenge modal
-    console.log("[ResultPage] Challenge clicked")
+    setIsChallengeDialogOpen(true)
   }
 
   // Keep spelling (go to endless mode)
@@ -388,6 +389,12 @@ function ResultContent() {
           )}
         </div>
       </main>
+
+      {/* Challenge Dialog */}
+      <ChallengeDialog
+        open={isChallengeDialogOpen}
+        onOpenChange={setIsChallengeDialogOpen}
+      />
     </div>
   )
 }
