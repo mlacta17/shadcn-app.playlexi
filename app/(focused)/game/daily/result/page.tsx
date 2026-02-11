@@ -13,7 +13,7 @@
  * - "You're in the top X% today" title (4xl semibold)
  * - Subtitle explaining percentile meaning
  * - 3 action cards: Challenge a Friend, Keep Spelling, Share results
- * - Data table with columns: Correct Answer, Your Answer, Difficulty, Status
+ * - Data table with columns: Show (eye toggle), Correct Answer, Your Answer, Difficulty, Status
  *
  * ## Reusable Components
  *
@@ -31,6 +31,7 @@ import { EyeIcon, EyeOffIcon } from "@/lib/icons"
 
 import { TopNavbar } from "@/components/ui/top-navbar"
 import { ActionCard } from "@/components/ui/action-card"
+import { Button } from "@/components/ui/button"
 import {
   Table,
   TableBody,
@@ -105,25 +106,25 @@ function DifficultyBar({ tier }: DifficultyBarProps) {
   }
 
   return (
-    <div className="flex gap-[3.333px] items-end w-10">
+    <div className="flex gap-1 items-end w-10">
       {/* Bar 1 - Short (10px) */}
       <div
         className={cn(
-          "flex-1 h-[10px] rounded-lg",
+          "flex-1 h-[10px] rounded-xs",
           filledBars >= 1 ? "bg-orange-600" : "bg-accent"
         )}
       />
       {/* Bar 2 - Medium (18px) */}
       <div
         className={cn(
-          "flex-1 h-[18px] rounded-lg",
+          "flex-1 h-[18px] rounded-xs",
           filledBars >= 2 ? "bg-orange-600" : "bg-accent"
         )}
       />
       {/* Bar 3 - Tall (24px) */}
       <div
         className={cn(
-          "flex-1 h-[24px] rounded-lg",
+          "flex-1 h-[24px] rounded-xs",
           filledBars >= 3 ? "bg-orange-600" : "bg-accent"
         )}
       />
@@ -321,11 +322,14 @@ function ResultContent() {
           </div>
 
           {/* Data Table - Uses standard Table component with hover states */}
+          {/* Column order: [Show] [Correct Answer] [Your Answer] [Difficulty] [Status] */}
           {!isLoading && result?.wordResults && result.wordResults.length > 0 && (
             <div className="w-full rounded-xl border border-border overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
+                    {/* Narrow column for reveal toggle with "Show" header */}
+                    <TableHead className="w-16">Show / Hide</TableHead>
                     <TableHead>Correct Answer</TableHead>
                     <TableHead>Your Answer</TableHead>
                     <TableHead>Difficulty</TableHead>
@@ -337,25 +341,27 @@ function ResultContent() {
                     const isRevealed = revealedWords.has(index)
                     return (
                       <TableRow key={`word-${index}`}>
-                        {/* Correct Answer with eye toggle */}
+                        {/* Show/Hide Toggle - Ghost icon-only button per design system */}
+                        <TableCell className="w-16">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => handleToggleReveal(index)}
+                            aria-label={isRevealed ? "Hide word" : "Show word"}
+                            aria-pressed={isRevealed}
+                          >
+                            {isRevealed ? (
+                              <EyeOffIcon />
+                            ) : (
+                              <EyeIcon />
+                            )}
+                          </Button>
+                        </TableCell>
+                        {/* Correct Answer - the word or masked dots */}
                         <TableCell>
-                          <div className="flex items-center gap-2.5">
-                            <span className="text-sm text-foreground">
-                              {isRevealed ? word.word : "••••••••"}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleToggleReveal(index)}
-                              className="size-4 flex items-center justify-center hover:opacity-70 transition-opacity"
-                              aria-label={isRevealed ? "Hide word" : "Reveal word"}
-                            >
-                              {isRevealed ? (
-                                <EyeOffIcon className="size-4 text-foreground" />
-                              ) : (
-                                <EyeIcon className="size-4 text-foreground" />
-                              )}
-                            </button>
-                          </div>
+                          <span className="text-sm text-foreground">
+                            {isRevealed ? word.word : "••••••••"}
+                          </span>
                         </TableCell>
                         {/* Your Answer */}
                         <TableCell>
