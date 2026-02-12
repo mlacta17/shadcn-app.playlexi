@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
 
 import { Logo } from "@/components/ui/logo"
 import { TopNavbar } from "@/components/ui/top-navbar"
@@ -21,6 +20,7 @@ import { sanitizeUsername, USERNAME_MAX_LENGTH } from "@/lib/username-utils"
 import { CheckIcon } from "@/lib/icons"
 import { AVATARS, getAvatarById } from "@/lib/avatar-utils"
 import { AvatarOption, AvatarPreview } from "@/components/ui/avatar-selector"
+import { showErrorToast } from "@/lib/toast-utils"
 
 // =============================================================================
 // CONSTANTS
@@ -75,8 +75,6 @@ interface PlacementResult {
  * @see Figma node 2760:35902 (Step 1)
  */
 export default function ProfilePage() {
-  const router = useRouter()
-
   // ---------------------------------------------------------------------------
   // Step State
   // ---------------------------------------------------------------------------
@@ -114,7 +112,7 @@ export default function ProfilePage() {
 
   const handleClose = () => {
     // Return to home (will need to go through onboarding again)
-    router.push("/")
+    window.location.href = "/"
   }
 
   const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -183,15 +181,25 @@ export default function ProfilePage() {
       })
 
       if (!response.ok) {
-        const data = await response.json() as { error?: string }
-        throw new Error(data.error || "Failed to create profile")
+        // Try to parse error message from API response
+        let errorMessage = "Failed to create profile"
+        try {
+          const data = await response.json() as { error?: string }
+          errorMessage = data.error || errorMessage
+        } catch {
+          // Response wasn't JSON — use status text
+          errorMessage = `Server error (${response.status})`
+        }
+        throw new Error(errorMessage)
       }
 
-      // Navigate to dashboard after profile completion
-      router.push("/")
+      // Full page navigation to dashboard — ensures clean load with new user data
+      // and avoids stale client-side router cache from the (focused) layout group
+      window.location.href = "/"
     } catch (error) {
-      console.error("[ProfilePage] Error creating user:", error)
-      // TODO: Show error toast to user
+      const message = error instanceof Error ? error.message : "Something went wrong"
+      console.error("[ProfilePage] Error creating user:", message)
+      showErrorToast("Couldn't create profile", { description: message })
       setIsSubmitting(false)
     }
   }
