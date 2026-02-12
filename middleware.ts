@@ -28,8 +28,12 @@
  *
  * ## Session Detection
  *
- * Better Auth stores the session token in a cookie named `better-auth.session_token`.
- * We check for this cookie's presence as a quick auth check.
+ * Better Auth stores the session token in a cookie. The cookie name depends
+ * on the environment:
+ * - Development: `better-auth.session_token`
+ * - Production:  `__Secure-better-auth.session_token` (useSecureCookies adds prefix)
+ *
+ * We check for both cookie names as a quick auth check.
  *
  * Note: This is a lightweight check. Full session validation happens server-side
  * in API routes and server components.
@@ -56,6 +60,10 @@ const PUBLIC_ROUTES = [
   "/_next/",
   "/favicon.ico",
   "/showcase",
+  // OAuth callback — this page handles its own session check and redirects
+  // to /login if no session exists. Must be public so the middleware doesn't
+  // block the first request after OAuth (before the cookie is fully available).
+  "/auth/callback",
   // Pre-auth onboarding (before OAuth)
   "/onboarding/tutorial",
   "/onboarding/placement",
@@ -75,8 +83,16 @@ const ONBOARDING_ROUTES = [
 
 /**
  * The session cookie name used by Better Auth.
+ *
+ * When useSecureCookies is enabled (production), Better Auth prefixes all
+ * cookie names with "__Secure-". We must check for both names so the
+ * middleware works correctly in all environments.
+ *
+ * @see lib/auth/index.ts — useSecureCookies is true when NODE_ENV === "production"
+ * @see https://www.better-auth.com/docs/concepts/cookies
  */
 const SESSION_COOKIE_NAME = "better-auth.session_token"
+const SECURE_SESSION_COOKIE_NAME = "__Secure-better-auth.session_token"
 
 // =============================================================================
 // MIDDLEWARE
@@ -86,7 +102,10 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Check if user has a session cookie (lightweight auth check)
-  const sessionToken = request.cookies.get(SESSION_COOKIE_NAME)
+  // Better Auth uses "__Secure-" prefix in production, so check both names
+  const sessionToken =
+    request.cookies.get(SECURE_SESSION_COOKIE_NAME) ||
+    request.cookies.get(SESSION_COOKIE_NAME)
   const isAuthenticated = !!sessionToken
 
   // ---------------------------
