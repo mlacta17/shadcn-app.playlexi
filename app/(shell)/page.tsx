@@ -40,8 +40,8 @@ export default function DashboardPage() {
         </p>
       </section>
 
-      {/* Game Mode Carousel */}
-      <section className="flex-1 px-4 pb-8">
+      {/* Game Mode Carousel — no horizontal padding so cards bleed to viewport edges */}
+      <section className="flex-1 pb-8">
         <GameModeCarousel modes={GAME_MODES} />
       </section>
     </main>

@@ -1,9 +1,15 @@
 /**
  * Game Mode Carousel — PlayLexi
  *
- * An interactive card stack carousel for browsing game modes on the dashboard.
- * The focused card is centered and vivid; background cards fan out behind it
- * with a white frost overlay (no blur), matching the Figma design.
+ * A full-bleed card stack carousel for browsing game modes on the dashboard.
+ * The focused card is centered and vivid; background cards fan out to the
+ * viewport edges with a white frost overlay, matching the Figma design.
+ *
+ * ## Overlapping Full-Bleed Layout
+ * Cards overlap each other in a stacked fan, spreading across the viewport.
+ * Each step offsets ~250px (capped), giving ~112px overlap between adjacent
+ * cards. The ±2 cards peek from the screen edges. On smaller screens the
+ * offset scales down proportionally (20% of viewport width).
  *
  * ## Interaction
  * - **Arrow buttons**: Navigate left/right (loops infinitely)
@@ -13,20 +19,20 @@
  *
  * ## Visual Stack (Figma node 3048:43528)
  * ```
- *        ┌─────┐
- *   ┌────┤Focus├────┐       ← Centered, vivid, z-20
- *   │    └─────┘    │
- *  ┌┤  frost 56%   ├┐      ← ±1 cards, rotated +4°, white/56 overlay
- *  │└──────────────┘│
- *  └────────────────┘       ← ±2 cards, rotated -4°, white/56 overlay
- *
- *        ← →                ← Arrow buttons (always enabled, loops)
+ * ┌─viewport──────────────────────────────viewport─┐
+ * │┌──┐ ┌───┐  ┌────────┐  ┌───┐ ┌──┐            │
+ * ││±2├─┤ ±1├──┤ Focus  ├──┤±1 ├─┤±2│            │
+ * ││  │ │   │  │        │  │   │ │  │            │
+ * │└──┘ └───┘  └────────┘  └───┘ └──┘            │
+ * └───────────────────────────────────────────────┘
+ *                   ← →
  * ```
+ * Cards overlap ~112px. Focused card has highest z-index.
  *
  * ## Circular Layout
- * Cards wrap around infinitely. When navigating past the last card,
- * it loops to the first. Background cards rearrange using the
- * shortest circular path so the stack always looks balanced.
+ * Cards wrap around infinitely. Background cards rearrange using the
+ * shortest circular path. Cards that wrap teleport instantly (duration: 0)
+ * to avoid visible cross-screen animation artifacts.
  *
  * @see lib/game-modes.ts for game mode configuration
  * @see components/game/game-mode-card.tsx for individual card rendering
@@ -50,17 +56,52 @@ import type { GameModeConfig } from "@/lib/game-modes"
 /** Card width in pixels (Figma: 362px) */
 const CARD_WIDTH = 362
 
-/** Horizontal distance between stacked cards (Figma: ~280px between centers) */
-const CARD_OFFSET = 280
-
-/** Height of the card stack area (matches card aspect ratio at 362px width) */
+/** Card height in pixels (Figma: 446px) */
 const CARD_HEIGHT = 446
+
+/**
+ * Card offset scales with viewport but caps to guarantee overlap.
+ *
+ * In Figma (1280px), ±1 cards are ~258px from center → ~20% of viewport.
+ * Cards are 362px wide, so 250px offset → 112px overlap (~31% of card).
+ *
+ * Without a cap, wider screens (1920px+) push cards apart until they
+ * no longer overlap, breaking the stacked look. The cap ensures cards
+ * always overlap by at least 112px on any screen size.
+ */
+const OFFSET_RATIO = 0.20
+const MAX_OFFSET = 250
 
 /** Spring animation config for smooth card transitions */
 const SPRING = { type: "spring" as const, stiffness: 300, damping: 30 }
 
 /** Instant transition for cards that wrap around the circular layout */
 const INSTANT = { duration: 0 }
+
+// =============================================================================
+// HOOKS
+// =============================================================================
+
+/**
+ * Track viewport width for responsive card spread.
+ *
+ * Returns a pixel offset per step that:
+ * - Scales proportionally on small/medium screens (cards stay visible)
+ * - Caps at MAX_OFFSET on large screens (cards always overlap)
+ */
+function useCardOffset(): number {
+  const [offset, setOffset] = React.useState(MAX_OFFSET)
+
+  React.useEffect(() => {
+    const update = () =>
+      setOffset(Math.min(window.innerWidth * OFFSET_RATIO, MAX_OFFSET))
+    update()
+    window.addEventListener("resize", update)
+    return () => window.removeEventListener("resize", update)
+  }, [])
+
+  return offset
+}
 
 // =============================================================================
 // HELPERS
@@ -109,13 +150,15 @@ interface GameModeCarouselProps {
 }
 
 /**
- * Card stack carousel with centered focus card and frosted background cards.
+ * Full-bleed card stack carousel with centered focus card and
+ * frosted background cards that spread to the viewport edges.
  * Uses Motion for spring-based animations. Loops infinitely.
  */
 function GameModeCarousel({ modes }: GameModeCarouselProps) {
   const [activeIndex, setActiveIndex] = React.useState(0)
   const prevActiveRef = React.useRef(activeIndex)
   const touchStartX = React.useRef(0)
+  const cardOffset = useCardOffset()
 
   // Track previous active index to detect wrap-around transitions
   React.useEffect(() => {
@@ -166,9 +209,9 @@ function GameModeCarousel({ modes }: GameModeCarouselProps) {
       aria-roledescription="carousel"
       aria-label="Game modes"
     >
-      {/* Card stack area */}
+      {/* Card stack area — NO overflow-hidden, cards bleed to viewport edges */}
       <div
-        className="relative w-full overflow-hidden"
+        className="relative w-full"
         style={{ height: CARD_HEIGHT }}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
@@ -194,9 +237,8 @@ function GameModeCarousel({ modes }: GameModeCarouselProps) {
               className="absolute left-1/2 top-0"
               style={{ width: CARD_WIDTH }}
               animate={{
-                x: -CARD_WIDTH / 2 + offset * CARD_OFFSET,
+                x: -CARD_WIDTH / 2 + offset * cardOffset,
                 rotate: getRotation(offset),
-                scale: isFocused ? 1 : 0.88,
                 zIndex: isFocused ? 20 : 10 - absOffset,
               }}
               transition={didWrap ? INSTANT : SPRING}
