@@ -11,8 +11,9 @@
  * 4. Multiplayer - Head-to-head mode (coming soon)
  *
  * ## Layout
- * Currently a horizontal scrollable preview. This will be replaced
- * with an animated carousel in the next iteration.
+ * - Mobile (< md): Horizontal scroll with snap — each card at ~75vw
+ *   width, showing 1 card + a peek of the next
+ * - md (768px+): 2-column centered grid (cards ≈360px — Figma size)
  *
  * @see lib/game-modes.ts for game mode configuration
  * @see components/game/game-mode-card.tsx for card component
@@ -35,13 +36,13 @@ export default function DashboardPage() {
         </p>
       </section>
 
-      {/* Game Mode Cards — Preview layout (will become carousel) */}
-      <section className="flex flex-1 flex-col items-center px-4 pb-8">
-        <div className="grid w-full max-w-5xl grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+      {/* Game Mode Cards — Horizontal scroll on mobile, grid on md+ */}
+      <section className="pb-8">
+        <div className="flex gap-4 overflow-x-auto px-4 snap-x snap-mandatory scroll-pl-4 no-scrollbar md:grid md:grid-cols-2 md:overflow-visible md:snap-none md:mx-auto md:max-w-3xl">
           {GAME_MODES.map((mode) => (
             <div
               key={mode.id}
-              className="aspect-[3/4]"
+              className="aspect-[362/446] w-[75vw] max-w-[362px] shrink-0 snap-start md:w-auto md:max-w-none md:shrink"
             >
               <GameModeCard mode={mode} />
             </div>

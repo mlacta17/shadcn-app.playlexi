@@ -76,4 +76,12 @@ export const GAME_MODES: GameModeConfig[] = [
     accentColor: "#00A653",
     badge: "Coming soon",
   },
+  {
+    id: "phonetic-calibration",
+    title: "Phonetic Calibration",
+    description:
+      "Want to make the game more accurate for you? Try calibrating the game to the way that you say letters!",
+    illustration: "/illustrations/game-cards/endless.png",
+    accentColor: "#0052D6",
+  },
 ]

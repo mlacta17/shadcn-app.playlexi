@@ -469,6 +469,15 @@ button.destructive:focus-visible,
     outline: none !important;
   }
 
+  /* Hide scrollbar while preserving scroll functionality */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
   /*
    * Focus ring for container components (InputGroup, ComboboxChips)
    * Use when a container div wraps focusable children.

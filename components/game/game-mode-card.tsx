@@ -99,7 +99,7 @@ function GameModeCard({ mode, className }: GameModeCardProps) {
         <h3 className="truncate text-xl font-semibold leading-7">
           {title}
         </h3>
-        <p className="text-sm leading-5">
+        <p className="line-clamp-3 text-sm leading-5">
           {description}
         </p>
       </div>
