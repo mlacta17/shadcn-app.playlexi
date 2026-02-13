@@ -1,0 +1,38 @@
+name: Generate Daily Spell Puzzles
+
+on:
+  schedule:
+    # Run daily at 00:05 UTC
+    - cron: "5 0 * * *"
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Number of days to generate (default: 7, max: 30)"
+        required: false
+        default: "7"
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate puzzles
+        run: |
+          DAYS="${{ github.event.inputs.days || '7' }}"
+          echo "Generating $DAYS days of puzzles..."
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.PLAYLEXI_URL }}/api/admin/generate-puzzles" \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_CLEANUP_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"days\": $DAYS}")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            echo "::error::Puzzle generation failed with status $HTTP_CODE"
+            exit 1
+          fi

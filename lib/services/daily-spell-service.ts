@@ -28,6 +28,7 @@ import {
   challengeReferrals,
   words,
 } from "@/db/schema"
+import { generatePuzzleForDate } from "./puzzle-generator"
 
 // =============================================================================
 // TYPES
@@ -157,14 +158,30 @@ export async function getTodayPuzzle(
   const today = getTodayDate()
 
   // Get today's puzzle
-  const puzzle = await orm
+  let puzzle = await orm
     .select()
     .from(dailySpellPuzzles)
     .where(eq(dailySpellPuzzles.puzzleDate, today))
     .get()
 
   if (!puzzle) {
-    console.warn("[DailySpell] No puzzle found for today:", today)
+    // On-demand fallback: generate a puzzle so the game never breaks
+    console.warn("[DailySpell] No puzzle found for today:", today, "— generating on-demand")
+    try {
+      await generatePuzzleForDate(db, today)
+    } catch (error) {
+      console.error("[DailySpell] On-demand generation failed:", error)
+    }
+    // Re-query (handles both our generation and concurrent creation)
+    puzzle = await orm
+      .select()
+      .from(dailySpellPuzzles)
+      .where(eq(dailySpellPuzzles.puzzleDate, today))
+      .get()
+  }
+
+  if (!puzzle) {
+    console.error("[DailySpell] No puzzle for today even after fallback:", today)
     return null
   }
 
