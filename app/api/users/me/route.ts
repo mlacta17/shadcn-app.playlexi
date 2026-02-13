@@ -30,20 +30,11 @@ export async function GET() {
     // Require authentication
     const { user, db } = await requireAuth()
 
-    console.log("[API /users/me] Auth user ID:", user.id)
-    console.log("[API /users/me] Auth user email:", user.email)
-
     // Get PlayLexi user profile
     const profile = await getUserById(db, user.id)
 
-    console.log("[API /users/me] Profile found:", !!profile)
-    if (profile) {
-      console.log("[API /users/me] Profile username:", profile.username)
-    }
-
     if (!profile) {
       // Special case: authenticated but no profile yet (new user)
-      console.log("[API /users/me] No profile found for user ID:", user.id)
       throw new AppError(
         "Profile not found",
         ErrorCode.NOT_FOUND,

@@ -103,10 +103,6 @@ export async function POST(
     // This catches the case where user logged in but didn't complete onboarding
     const userStatus = await getUserStatus(db, user.id)
     if (!userStatus.exists) {
-      console.error("[FinishGame] User has no PlayLexi profile:", {
-        authUserId: user.id,
-        authEmail: user.email,
-      })
       throw Errors.validation(
         "Profile incomplete. Please complete onboarding first.",
         { needsProfile: true, redirectTo: "/onboarding/profile" }
@@ -160,17 +156,13 @@ export async function POST(
         heartsRemaining: body.heartsRemaining,
       })
     } catch (finalizeError) {
-      // Log detailed error for debugging database issues
+      // Log error without PII for debugging database issues
       console.error("[FinishGame] finalizeGame failed:", {
         gameId,
-        userId: user.id,
         roundCount: body.rounds.length,
-        wordIds: body.rounds.map(r => r.wordId),
-        error: finalizeError instanceof Error ? {
-          name: finalizeError.name,
-          message: finalizeError.message,
-          stack: finalizeError.stack,
-        } : String(finalizeError),
+        error: finalizeError instanceof Error
+          ? finalizeError.message
+          : String(finalizeError),
       })
       throw finalizeError
     }

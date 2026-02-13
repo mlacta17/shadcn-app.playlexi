@@ -210,7 +210,6 @@ export async function GET(
         // R2 binding exists but file not found - try remote fallback for local dev
         const remoteResult = await fetchFromRemoteR2(key)
         if (!remoteResult) {
-          console.log(`[Assets API] Not found: ${key}`)
           return new NextResponse("Not found", { status: 404 })
         }
         body = remoteResult.body

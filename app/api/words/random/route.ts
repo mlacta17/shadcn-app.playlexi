@@ -149,12 +149,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<ApiRespons
       throw Errors.invalidInput("tier", "Must be 1-7", [1, 2, 3, 4, 5, 6, 7])
     }
 
-    // Debug: Log incoming request
-    console.log(
-      `[API] /api/words/random - tier=${tier}, excludeIds=${excludeIds.length}, ` +
-      `lastWordId=${lastWordId ? "set" : "none"}, adaptiveMixing=${enableAdaptiveMixing}`
-    )
-
     // Get D1 database binding from Cloudflare context via OpenNext
     // This works in both production AND local development thanks to
     // initOpenNextCloudflareForDev() in next.config.ts
@@ -177,9 +171,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<ApiRespons
     if (!word) {
       throw Errors.notFound("Word", `tier ${tier}`)
     }
-
-    // Debug: Log returned word
-    console.log(`[API] Returning word: "${word.word}" (id=${word.id}, tier=${word.tier})`)
 
     return NextResponse.json({
       success: true,

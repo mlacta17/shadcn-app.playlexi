@@ -62,7 +62,6 @@ export async function POST(request: Request) {
     // Games require user_ranks records which are created during profile completion
     const userStatus = await getUserStatus(db, user.id)
     if (!userStatus.exists) {
-      console.warn("[CreateGame] User has no PlayLexi profile:", user.id)
       throw Errors.validation(
         "Profile incomplete. Please complete onboarding first.",
         { needsProfile: true, redirectTo: "/onboarding/profile" }
