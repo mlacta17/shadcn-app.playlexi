@@ -37,7 +37,7 @@
 
 | Layer | Technology | Rationale |
 |-------|------------|-----------|
-| **Framework** | Next.js 14+ (App Router) | Server components, API routes, built-in optimization |
+| **Framework** | Next.js 16 (App Router) | Server components, API routes, built-in optimization |
 | **Language** | TypeScript | Type safety, better DX, catch errors early |
 | **Styling** | Tailwind CSS + CSS Variables | Already in design system, utility-first, themeable |
 | **UI Components** | shadcn/ui | Already in project, accessible, customizable |

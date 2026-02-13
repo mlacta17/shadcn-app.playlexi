@@ -310,7 +310,7 @@ Add your Nucleo license key to `.env`:
 ```
 NUCLEO_LICENSE_KEY=your-license-key
 ```
-For deployment, add the same variable to your hosting provider (Vercel/Netlify/etc.).
+For deployment, add the same variable to your CI environment (GitHub Actions `NUCLEO_LICENSE_KEY` secret).
 
 ## Canvas-Based Components
 

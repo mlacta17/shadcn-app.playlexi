@@ -1,6 +1,6 @@
 # PlayLexi Setup Guide
 
-> **Last Updated:** January 17, 2026
+> **Last Updated:** February 13, 2026
 
 This guide walks you through setting up PlayLexi for local development, testing, and production deployment.
 
@@ -72,7 +72,13 @@ npm install
 
 ### 2. Create Environment Files
 
-Create `.env.local` for Next.js:
+Copy `.env.example` to `.env.local` and fill in your values:
+
+```bash
+cp .env.example .env.local
+```
+
+Key variables for local development:
 
 ```bash
 # .env.local
@@ -82,11 +88,18 @@ GOOGLE_CLOUD_PROJECT_ID=your-project-id
 GOOGLE_CLOUD_CLIENT_EMAIL=your-service-account@project.iam.gserviceaccount.com
 GOOGLE_CLOUD_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 
-# Merriam-Webster Dictionary API
-MERRIAM_WEBSTER_API_KEY=your-api-key
+# Merriam-Webster Dictionary API (two separate keys)
+MERRIAM_WEBSTER_LEARNERS_KEY=your-learners-api-key
+MERRIAM_WEBSTER_COLLEGIATE_KEY=your-collegiate-api-key
 
-# Speech server URL (local development)
-NEXT_PUBLIC_SPEECH_SERVER_URL=ws://localhost:3002
+# Google OAuth (for authentication)
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-your-client-secret
+
+# Better Auth
+BETTER_AUTH_SECRET=your-random-secret-at-least-32-characters
+BETTER_AUTH_URL=http://localhost:3000
+NEXT_PUBLIC_BETTER_AUTH_URL=http://localhost:3000
 ```
 
 ### 3. Setup Cloudflare D1 Database
@@ -215,7 +228,12 @@ describe("normalizeAnswer", () => {
 
 | Module | Tests | Coverage |
 |--------|-------|----------|
-| `lib/answer-validation.ts` | 43 tests | Core game logic |
+| `lib/answer-validation.ts` | 43 tests | Core game logic, phonetic mapping |
+| `lib/api/errors.ts` | 33 tests | Error handling, API responses |
+| `lib/phonetic-learning/learning-engine.ts` | 36 tests | Auto-learning inference |
+| `lib/services/user-service.ts` | 15 tests | User management |
+| `lib/services/game-service.ts` | 14 tests | Game sessions |
+| **Total** | **141 tests** | |
 
 ### What to Test
 
@@ -245,20 +263,35 @@ This will:
 
 ### 2. Configure Environment Variables
 
-Set these as secrets in Cloudflare:
+**Cloudflare Secrets** (set via Wrangler CLI — these are NOT in any file):
 
 ```bash
-# Set secrets via Wrangler
-npx wrangler secret put MERRIAM_WEBSTER_API_KEY
+# Authentication
+echo "YOUR_VALUE" | npx wrangler secret put BETTER_AUTH_SECRET
+echo "https://app.playlexi.com" | npx wrangler secret put BETTER_AUTH_URL
+echo "YOUR_VALUE" | npx wrangler secret put GOOGLE_CLIENT_ID
+echo "YOUR_VALUE" | npx wrangler secret put GOOGLE_CLIENT_SECRET
+
+# Admin API (for cron jobs and admin endpoints)
+echo "YOUR_VALUE" | npx wrangler secret put ADMIN_CLEANUP_SECRET
 ```
 
-Or in Cloudflare Dashboard → Workers → Your Worker → Settings → Variables.
+| Secret | Purpose |
+|--------|---------|
+| `BETTER_AUTH_SECRET` | Signs session tokens (generate with `openssl rand -base64 32`) |
+| `BETTER_AUTH_URL` | Production URL (`https://app.playlexi.com`) |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
+| `ADMIN_CLEANUP_SECRET` | Bearer token for admin API endpoints |
+
+**Build-time variables** (in `.env.production`, checked into git):
 
 | Variable | Value |
 |----------|-------|
-| `MERRIAM_WEBSTER_API_KEY` | Your MW API key |
+| `NEXT_PUBLIC_BETTER_AUTH_URL` | `https://app.playlexi.com` |
+| `NEXT_PUBLIC_SPEECH_SERVER_URL` | `wss://speech.playlexi.com` |
 
-**Note:** `NEXT_PUBLIC_SPEECH_SERVER_URL` is set in `.env.production` and embedded at build time.
+**Note:** Merriam-Webster API keys are only used at seed time (`npm run db:seed`), not at runtime. They go in `.env.local` for local development, not in Cloudflare.
 
 ### 3. D1 and R2 Bindings
 
@@ -394,9 +427,14 @@ PlayLexi uses GitHub Actions for continuous integration. The pipeline runs autom
 | **Build** | Catches TypeScript errors, missing imports, route conflicts |
 | **Migration Check** | Warns if database migrations need to be applied |
 
-### Workflow File
+### Workflow Files
 
-The CI configuration is in `.github/workflows/ci.yml`.
+| Workflow | File | Trigger |
+|----------|------|---------|
+| **CI** | `.github/workflows/ci.yml` | Every push and PR to main |
+| **Daily Puzzle Generation** | `.github/workflows/generate-puzzles.yml` | Daily at 00:05 UTC + manual trigger |
+
+The puzzle generation workflow calls `POST /api/admin/generate-puzzles` to pre-generate 7 days of daily spell puzzles. Requires `PLAYLEXI_URL` and `ADMIN_CLEANUP_SECRET` GitHub secrets.
 
 ### How It Works
 
@@ -442,14 +480,19 @@ Without these secrets, the migration check is skipped (tests and build still run
 | `npm run deploy` | Build and deploy to Cloudflare Workers |
 | `npm run preview` | Preview production build locally |
 | `npm test` | Run tests in watch mode |
-| `npm run test:run` | Run tests once |
+| `npm run test:run` | Run tests once (141 tests) |
 | `npm run test:coverage` | Run tests with coverage report |
 | `npm run db:generate` | Generate Drizzle migrations |
 | `npm run db:migrate` | Apply migrations to local D1 |
 | `npm run db:migrate:prod` | Apply migrations to production D1 |
 | `npm run db:seed` | Seed database with words (local) |
 | `npm run db:seed:prod` | Seed database with words (production) |
+| `npm run db:seed:daily` | Generate daily spell puzzles (local, 7 days ahead) |
+| `npm run db:seed:daily:prod` | Generate daily spell puzzles (production) |
 | `npm run db:studio` | Open Drizzle Studio (database GUI) |
+| `npm run tts:generate` | Generate TTS audio for words (local) |
+| `npm run tts:generate:prod` | Generate TTS audio (production) |
+| `npm run daily:reset` | Reset today's daily spell results (local dev only) |
 
 ---
 

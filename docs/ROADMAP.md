@@ -382,8 +382,8 @@ The phonetic learning system integrates with the existing speech server architec
 │  PRODUCTION                                                      │
 │                                                                  │
 │  ┌─────────────┐    WebSocket     ┌──────────────────┐          │
-│  │  Vercel     │ ◄──────────────► │ speech.playlexi  │          │
-│  │  (Next.js)  │  wss://speech    │    .com          │          │
+│  │  Cloudflare │ ◄──────────────► │ speech.playlexi  │          │
+│  │  Workers    │  wss://speech    │    .com          │          │
 │  └─────────────┘   .playlexi.com  └────────┬─────────┘          │
 │        │                                   │                     │
 │        │                                   │ gRPC                │

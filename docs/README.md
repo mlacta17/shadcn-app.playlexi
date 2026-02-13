@@ -10,7 +10,7 @@
 |----------|---------|
 | **[ARCHITECTURE.md](ARCHITECTURE.md)** | Technical design, database schema, real-time architecture, voice recognition |
 | **[PRD.md](PRD.md)** | Product requirements, game mechanics, user flows, XP/ranking system |
-| **[ADR.md](ADR.md)** | Architecture Decision Records (ADR-001 to ADR-013) |
+| **[ADR.md](ADR.md)** | Architecture Decision Records (ADR-001 to ADR-015) |
 | **[SETUP.md](SETUP.md)** | Development setup, testing, deployment |
 
 ---
@@ -35,4 +35,4 @@
 
 ---
 
-*Last updated: January 20, 2026*
+*Last updated: February 13, 2026*
