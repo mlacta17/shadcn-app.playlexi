@@ -179,6 +179,12 @@ export interface UseDailySpellSessionReturn {
     /** Progress (e.g., "Round 2 of 5") */
     progressText: string
   }
+  /**
+   * Promise that resolves when result submission completes.
+   * Consumers should await this before navigating away to ensure
+   * the result is persisted and available for the result page.
+   */
+  submitResultPromise: React.RefObject<Promise<void> | null>
 }
 
 // =============================================================================
@@ -507,6 +513,7 @@ export function useDailySpellSession(
   // ---------------------------------------------------------------------------
 
   const hasSubmittedResultRef = React.useRef(false)
+  const submitResultPromiseRef = React.useRef<Promise<void> | null>(null)
 
   React.useEffect(() => {
     if (state.phase !== "complete" || state.alreadyPlayed) return
@@ -515,7 +522,9 @@ export function useDailySpellSession(
 
     hasSubmittedResultRef.current = true
 
-    // Submit results to API
+    // Submit results to API — store the promise so consumers
+    // can await it before navigating (prevents race condition
+    // where the result page loads before the POST completes).
     const submitResults = async () => {
       try {
         const wordResults = state.answers.map((answer) => ({
@@ -551,7 +560,7 @@ export function useDailySpellSession(
       }
     }
 
-    submitResults()
+    submitResultPromiseRef.current = submitResults()
   }, [state.phase, state.alreadyPlayed, state.puzzleId, state.answers, visitorId])
 
   // ---------------------------------------------------------------------------
@@ -597,5 +606,6 @@ export function useDailySpellSession(
       playDefinition,
     },
     computed,
+    submitResultPromise: submitResultPromiseRef,
   }
 }

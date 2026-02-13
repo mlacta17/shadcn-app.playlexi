@@ -55,7 +55,7 @@ export default function DailySpellGamePage() {
   // ---------------------------------------------------------------------------
   // Daily Spell Session State
   // ---------------------------------------------------------------------------
-  const { state: gameState, actions: gameActions, computed } = useDailySpellSession()
+  const { state: gameState, actions: gameActions, computed, submitResultPromise } = useDailySpellSession()
 
   // ---------------------------------------------------------------------------
   // Timer Hook
@@ -267,7 +267,6 @@ export default function DailySpellGamePage() {
   // Game End: Navigate to Streak Page
   // ---------------------------------------------------------------------------
   const hasHandledEndRef = React.useRef(false)
-  const navigationTimeoutRef = React.useRef<NodeJS.Timeout | null>(null)
   const computedRef = React.useRef(computed)
   const gameStateRef = React.useRef(gameState)
 
@@ -288,8 +287,19 @@ export default function DailySpellGamePage() {
     // Trigger phonetic learning analysis
     triggerLearning()
 
-    // Navigate to streak page after brief delay
-    navigationTimeoutRef.current = setTimeout(() => {
+    // Wait for result submission to complete before navigating.
+    // This prevents a race condition where the result page loads
+    // before the POST finishes, causing the word results table
+    // to be empty.
+    const navigateAfterSubmit = async () => {
+      // Wait for the submission POST to finish
+      if (submitResultPromise.current) {
+        await submitResultPromise.current
+      }
+
+      // Brief delay for feedback animation
+      await new Promise((resolve) => setTimeout(resolve, 800))
+
       const currentComputed = computedRef.current
       const currentState = gameStateRef.current
 
@@ -302,8 +312,10 @@ export default function DailySpellGamePage() {
       })
 
       router.push(`/game/daily/streak?${params.toString()}`)
-    }, 800)
-  }, [gameState.phase, triggerLearning, router])
+    }
+
+    navigateAfterSubmit()
+  }, [gameState.phase, triggerLearning, router, submitResultPromise])
 
   // Reset helper state when word changes
   React.useEffect(() => {
@@ -362,9 +374,6 @@ export default function DailySpellGamePage() {
   React.useEffect(() => {
     return () => {
       clearHelperTimeout()
-      if (navigationTimeoutRef.current) {
-        clearTimeout(navigationTimeoutRef.current)
-      }
     }
   }, [])
 

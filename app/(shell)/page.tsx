@@ -35,13 +35,13 @@ export default function DashboardPage() {
         </p>
       </section>
 
-      {/* Game Mode Cards — Horizontal scroll preview (will become carousel) */}
-      <section className="flex flex-1 flex-col px-6 pb-8">
-        <div className="mx-auto flex w-full max-w-sm flex-1 gap-4 overflow-x-auto pb-4 snap-x snap-mandatory sm:max-w-4xl sm:justify-center">
+      {/* Game Mode Cards — Preview layout (will become carousel) */}
+      <section className="flex flex-1 flex-col items-center px-4 pb-8">
+        <div className="grid w-full max-w-5xl grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
           {GAME_MODES.map((mode) => (
             <div
               key={mode.id}
-              className="h-[480px] w-[300px] shrink-0 snap-center sm:h-[520px] sm:w-[320px]"
+              className="aspect-[3/4]"
             >
               <GameModeCard mode={mode} />
             </div>
