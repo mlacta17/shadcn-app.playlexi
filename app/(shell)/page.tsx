@@ -2,25 +2,29 @@
  * Dashboard Page — PlayLexi
  *
  * The main home screen for authenticated users.
- * Shows game mode cards that users can browse and select.
+ * Shows game mode cards in an interactive carousel that users
+ * can browse with arrows, clicks, keyboard, or swipe.
  *
  * ## Card Order
  * 1. Daily Game - Primary retention/virality mechanic
  * 2. Endless - Core practice mode
  * 3. Blitz - Time-based challenge (coming soon)
  * 4. Multiplayer - Head-to-head mode (coming soon)
+ * 5. Phonetic Calibration - Voice accuracy tuning
  *
  * ## Layout
- * - Mobile (< md): Horizontal scroll with snap — each card at ~75vw
- *   width, showing 1 card + a peek of the next
- * - md (768px+): 2-column centered grid (cards ≈360px — Figma size)
+ * The carousel shows the focused card centered and sharp, with
+ * background cards fanned out, blurred, and frost-overlayed.
+ * Arrow buttons and swipe gestures navigate between cards.
  *
  * @see lib/game-modes.ts for game mode configuration
+ * @see components/game/game-mode-carousel.tsx for carousel component
  * @see components/game/game-mode-card.tsx for card component
+ * @see Figma node 3048:43528
  * @see PRD Section 2.3 — Existing User Flow
  */
 
-import { GameModeCard } from "@/components/game/game-mode-card"
+import { GameModeCarousel } from "@/components/game/game-mode-carousel"
 import { GAME_MODES } from "@/lib/game-modes"
 
 export default function DashboardPage() {
@@ -36,18 +40,9 @@ export default function DashboardPage() {
         </p>
       </section>
 
-      {/* Game Mode Cards — Horizontal scroll on mobile, grid on md+ */}
-      <section className="pb-8">
-        <div className="flex gap-4 overflow-x-auto px-4 snap-x snap-mandatory scroll-pl-4 no-scrollbar md:grid md:grid-cols-2 md:overflow-visible md:snap-none md:mx-auto md:max-w-3xl">
-          {GAME_MODES.map((mode) => (
-            <div
-              key={mode.id}
-              className="aspect-[362/446] w-[75vw] max-w-[362px] shrink-0 snap-start md:w-auto md:max-w-none md:shrink"
-            >
-              <GameModeCard mode={mode} />
-            </div>
-          ))}
-        </div>
+      {/* Game Mode Carousel */}
+      <section className="flex-1 px-4 pb-8">
+        <GameModeCarousel modes={GAME_MODES} />
       </section>
     </main>
   )
