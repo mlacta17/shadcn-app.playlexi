@@ -179,8 +179,19 @@ function executeD1Query(sql: string, isRemote: boolean): string {
   }
 }
 
+/** Maps TTS audio types to their database column names. */
+const TTS_COLUMN_MAP: Record<TtsAudioType, string> = {
+  intro: "intro_audio_url",
+  sentence: "sentence_audio_url",
+  definition: "definition_audio_url",
+}
+
 /**
  * Fetch words from the database.
+ *
+ * When --skip-existing is set, only fetches words that are missing at least
+ * one of the required audio types (respects --type filter). This keeps the
+ * progress counter accurate and the cost estimate honest.
  */
 function fetchWords(isRemote: boolean): WordRow[] {
   // Build SQL on single line to avoid escaping issues with wrangler
@@ -194,6 +205,17 @@ function fetchWords(isRemote: boolean): WordRow[] {
 
   if (specificWord) {
     conditions.push(`word = '${specificWord.replace(/'/g, "''")}'`)
+  }
+
+  // Filter at the DB level: only fetch words missing the audio types we need.
+  // Example: --skip-existing --type=sentence → WHERE sentence_audio_url IS NULL
+  // Example: --skip-existing (no --type)     → WHERE intro_audio_url IS NULL
+  //                                               OR sentence_audio_url IS NULL
+  //                                               OR definition_audio_url IS NULL
+  if (skipExisting) {
+    const types: TtsAudioType[] = typeFilter ? [typeFilter] : ["intro", "sentence", "definition"]
+    const nullChecks = types.map((t) => `${TTS_COLUMN_MAP[t]} IS NULL`)
+    conditions.push(`(${nullChecks.join(" OR ")})`)
   }
 
   if (conditions.length > 0) {
@@ -212,7 +234,14 @@ function fetchWords(isRemote: boolean): WordRow[] {
     const parsed = JSON.parse(output)
     // D1 output format: [{ results: [...], ... }]
     if (Array.isArray(parsed) && parsed[0]?.results) {
-      return parsed[0].results as WordRow[]
+      // Wrangler --json serializes SQL NULL as the string "null".
+      // Normalize nullable audio URL columns so skip-existing checks work.
+      return (parsed[0].results as WordRow[]).map((row) => ({
+        ...row,
+        intro_audio_url: row.intro_audio_url === "null" ? null : row.intro_audio_url,
+        sentence_audio_url: row.sentence_audio_url === "null" ? null : row.sentence_audio_url,
+        definition_audio_url: row.definition_audio_url === "null" ? null : row.definition_audio_url,
+      }))
     }
     return []
   } catch {
@@ -230,13 +259,7 @@ function updateWordTtsUrl(
   url: string,
   isRemote: boolean
 ): void {
-  const columnMap: Record<TtsAudioType, string> = {
-    intro: "intro_audio_url",
-    sentence: "sentence_audio_url",
-    definition: "definition_audio_url",
-  }
-
-  const column = columnMap[type]
+  const column = TTS_COLUMN_MAP[type]
   const escapedUrl = url.replace(/'/g, "''")
 
   const sql = `
@@ -279,13 +302,10 @@ async function generateForWord(
     success: false,
   }
 
-  // Check if already exists
-  const existingUrl =
-    type === "intro"
-      ? wordRow.intro_audio_url
-      : type === "sentence"
-        ? wordRow.sentence_audio_url
-        : wordRow.definition_audio_url
+  // Check if this specific audio type already exists (safety net — the SQL
+  // query already filters most of these out, but a word fetched because it's
+  // missing "intro" might still have "sentence" and "definition")
+  const existingUrl = wordRow[TTS_COLUMN_MAP[type] as keyof WordRow] as string | null
 
   if (skipExisting && existingUrl) {
     result.success = true

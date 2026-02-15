@@ -18,6 +18,8 @@
  *   --tier=N        Only seed words for tier N (1-7)
  *   --skip-audio    Skip downloading/uploading audio files
  *   --limit=N       Limit to N words per tier
+ *   --batch-size=N  Limit to N total words across all tiers (for MW API daily limit)
+ *   --skip-existing Skip words already in the database
  *
  * ## Prerequisites
  *
@@ -74,6 +76,9 @@ const limitArg = args.find((a) => a.startsWith("--limit="))
 const limitPerTier = limitArg ? parseInt(limitArg.split("=")[1], 10) : null
 
 const skipExisting = args.includes("--skip-existing")
+
+const batchSizeArg = args.find((a) => a.startsWith("--batch-size="))
+const batchSize = batchSizeArg ? parseInt(batchSizeArg.split("=")[1], 10) : null
 
 // Paths
 const SEED_FILE = path.join(__dirname, "..", "data", "seed-words.json")
@@ -299,6 +304,7 @@ async function main() {
   if (skipAudio) logWarning("Skipping audio download/upload")
   if (tierFilter) logInfo(`Filtering to tier ${tierFilter} only`)
   if (limitPerTier) logInfo(`Limiting to ${limitPerTier} words per tier`)
+  if (batchSize) logInfo(`Batch size: ${batchSize} total words (for MW API daily limit)`)
   if (skipExisting) logInfo("Skipping words already in database")
   logInfo(`R2 configured: ${isR2Configured() ? "yes" : "no (using placeholder URLs)"}`)
   console.log("")
@@ -329,11 +335,16 @@ async function main() {
   // Process each tier
   const results: SeedResult[] = []
   let skippedCount = 0
+  let totalProcessed = 0
+  let batchLimitReached = false
+
   const tiers = Object.entries(seedData.tiers)
     .filter(([tier]) => !tierFilter || parseInt(tier, 10) === tierFilter)
     .sort(([a], [b]) => parseInt(a, 10) - parseInt(b, 10))
 
   for (const [tierStr, tierData] of tiers) {
+    if (batchLimitReached) break
+
     const tier = parseInt(tierStr, 10)
     let words = limitPerTier ? tierData.words.slice(0, limitPerTier) : tierData.words
 
@@ -356,10 +367,18 @@ async function main() {
     log(`\n━━━ Tier ${tier}: ${tierData.name} (${words.length} new words) ━━━`, colors.blue)
 
     for (const word of words) {
+      // Stop if batch size limit reached
+      if (batchSize && totalProcessed >= batchSize) {
+        batchLimitReached = true
+        logWarning(`\nBatch limit reached (${batchSize} words). Run again with --skip-existing to continue.`)
+        break
+      }
+
       process.stdout.write(`  Processing "${word}"... `)
 
       const result = await processWord(word, tier, isRemote)
       results.push(result)
+      totalProcessed++
 
       if (result.success) {
         console.log(colors.green + "✓" + colors.reset + (result.hasAudio ? " (with audio)" : ""))
@@ -396,6 +415,9 @@ async function main() {
   }
 
   console.log("")
+  if (batchLimitReached) {
+    logWarning(`Batch limit reached. Run again with --skip-existing --batch-size=${batchSize} to process next batch.`)
+  }
   if (isDryRun) {
     logWarning("This was a dry run. Run without --dry-run to apply changes.")
   } else if (successful.length > 0) {

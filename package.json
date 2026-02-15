@@ -21,6 +21,8 @@
     "db:seed": "npx ts-node --project scripts/tsconfig.json scripts/seed-words.ts",
     "db:seed:prod": "npx ts-node --project scripts/tsconfig.json scripts/seed-words.ts --production",
     "db:seed:dry": "npx ts-node --project scripts/tsconfig.json scripts/seed-words.ts --dry-run",
+    "db:seed:batch": "npx ts-node --project scripts/tsconfig.json scripts/seed-words.ts --skip-existing --batch-size=900",
+    "db:seed:batch:prod": "npx ts-node --project scripts/tsconfig.json scripts/seed-words.ts --production --skip-existing --batch-size=900",
     "db:seed:daily": "npx ts-node --project scripts/tsconfig.json scripts/seed-daily-spell.ts",
     "db:seed:daily:prod": "npx ts-node --project scripts/tsconfig.json scripts/seed-daily-spell.ts --production",
     "db:seed:daily:dry": "npx ts-node --project scripts/tsconfig.json scripts/seed-daily-spell.ts --dry-run",
