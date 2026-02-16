@@ -60,7 +60,16 @@ function SignInDialog({ open, onOpenChange }: SignInDialogProps) {
             className="h-auto p-0 text-sm font-medium"
             onClick={() => {
               onOpenChange(false)
-              router.push("/login")
+              // New users who haven't seen the tutorial get it first,
+              // then land on /login for OAuth. Users who already completed
+              // the tutorial skip straight to OAuth.
+              const tutorialComplete =
+                localStorage.getItem("playlexi_tutorial_complete") === "true"
+              if (tutorialComplete) {
+                router.push("/login")
+              } else {
+                router.push("/onboarding/tutorial?returnTo=/login")
+              }
             }}
           >
             Sign up
