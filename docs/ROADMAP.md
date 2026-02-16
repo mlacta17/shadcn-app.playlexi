@@ -1,6 +1,6 @@
 # PlayLexi Technical Roadmap
 
-> **Last Updated:** January 18, 2026
+> **Last Updated:** February 15, 2026
 > **Status:** Active Development
 
 ---
@@ -234,7 +234,7 @@ Recognition event logging is now integrated into the game:
 - **Hooks created**:
   - `hooks/use-user-id.ts` - Anonymous device ID for pre-auth logging
   - `hooks/use-phonetic-learning.ts` - Fire-and-forget logging integration
-- **Game integration**: `app/game/endless/page.tsx` now logs all voice answers
+- **Game integration**: `app/(focused)/game/endless/page.tsx` now logs all voice answers
 - **Learning trigger**: `triggerLearning()` called when game ends
 
 What gets logged:
@@ -338,7 +338,7 @@ hooks/
 ├── use-phonetic-learning.ts  # Learning integration hook ✅
 
 app/
-├── game/endless/page.tsx     # Integrated with phonetic learning ✅
+├── (focused)/game/endless/page.tsx     # Integrated with phonetic learning ✅
 
 migrations/
 ├── 0001_add_phonetic_learning.sql  # Database tables ✅
@@ -349,7 +349,7 @@ migrations/
 #### Integration Points
 
 1. **answer-validation.ts** - Merge user mappings with global defaults
-2. **app/game/endless/page.tsx** - Logs recognition events during feedback phase
+2. **app/(focused)/game/endless/page.tsx** - Logs recognition events during feedback phase
 3. **hooks/use-phonetic-learning.ts** - Hook that manages logging and learning triggers
 4. **API routes** - Endpoints for reading/writing phonetic data:
    - `POST /api/phonetic-learning/log` - Log recognition events

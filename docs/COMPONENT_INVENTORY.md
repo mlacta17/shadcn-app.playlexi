@@ -1,7 +1,7 @@
 # PlayLexi — Component Inventory
 
-> **Version:** 1.2
-> **Last Updated:** January 17, 2026
+> **Version:** 1.3
+> **Last Updated:** February 15, 2026
 > **Purpose:** Track all UI components and hooks needed for PlayLexi, their design status, and implementation status.
 
 ---
@@ -222,10 +222,10 @@ Needed for a complete single-player experience:
 1. ~~RoundIndicator~~ ✗ Removed (just inline text, see Architecture Decision #4)
 2. ~~CorrectAnswerFeedback~~ ✓ Done (now `GameFeedbackOverlay`)
 3. ~~WrongAnswerFeedback~~ ✓ Done (now `GameFeedbackOverlay`)
-4. TutorialCard
-5. ~~PlacementGameIntro~~ ✗ Removed (tutorial steps 3-4 explain placement + hearts, no separate intro needed per PRD)
+4. ~~TutorialCard~~ ✗ Not needed (see Architecture Decision #5 — use Card + content)
+5. ~~PlacementGameIntro~~ ✗ Removed (placement not part of current onboarding — reserved for ranked/multiplayer)
 6. ~~RankReveal~~ ✗ Removed (it's a page, not a component — see `/onboarding/rank-result/page.tsx`)
-7. ProfileCompletionForm
+7. ~~ProfileCompletionForm~~ ✓ Done (implemented as page at `/onboarding/profile/page.tsx`)
 
 ### P2 — Multiplayer
 

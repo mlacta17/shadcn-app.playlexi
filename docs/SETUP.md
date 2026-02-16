@@ -413,6 +413,32 @@ For production:
 For development:
 - The app falls back to browser Speech Synthesis when audio files are unavailable
 
+### Cookie issues / OAuth login loop
+
+Better Auth prefixes cookies differently in dev vs production:
+- Dev: `better-auth.session_token`
+- Production (`useSecureCookies: true`): `__Secure-better-auth.session_token`
+
+If users can sign in but immediately get redirected back to login, the middleware is likely checking the wrong cookie name. See `middleware.ts` — it must check for BOTH names.
+
+### SQLite schema drift after migrations
+
+SQLite cannot `ALTER COLUMN` — only `ADD COLUMN` and `DROP COLUMN` (with limitations). If a migration intended to change a column constraint (e.g., remove `NOT NULL`), verify the production schema actually changed:
+
+```bash
+# Check actual production schema
+npx wrangler d1 execute playlexi-db --remote --command="PRAGMA table_info(users)"
+
+# Check which migrations have been applied
+npx wrangler d1 execute playlexi-db --remote --command="SELECT * FROM d1_migrations"
+```
+
+### Cloudflare bot protection blocking automated requests
+
+Cloudflare's bot protection on custom domains (e.g., `app.playlexi.com`) blocks requests from GitHub Actions, cron jobs, and similar automated sources (returns 403).
+
+**Workaround**: Use the `workers.dev` URL instead (e.g., `playlexi.lactao-maria04.workers.dev`) for any automated API calls. The workers.dev domain does not have bot protection.
+
 ---
 
 ## CI/CD Pipeline

@@ -1,8 +1,8 @@
 # PlayLexi — Technical Architecture
 
-> **Version:** 1.8
-> **Last Updated:** January 17, 2026
-> **Status:** Final Draft
+> **Version:** 2.0
+> **Last Updated:** February 15, 2026
+> **Status:** Living Document
 
 ---
 
@@ -136,7 +136,7 @@ PlayLexi uses a **hybrid cloud architecture** with Cloudflare as the primary pla
 **Technical Limitation:**
 Cloudflare Workers cannot make outbound gRPC calls, which Google Speech-to-Text requires for real-time streaming. This necessitates a separate WebSocket server.
 
-**Speech Server Scaling Strategy (Decision: January 2025):**
+**Speech Server Scaling Strategy (Decision: January 2026):**
 
 | Phase | Scale | Platform | Rationale |
 |-------|-------|----------|-----------|
@@ -205,23 +205,37 @@ The app uses **two route groups** based on navigation pattern, not feature domai
 ```
 playlexi/
 ├── app/                          # Next.js App Router
-│   ├── (shell)/                  # Full navigation shell (requires auth)
+│   ├── (shell)/                  # Full navigation shell (public + auth)
 │   │   ├── layout.tsx            # Renders ShellNavbar
-│   │   ├── shell-navbar.tsx      # Session-aware navbar component
-│   │   ├── page.tsx              # Dashboard (/)
+│   │   ├── shell-navbar.tsx      # Session-aware navbar (shows Sign Up for anon)
+│   │   ├── page.tsx              # Dashboard (/) — PUBLIC, game mode carousel
 │   │   └── leaderboard/
 │   │       └── page.tsx
 │   │
-│   ├── (focused)/                # Focused experiences (requires auth)
+│   ├── (focused)/                # Focused experiences (mixed auth)
 │   │   ├── layout.tsx            # Minimal — pages own their TopNavbar
+│   │   ├── auth/callback/
+│   │   │   └── page.tsx          # Post-OAuth routing (public)
 │   │   ├── game/
+│   │   │   ├── daily/            # Daily Spell — PUBLIC (anonymous play)
+│   │   │   │   ├── page.tsx      # Daily game (5 words, voice only)
+│   │   │   │   ├── streak/
+│   │   │   │   │   └── page.tsx  # Streak display after game
+│   │   │   │   └── result/
+│   │   │   │       └── page.tsx  # Daily results + sharing
 │   │   │   ├── endless/
-│   │   │   │   └── page.tsx      # Endless mode gameplay
+│   │   │   │   └── page.tsx      # Endless mode (requires auth)
 │   │   │   └── result/
-│   │   │       └── page.tsx      # Game results screen
+│   │   │       └── page.tsx      # Endless results screen
 │   │   └── onboarding/
-│   │       └── rank-result/
-│   │           └── page.tsx      # Post-placement rank display
+│   │       ├── tutorial/
+│   │       │   └── page.tsx      # 4-step tutorial (public)
+│   │       ├── placement/
+│   │       │   └── page.tsx      # Placement test (public, reserved for future)
+│   │       ├── rank-result/
+│   │       │   └── page.tsx      # Rank display (public, reserved for future)
+│   │       └── profile/
+│   │           └── page.tsx      # Profile completion (requires auth)
 │   │
 │   ├── login/                    # Public (no auth required)
 │   │   ├── page.tsx              # OAuth login page
@@ -230,10 +244,25 @@ playlexi/
 │   ├── showcase/                 # Public (dev/demo)
 │   │   └── page.tsx              # Component showcase
 │   │
-│   ├── api/                      # API Routes (current)
-│   │   ├── auth/[...all]/        # Better Auth handler
-│   │   ├── words/random/         # GET random word
-│   │   └── phonetic-learning/    # Voice recognition learning
+│   ├── api/                      # API Routes
+│   │   ├── auth/[...all]/        # Better Auth catch-all handler
+│   │   ├── users/
+│   │   │   ├── me/               # GET/PATCH current user
+│   │   │   ├── check-username/   # POST username availability
+│   │   │   └── complete-profile/ # POST create PlayLexi user
+│   │   ├── games/                # POST create, GET history
+│   │   │   └── [gameId]/finish/  # POST finish game
+│   │   ├── daily-spell/          # GET puzzle, POST result
+│   │   │   ├── stats/            # GET streak/stats
+│   │   │   ├── challenge/        # Challenge link API
+│   │   │   └── reset/            # Dev: reset daily progress
+│   │   ├── words/random/         # GET random word by tier
+│   │   ├── leaderboard/          # GET leaderboard
+│   │   ├── phonetic-learning/    # log, learn, mappings, stats
+│   │   ├── assets/[...path]/     # R2 asset proxy
+│   │   └── admin/
+│   │       ├── generate-puzzles/ # POST generate daily puzzles
+│   │       └── cleanup/          # POST data cleanup
 │   │
 │   └── layout.tsx                # Root layout (fonts, providers)
 ```
@@ -327,7 +356,7 @@ playlexi/
 │   │
 │   ├── api/                      # API Routes
 │   │   ├── auth/
-│   │   │   └── [...nextauth]/
+│   │   │   └── [...all]/
 │   │   │       └── route.ts
 │   │   ├── users/
 │   │   │   ├── route.ts          # GET users, POST create
@@ -1004,66 +1033,66 @@ Based on research of competitive games (Valorant, Chess.com, Duolingo), PlayLexi
 
 | Method | Route | Purpose |
 |--------|-------|---------|
-| * | `/api/auth/[...nextauth]` | NextAuth.js handler |
+| * | `/api/auth/[...all]` | Better Auth catch-all handler (OAuth, sessions) |
 
 ### 5.2 User Routes
 
 | Method | Route | Purpose |
 |--------|-------|---------|
-| GET | `/api/users/me` | Get current user |
-| PATCH | `/api/users/me` | Update profile |
-| GET | `/api/users/[userId]` | Get user by ID |
-| GET | `/api/users/search?q=` | Search users by username |
+| GET | `/api/users/me` | Get current user (includes `hasCompletedTutorial`) |
+| PATCH | `/api/users/me` | Update profile, settings, tutorial flag |
 | POST | `/api/users/check-username` | Check username availability |
+| POST | `/api/users/complete-profile` | Create PlayLexi user after OAuth |
 
 ### 5.3 Game Routes
 
 | Method | Route | Purpose |
 |--------|-------|---------|
-| POST | `/api/games` | Create new game |
-| GET | `/api/games/[gameId]` | Get game state |
-| POST | `/api/games/[gameId]/join` | Join game lobby |
-| POST | `/api/games/[gameId]/start` | Start game (host only) |
-| POST | `/api/games/[gameId]/submit` | Submit answer |
-| POST | `/api/games/[gameId]/leave` | Leave game |
+| POST | `/api/games` | Create new game session |
+| GET | `/api/games/history` | Get user's game history |
+| POST | `/api/games/[gameId]/finish` | Submit final game results |
 
-### 5.4 Matchmaking Routes
+### 5.4 Daily Spell Routes
 
 | Method | Route | Purpose |
 |--------|-------|---------|
-| POST | `/api/matchmaking/find` | Find public match |
-| DELETE | `/api/matchmaking/cancel` | Cancel matchmaking |
+| GET | `/api/daily-spell` | Get today's puzzle (supports `?visitorId=` for anonymous) |
+| POST | `/api/daily-spell` | Submit daily result |
+| GET | `/api/daily-spell/stats` | Get streak and stats |
+| POST | `/api/daily-spell/challenge` | Create/get challenge link |
+| POST | `/api/daily-spell/reset` | Dev: reset daily progress |
 
-### 5.5 Friends Routes
-
-| Method | Route | Purpose |
-|--------|-------|---------|
-| GET | `/api/friends` | Get friends list |
-| POST | `/api/friends/request` | Send friend request |
-| GET | `/api/friends/requests` | Get pending requests |
-| POST | `/api/friends/requests/[id]/accept` | Accept request |
-| POST | `/api/friends/requests/[id]/decline` | Decline request |
-| DELETE | `/api/friends/[friendId]` | Unfriend |
-
-### 5.6 Leaderboard Routes
+### 5.5 Leaderboard Routes
 
 | Method | Route | Purpose |
 |--------|-------|---------|
-| GET | `/api/leaderboard/global` | Global rankings |
-| GET | `/api/leaderboard/friends` | Friends rankings |
-| GET | `/api/leaderboard/solo` | Personal history |
+| GET | `/api/leaderboard` | Get leaderboard rankings |
 
-### 5.7 Other Routes
+### 5.6 Phonetic Learning Routes
 
 | Method | Route | Purpose |
 |--------|-------|---------|
-| GET | `/api/words/random` | Get word for round |
-| WS | `ws://localhost:3002` | Speech recognition (Google Cloud via WebSocket) |
-| GET | `/api/notifications` | Get notifications |
-| PATCH | `/api/notifications/[id]/read` | Mark as read |
-| POST | `/api/chat/send` | Send preset message |
-| POST | `/api/reports` | Submit report |
-| POST | `/api/blocks` | Block user |
+| POST | `/api/phonetic-learning/log` | Log a recognition attempt |
+| POST | `/api/phonetic-learning/learn` | Trigger learning analysis |
+| GET | `/api/phonetic-learning/mappings` | Get user's phonetic mappings |
+| GET | `/api/phonetic-learning/stats` | Get learning statistics |
+
+### 5.7 Admin Routes
+
+| Method | Route | Purpose |
+|--------|-------|---------|
+| POST | `/api/admin/generate-puzzles` | Generate daily puzzles (Bearer auth) |
+| POST | `/api/admin/cleanup` | Data cleanup tasks |
+
+### 5.8 Other Routes
+
+| Method | Route | Purpose |
+|--------|-------|---------|
+| GET | `/api/words/random` | Get random word by difficulty tier |
+| GET | `/api/assets/[...path]` | Proxy to Cloudflare R2 assets |
+| WS | `wss://speech.playlexi.com` | Speech recognition (Google Cloud via WebSocket on Railway) |
+
+> **Note:** Friends, matchmaking, chat, notifications, and reports APIs are planned for future phases. See Section 20.
 
 ---
 
@@ -1662,66 +1691,77 @@ See [speech-server/DEPLOYMENT.md](../speech-server/DEPLOYMENT.md) for deployment
 
 ## 9. Authentication
 
-### 9.1 NextAuth Configuration
+### 9.1 Better Auth Configuration
+
+PlayLexi uses **Better Auth v1.4.x** (not NextAuth) for edge-compatible OAuth.
 
 ```typescript
-// lib/auth.ts
+// lib/auth/index.ts — Per-request factory (Cloudflare D1 bindings are request-scoped)
 
-import NextAuth from 'next-auth';
-import GoogleProvider from 'next-auth/providers/google';
-import AppleProvider from 'next-auth/providers/apple';
-import { DrizzleAdapter } from '@auth/drizzle-adapter';
-import { createDb } from '@/db';
+import { betterAuth } from "better-auth"
+import { drizzleAdapter } from "better-auth/adapters/drizzle"
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  // Note: DrizzleAdapter requires passing the db instance
-  // For D1, the db is created per-request with the D1 binding
-  adapter: DrizzleAdapter(db),
-  providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
-    AppleProvider({
-      clientId: process.env.APPLE_CLIENT_ID!,
-      clientSecret: process.env.APPLE_CLIENT_SECRET!,
-    }),
-  ],
-  callbacks: {
-    session: ({ session, user }) => ({
-      ...session,
-      user: {
-        ...session.user,
-        id: user.id,
-        username: user.username,
+export function createAuth(d1: D1Database) {
+  const db = drizzle(d1, { schema: authSchema })
+  return betterAuth({
+    database: drizzleAdapter(db, { provider: "sqlite", schema: authSchema }),
+    emailAndPassword: { enabled: false },  // OAuth only
+    socialProviders: {
+      google: {
+        clientId: process.env.GOOGLE_CLIENT_ID!,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       },
-    }),
-  },
-  pages: {
-    signIn: '/login',
-    newUser: '/onboarding/profile',
-  },
-});
+    },
+    session: {
+      expiresIn: 60 * 60 * 24 * 7,  // 7 days
+      cookieCache: { enabled: false },  // Disabled — caused issues with 1.4.x
+    },
+    advanced: {
+      useSecureCookies: process.env.NODE_ENV === "production",
+    },
+  })
+}
 ```
 
-### 9.2 Protected Routes
+**Better Auth creates its own tables** (`user`, `session`, `account`, `verification`) separate from PlayLexi's `users` table. After OAuth, we create/link PlayLexi user records via `/api/users/complete-profile`.
 
-```typescript
-// middleware.ts
+### 9.2 Cookie Naming (Important)
 
-export { auth as middleware } from '@/lib/auth';
+Better Auth cookie names differ by environment:
 
-export const config = {
-  matcher: [
-    '/play/:path*',
-    '/game/:path*',
-    '/leaderboard/:path*',
-    '/profile/:path*',
-    '/settings/:path*',
-    '/chat/:path*',
-  ],
-};
-```
+| Environment | Cookie Name |
+|-------------|-------------|
+| Development | `better-auth.session_token` |
+| Production | `__Secure-better-auth.session_token` |
+
+When `useSecureCookies: true` (production), Better Auth adds the `__Secure-` prefix. **Middleware must check for both names.** This was the root cause of an OAuth login loop bug (fixed 2026-02-11).
+
+### 9.3 Route Protection (middleware.ts)
+
+The middleware does **manual cookie checking** — it does not export from the auth library.
+
+| Route | Auth Required | Purpose |
+|-------|--------------|---------|
+| `/` | No | Dashboard (public landing page) |
+| `/login` | No | Sign in page |
+| `/game/daily*` | No | Daily game (anonymous via localStorage) |
+| `/onboarding/tutorial` | No | Tutorial (pre-auth) |
+| `/onboarding/placement` | No | Placement test (pre-auth, reserved for future) |
+| `/onboarding/rank-result` | No | Rank display (pre-auth, reserved for future) |
+| `/auth/callback` | No | Post-OAuth routing |
+| `/api/*` | No (handled per-route) | API routes handle their own auth |
+| `/onboarding/profile` | Yes | Profile completion (post-OAuth) |
+| `/game/endless` | Yes | Endless mode |
+| All other routes | Yes | Protected by default |
+
+### 9.4 Environment Variables
+
+| Variable | Where Set | Purpose |
+|----------|-----------|---------|
+| `GOOGLE_CLIENT_ID` | `wrangler secret` | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | `wrangler secret` | Google OAuth client secret |
+| `BETTER_AUTH_SECRET` | `wrangler secret` | Session encryption (32+ chars) |
+| `BETTER_AUTH_URL` | `wrangler secret` | Base URL (`https://app.playlexi.com`) |
 
 ---
 
@@ -1792,7 +1832,7 @@ The project uses **OKLCH color space** for perceptually uniform colors. All toke
 
 ### 11.2 Critical Paths to Test
 
-1. **New user onboarding:** Tutorial → Placement → Signup → Profile
+1. **New user onboarding:** Dashboard → Tap game → Tutorial → OAuth → Profile
 2. **Game flow:** Start → Play rounds → Win/Lose → Results
 3. **Multiplayer:** Create → Join → Play → Elimination → Results
 4. **XP calculation:** Verify correct XP for various placements/scenarios
@@ -2644,13 +2684,13 @@ This section defines the phased approach for building PlayLexi. Each phase is a 
 
 This approach unblocks development immediately and isolates problems. The architecture is designed so swapping from local to production requires minimal code changes.
 
-| Service | Local Implementation | Production Implementation | When to Switch |
-|---------|---------------------|---------------------------|----------------|
-| **Database** | Local SQLite via `better-sqlite3` | Cloudflare D1 | After Phase 2 tested |
-| **Auth** | Mock auth (hardcoded dev user) | Google + Apple OAuth | After Phase 2 tested |
-| **Words** | Hardcoded seed data (50+ words) | Merriam-Webster API seeding | Before Phase 3 |
-| **Voice AI** | Google Speech via local WebSocket server | Google Speech via Railway → Cloud Run | After Phase 2 tested |
-| **Real-time** | Local state (no WebSocket) | Cloudflare Durable Objects | Phase 4 |
+| Service | Local Implementation | Production Implementation | Status |
+|---------|---------------------|---------------------------|--------|
+| **Database** | Local SQLite via D1 miniflare | Cloudflare D1 | **Done** |
+| **Auth** | Better Auth (localhost) | Better Auth (Google OAuth) | **Done** |
+| **Words** | Seeded from Merriam-Webster | Seeded from Merriam-Webster | **Done** |
+| **Voice AI** | Google Speech via local WebSocket | Google Speech via Railway | **Done** |
+| **Real-time** | Local state (no WebSocket) | Cloudflare Durable Objects | Not Started |
 
 **Why this works:**
 - Drizzle ORM uses the same API for SQLite and D1 — zero code changes
@@ -2659,15 +2699,16 @@ This approach unblocks development immediately and isolates problems. The archit
 
 **Post-Local Migration Checklist:**
 
-After Phase 2 is working locally, complete these before Phase 3:
+All items completed as of February 2026:
 
-- [ ] Create Cloudflare D1 database (`wrangler d1 create playlexi-db`)
-- [ ] Set up Google OAuth (Google Cloud Console → OAuth credentials)
-- [ ] Set up Apple OAuth (Apple Developer account required)
-- [ ] Get Merriam-Webster API key (dictionaryapi.com)
-- [ ] Seed production database with real word data
-- [ ] Configure `wrangler.jsonc` with D1 binding
-- [ ] Deploy to Cloudflare Workers for testing
+- [x] Create Cloudflare D1 database (`playlexi-db`)
+- [x] Set up Google OAuth (Google Cloud Console)
+- [ ] Set up Apple OAuth (Apple Developer account — future)
+- [x] Get Merriam-Webster API key (dictionaryapi.com)
+- [x] Seed production database with word data
+- [x] Configure `wrangler.jsonc` with D1 binding
+- [x] Deploy to Cloudflare Workers
+- [x] Deploy speech server to Railway (`speech.playlexi.com`)
 
 ---
 
@@ -2687,21 +2728,21 @@ After Phase 2 is working locally, complete these before Phase 3:
 
 | Task | Type | Details | Status |
 |------|------|---------|--------|
-| 1.1 | Database | Drizzle schema from Section 4, local SQLite setup | Not Started |
-| 1.2 | Database | Run migrations locally, verify tables | Not Started |
-| 1.3 | Database | Seed words table (50+ words across 7 tiers, hardcoded) | Not Started |
-| 1.4 | Auth | Mock auth provider (hardcoded dev user, skip OAuth) | Not Started |
-| 1.5 | Auth | Protected route middleware (works with mock session) | Not Started |
-| 1.6 | Layout | Navbar already done ✓ | Done |
-| 1.7 | Layout | Main app layout with auth gate | Not Started |
-| 1.8 | API | `/api/words/random` — get word by difficulty tier | Not Started |
-| 1.9 | API | `/api/users/me` — get/update current user | Not Started |
+| 1.1 | Database | Drizzle schema, D1 setup, 10 migrations | ✅ Done |
+| 1.2 | Database | Run migrations locally and remotely | ✅ Done |
+| 1.3 | Database | Seed words table (1000+ words via Merriam-Webster) | ✅ Done |
+| 1.4 | Auth | Better Auth with Google OAuth | ✅ Done |
+| 1.5 | Auth | Protected route middleware (cookie-based) | ✅ Done |
+| 1.6 | Layout | Navbar with auth-aware state | ✅ Done |
+| 1.7 | Layout | Shell + focused layout groups | ✅ Done |
+| 1.8 | API | `/api/words/random` — get word by difficulty tier | ✅ Done |
+| 1.9 | API | `/api/users/me` — get/update current user | ✅ Done |
 
-**Exit Criteria (Local):**
-- [ ] Mock user can "sign in" (dev bypass)
-- [ ] Protected routes redirect when not authenticated
-- [ ] Can query random words by tier from local SQLite
-- [ ] Database migrations run successfully locally
+**Exit Criteria:**
+- [x] Users can sign in via Google OAuth
+- [x] Protected routes redirect when not authenticated
+- [x] Can query random words by tier
+- [x] Database migrations run locally and in production
 
 ---
 
@@ -2728,21 +2769,25 @@ After Phase 2 is working locally, complete these before Phase 3:
 | 2.6b | Component | `GameFeedbackOverlay` — correct/wrong answer flash overlay | ✅ Done |
 | 2.7 | Component | `RoundIndicator` — "Round 1" badge | ✗ Removed (inline text, not a component) |
 | 2.9 | API | Speech recognition via Google WebSocket server | ✅ Done (client-side) |
-| 2.10 | API | `/api/games` — create solo game session | Not Started |
-| 2.11 | API | `/api/games/[gameId]/submit` — submit answer, check correctness | Not Started |
-| 2.12 | Page | `/play/single/endless/page.tsx` — mode selection | Not Started |
-| 2.13 | Page | `/game/[gameId]/page.tsx` — game screen | Not Started |
-| 2.14 | Page | `/game/[gameId]/results/page.tsx` — end screen with stats | Not Started |
-| 2.15 | Logic | Game state machine (ready → playing → round → result → next/end) | Not Started |
+| 2.10 | API | `/api/games` — create solo game session | ✅ Done |
+| 2.11 | API | `/api/games/[gameId]/finish` — submit final results | ✅ Done |
+| 2.12 | Page | Dashboard with game mode carousel | ✅ Done |
+| 2.13 | Page | `/game/endless/page.tsx` — Endless mode game screen | ✅ Done |
+| 2.14 | Page | `/game/result/page.tsx` — end screen with stats | ✅ Done |
+| 2.15 | Logic | Game state machine (ready → playing → feedback → next/end) | ✅ Done |
 | 2.16 | Logic | Solo results: personal stats (no XP display per ADR-014) | ✅ Done |
+| 2.17 | Feature | Daily Spell mode (5 words, voice only, anonymous play) | ✅ Done |
+| 2.18 | Feature | Daily puzzle generation (GitHub Actions cron + fallback) | ✅ Done |
+| 2.19 | Feature | Streak tracking + sharing | ✅ Done |
 
 **Exit Criteria:**
-- [ ] Can start an Endless game
-- [ ] Can spell words via voice OR keyboard
-- [ ] Timer counts down with visual states
-- [ ] Hearts decrease on wrong answers
-- [ ] Game ends when hearts = 0
-- [ ] Results screen shows rounds completed, accuracy, personal best status (no XP per ADR-014)
+- [x] Can start an Endless game
+- [x] Can spell words via voice OR keyboard
+- [x] Timer counts down with visual states
+- [x] Hearts decrease on wrong answers
+- [x] Game ends when hearts = 0
+- [x] Results screen shows rounds completed and accuracy
+- [x] Daily Spell mode playable by anonymous users
 
 ---
 
@@ -2755,28 +2800,32 @@ After Phase 2 is working locally, complete these before Phase 3:
 
 | Task | Type | Details | Status |
 |------|------|---------|--------|
-| 3.1 | Component | `TutorialCard` — step card with progress bar | Not Started |
-| 3.2 | Component | `TutorialStep` — individual step content | Not Started |
+| 3.1 | Component | Tutorial page with step cards + progress bar | ✅ Done |
 | 3.3 | Component | `RankBadge` — tier badge (7 variants × 2 modes) | ✅ Done |
-| 3.4 | Component | `RankReveal` — animation showing earned rank | Not Started |
 | 3.5 | Component | `AvatarSelector` — 3-preset avatar picker | ✅ Done |
-| 3.6 | Page | `/onboarding/tutorial/page.tsx` — 4-step tutorial | Not Started |
-| 3.7 | Page | `/onboarding/placement/page.tsx` — adaptive placement test (no hearts) | Not Started |
-| 3.8 | Page | `/onboarding/rank-result/page.tsx` — rank assignment | Not Started |
-| 3.9 | Page | `/onboarding/profile/page.tsx` — 2-step profile form (username/age → avatar) | ✅ Done |
-| 3.10 | Logic | Placement algorithm (Bayesian tier estimation) | Not Started |
+| 3.6 | Page | `/onboarding/tutorial/page.tsx` — 4-step tutorial | ✅ Done |
+| 3.7 | Page | `/onboarding/placement/page.tsx` — placement test | ✅ Done (reserved for future ranked/multiplayer) |
+| 3.8 | Page | `/onboarding/rank-result/page.tsx` — rank assignment | ✅ Done (reserved for future ranked/multiplayer) |
+| 3.9 | Page | `/onboarding/profile/page.tsx` — username + avatar | ✅ Done |
 | 3.11 | API | `/api/users/check-username` — availability check | ✅ Done |
-| 3.12 | API | Update user profile after OAuth | Not Started |
+| 3.12 | API | `/api/users/complete-profile` — create user after OAuth | ✅ Done |
+| 3.13 | Feature | Tutorial intercept (shows once on first game tap) | ✅ Done |
+| 3.14 | Feature | Tutorial tracked via localStorage + DB `has_completed_tutorial` | ✅ Done |
+
+**Current Onboarding Flow (updated February 2026):**
+1. Anonymous user sees public dashboard with game carousel
+2. Taps a game card → Tutorial shows (once, if not completed)
+3. Daily game: plays anonymously (localStorage `visitorId`)
+4. Locked modes (Endless): Sign-up prompt dialog appears
+5. OAuth → Profile (username + avatar) → Dashboard
+6. **No placement test during onboarding** (reserved for future ranked/multiplayer)
 
 **Exit Criteria:**
-- [ ] New user sees 4-step tutorial on first visit
-- [ ] Tutorial Step 4 teaches hearts mechanic
-- [ ] Can skip or complete tutorial
-- [ ] Placement test (no hearts) determines starting rank via Bayesian inference
-- [ ] Rank reveal shows appropriate tier badge
-- [x] Profile completion validates unique username (debounced, real-time feedback)
-- [x] Avatar selection with 3 presets (Dog, Person, Cat)
-- [ ] User lands on main app after completion
+- [x] Tutorial shows once on first game tap (tracked via localStorage + DB)
+- [x] Can skip or complete tutorial
+- [x] Profile completion validates unique username
+- [x] Avatar selection with 3 presets
+- [x] User lands on dashboard after completion
 
 ---
 

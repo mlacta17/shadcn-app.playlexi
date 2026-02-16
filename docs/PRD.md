@@ -1,8 +1,8 @@
 # PlayLexi — Product Requirements Document (PRD)
 
-> **Version:** 1.5
-> **Last Updated:** January 24, 2026
-> **Status:** Final Draft
+> **Version:** 2.0
+> **Last Updated:** February 15, 2026
+> **Status:** Living Document
 
 ---
 
@@ -50,45 +50,54 @@ PlayLexi is a competitive spelling bee game where players spell words by voice o
 
 ### 2.1 Entry Points
 
-Users can enter PlayLexi from two places, each with two options:
+The app dashboard (`/`) is public — no account required to see game modes or play Daily Spell.
 
 **Marketing Site (playlexi.com):**
 | Button | Destination | Flow |
 |--------|-------------|------|
-| "Get Started" | `app.playlexi.com/onboarding/tutorial` | New user flow |
+| "Get Started" | `app.playlexi.com/` | Public dashboard with game carousel |
 | "I Have an Account" | `app.playlexi.com/login` | Existing user flow |
 
 **App (app.playlexi.com):**
 | Element | Destination | Flow |
 |---------|-------------|------|
-| "Get Started" link on `/login` | `/onboarding/tutorial` | New user flow |
+| `/` (landing page) | Dashboard | Public — game carousel, navbar shows "Sign up" for anonymous |
+| Daily Spell card | `/game/daily` | Playable anonymously (localStorage persistence) |
+| Locked game card (e.g., Endless) | Sign-up modal | Modal with Google sign-in button |
+| Navbar "Sign up" button | `/login` | OAuth sign-up flow |
 | OAuth buttons on `/login` | OAuth → Dashboard | Existing user flow |
-| "Sign in" link on onboarding pages | `/login` | Switch to existing user flow |
 
-**Why both places have both options:**
-- Marketing site visitors may be new or returning — both need clear paths
-- Direct app visitors (bookmarks, shared links) need the same options
-- Cross-linking between flows allows users to self-correct if they chose wrong
+**Why the dashboard is public:**
+- Reduces friction — users see the game immediately
+- Daily Spell is playable without an account (localStorage-based)
+- Locked game cards prompt sign-up when tapped (soft gate, not hard gate)
+- Users only sign up when they want to unlock more content
 
 ### 2.2 New User Flow
 
 ```
-Entry: Marketing "Get Started" OR App /onboarding/tutorial
-                                      ↓
-                               Tutorial (4 steps)
-                                      ↓
-                               Placement Test (adaptive)
-                                      ↓
-                               Rank Assignment
-                                      ↓
-                               OAuth Sign Up (Google/Apple)
-                                      ↓
-                               Complete Profile
-                                      ↓
-                               Dashboard (Main App)
+Entry: Dashboard (/) → Tap a game card
+                          ↓
+                   Tutorial (4 steps, once only)
+                          ↓
+                   Game plays (Daily Spell works anonymously)
+                          ↓
+         ┌── Wants more → Taps locked card (e.g., Endless) ──┐
+         │                                                      │
+         │                Sign-up modal appears                │
+         │                          ↓                          │
+         │                OAuth Sign Up (Google)               │
+         │                          ↓                          │
+         │                Complete Profile                     │
+         │                (username + avatar)                  │
+         │                          ↓                          │
+         │                Dashboard (all modes unlocked)       │
+         └──────────────────────────────────────────────────────┘
 ```
 
-**Cross-linking:** Each onboarding page has "Already have an account? Sign in" link.
+**Tutorial behavior:** Shows once on first-ever game tap. Completion is stored in `localStorage("playlexi_tutorial_complete")`. If authenticated, also synced to `users.has_completed_tutorial` via `PATCH /api/users/me`.
+
+**Cross-linking:** Login page has "New here? Get Started" link. Onboarding pages have "Already have an account? Sign in" link.
 
 #### 2.2.1 Tutorial (4 Steps)
 
@@ -96,141 +105,66 @@ Entry: Marketing "Get Started" OR App /onboarding/tutorial
 |------|-------|-------------|
 | 1 | "Press Start, then listen carefully to the word" | You can replay the word as many times as you'd like. Use the definition and sentence buttons for extra clues. |
 | 2 | "Use the microphone and spell the word letter by letter" | Saying the whole word will not count towards the microphone's recording, only letters. |
-| 3 | "First, a quick placement test" | We'll ask you 10-15 words to find your level. This is just calibration — don't worry about mistakes! |
+| 3 | "The game adapts to your skill level" | As you play, the difficulty adjusts automatically. Words get harder as you improve — no setup needed! |
 | 4 | "In real games, you'll have lives" | In Endless mode, you start with 3 hearts. Each mistake costs one heart. When you run out, the game ends. In Blitz mode, there's no hearts — just a 3-minute timer! |
 
 - Progress bar shows completion (25% → 50% → 75% → 100%)
 - "Skip" link available on all steps
 - "Continue" button advances, "Go back" returns to previous
-- "Finish" on step 4 starts placement test
+- "Finish" on step 4 navigates to `returnTo` URL (the game page the user originally tapped)
+- Supports `?returnTo=/game/daily` query param so the user returns to the game after tutorial
+- If authenticated, tutorial completion is also synced to the server via `PATCH /api/users/me`
 
-**Why 4 Steps Instead of 3:**
+**Why 4 Steps:**
+1. Steps 1-2 teach the core mechanics (listen, then spell)
+2. Step 3 explains adaptive difficulty (so users know why words get harder)
+3. Step 4 teaches the hearts/lives mechanic before the first real game
+4. This prevents confusion when players encounter hearts for the first time
 
-The placement test intentionally has NO hearts (to reduce pressure and collect full calibration data). However, the real game modes DO have hearts. Adding Step 4 bridges this gap by:
-1. Explicitly framing the placement test as "calibration, not a real game" (Step 3)
-2. Teaching the hearts mechanic BEFORE the first real game (Step 4)
-3. Explaining the difference between Endless (hearts) and Blitz (timer)
+#### 2.2.2 Placement Test (Reserved for Ranked/Multiplayer)
 
-This prevents confusion when players encounter hearts for the first time after placement.
+> **Status:** Not part of current onboarding. The placement test UI and logic exist at `/onboarding/placement` but are not in the sign-up flow. They will be used when ranked multiplayer is implemented. See ADR-013 in ADR.md for the Bayesian algorithm design.
 
-#### 2.2.2 Placement Test
+**Current behavior:** New users start at Tier 1 (New Bee) with default Glicko-2 rating (1500, RD 350). The hidden skill rating adjusts automatically as they play.
 
-> **Note:** This section was updated per ADR-013 (Adaptive Placement Test) in ADR.md.
+#### 2.2.3 OAuth Sign Up
 
-**Format:** Adaptive placement test (not Endless mode)
-
-| Attribute | Value |
-|-----------|-------|
-| Words | 10-15 (adaptive) |
-| Hearts | **None** (calibration mode — no elimination) |
-| Purpose | Determine starting skill rating using Bayesian inference |
-| Duration | ~5 minutes max |
-| Replayable | No (one-time only) |
-
-**How It Works:**
-
-1. Player starts with equal probability of being in any tier (1-7)
-2. System serves a mid-difficulty word (Tier 4) first
-3. Based on correct/incorrect answer, tier probabilities update
-4. Next word is selected from the most uncertain tier
-5. Process continues until one tier has >80% probability OR 15 words completed
-6. Player is placed at the most probable tier
-
-**Player Experience:**
-
-- **No hearts displayed** (reduces pressure, collects full calibration data)
-- Progress bar shows "8/15 words"
-- Encouraging message: "Don't worry about mistakes — we're finding your level!"
-- No "game over" — test simply concludes when calibration completes
-
-**Technical:** See ADR-013 in ADR.md for Bayesian algorithm details.
-
-**Temporary Data Storage:**
-
-The placement test happens BEFORE OAuth, so we can't persist results to the database yet. Solution:
-- Store placement result in `sessionStorage` (key: `playlexi_placement`)
-- Data includes: `{ tier: number, wordsAttempted: number, correctCount: number, timestamp: number }`
-- After OAuth + profile completion, read from sessionStorage and persist to `user_ranks` table
-- Clear sessionStorage after successful persistence
-
-Why sessionStorage (not localStorage):
-- Clears automatically when tab closes (no stale data)
-- Survives page navigation within the session
-- No server-side storage needed for unauthenticated users
-
-**Why No Hearts in Placement (Design Decision):**
-
-We considered three options for the placement test:
-
-| Option | Pros | Cons |
-|--------|------|------|
-| **1. No hearts (chosen)** | Full calibration data, low anxiety, clean separation of concerns | Doesn't teach hearts mechanic |
-| 2. Hearts with elimination | Teaches mechanic, consistent with Endless | Cuts off data, high anxiety, inaccurate placement |
-| 3. Hearts with regeneration | Teaches hearts, full data | Introduces fake mechanic that doesn't exist elsewhere |
-
-**Decision: No hearts, but add Tutorial Step 4 to teach hearts before first real game.**
-
-Rationale:
-- The tutorial's job is to **teach mechanics** → Step 4 teaches hearts
-- The placement test's job is to **measure skill** → No hearts needed
-- These are separate responsibilities and should stay separate
-- Introducing a "hearts with regeneration" mechanic would confuse players when it doesn't exist in real games
-
-**Why Adaptive (vs. Original Endless):**
-
-| Aspect | Old (Endless) | New (Adaptive) |
-|--------|---------------|----------------|
-| Time | Variable (could be 50+ words) | Fixed ~5 minutes |
-| Accuracy | "Highest tier reached" | Bayesian confidence estimate |
-| Stress level | High (fear of elimination) | Low (calibration framing) |
-| Skilled players | Slog through easy content | Quickly tested at higher tiers |
-| Hearts | 3 (elimination on depletion) | None (calibration mode) |
-
-#### 2.2.3 Rank Assignment Screen
-
-After placement test:
-- Display: Rank badge with tier name (e.g., "You've qualified as a 'New Bee' Rank")
-- Prompt: "Create an account to save your progress and continue playing for free."
-- Buttons: "Sign up with Google" | "Sign up with Apple"
-- Link: "Already have an account? Sign in"
-
-#### 2.2.4 OAuth Sign Up
-
-- Google or Apple OAuth popup appears
+- Google OAuth popup (Apple OAuth planned for future)
 - No custom password storage (security measure)
-- OAuth handles authentication entirely
+- OAuth handled by Better Auth library
+- After OAuth, auth callback checks if `users` record exists:
+  - Exists → redirect to `/` (returning user)
+  - Does not exist → redirect to `/onboarding/profile` (new user)
 
-#### 2.2.5 Complete Profile
+#### 2.2.4 Complete Profile
 
-After OAuth:
-- **Step 1: Username & Age**
-  - Username (required, must be unique, debounced validation)
-  - Age range (optional, stored as birth year for COPPA compliance)
-  - Button: "Next"
-- **Step 2: Avatar Selection**
-  - Avatar (choose from 3 presets: Dog, Person, Cat)
-  - Large preview with hover/selected states
-  - Button: "Finish" → Enters main app
+After OAuth, new users complete a single-page profile:
+- **Username** (required, must be unique, debounced validation with `GET /api/users/check-username`)
+- **Age range** (optional, stored as `birthYear` for COPPA compliance)
+- **Avatar selection** (choose from 3 presets: Dog, Person, Cat)
+- **"Finish" button** → Creates user via `POST /api/users/complete-profile` → Redirects to dashboard
+
+If the user completed the tutorial anonymously before signing up, the `hasCompletedTutorial` flag from localStorage is passed in the request body so the DB record is synced on creation.
 
 ### 2.3 Existing User Flow
 
 ```
-Entry: Marketing "I Have an Account" OR App /login
-                                            ↓
-                                      OAuth Login
-                                            ↓
-                                      Dashboard
+Entry: Dashboard (/) → Navbar "Sign in" OR /login
+                               ↓
+                         OAuth Login (Google)
+                               ↓
+                         Dashboard (all modes unlocked)
 ```
 
-- Direct to OAuth (Google/Apple)
-- No tutorial, no placement test
-- Straight to dashboard
+- Direct to OAuth via `/login` page
+- No tutorial (already completed — flag in DB)
+- Straight to dashboard with all game modes unlocked
 
 **Cross-linking:** Login page has "New here? Get Started" link.
 
-**Detection Logic:** After OAuth, check if `users` record exists for `auth_user.id`:
-- If exists → redirect to `/dashboard`
-- If not exists → redirect to `/onboarding/profile` (they came from new user flow)
+**Detection Logic (auth callback):** After OAuth, check if `users` record exists for `auth_user.id`:
+- If exists → redirect to `/` (returning user)
+- If not exists → redirect to `/onboarding/profile` (new user needs to complete profile)
 
 ---
 
@@ -378,9 +312,48 @@ To prevent Bee Keepers from going inactive:
 
 ## 4. Game Modes
 
+### 4.0 Daily Spell (Implemented)
+
+| Attribute | Value |
+|-----------|-------|
+| Objective | Spell all 5 daily words correctly |
+| Words | 5 fixed words, same for all players each day |
+| Hearts | **None** (complete all 5 regardless of mistakes) |
+| Input | **Voice only** |
+| Timer | Per-word timer |
+| Auth required | **No** — playable anonymously |
+| Attempt limit | 1 per day per user (or per visitor ID for anonymous) |
+
+**How It Works:**
+1. Each day at 00:05 UTC, a GitHub Actions cron job pre-generates puzzles 7 days ahead
+2. If no puzzle exists for today, `getTodayPuzzle()` auto-generates one as a fallback
+3. Players hear a word, spell it by voice, get instant correct/wrong feedback
+4. After all 5 words → streak page → result page with emoji row and share button
+
+**Anonymous Play:**
+- Anonymous users get a `visitorId` stored in `localStorage("playlexi_visitor_id")`
+- Results are persisted server-side keyed to this visitor ID
+- If the user later signs up, they can continue with their account
+- Anonymous users see a CTA: "Create an account to track your stats across devices"
+
+**Daily Spell Routes:**
+| Route | Purpose |
+|-------|---------|
+| `/game/daily` | Main gameplay page |
+| `/game/daily/streak` | Streak display after game |
+| `/game/daily/result` | Final results with score and share button |
+
+**API Endpoints:**
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/daily-spell?date=YYYY-MM-DD` | Get today's puzzle + check if already played |
+| `POST /api/daily-spell` | Submit round result |
+| `GET /api/daily-spell/stats` | Get streak and history |
+| `POST /api/daily-spell/challenge` | Generate a challenge/share link |
+
 ### 4.1 Single Player
 
-#### 4.1.1 Endless Mode
+#### 4.1.1 Endless Mode (Implemented, requires auth)
 
 | Attribute | Value |
 |-----------|-------|
@@ -422,7 +395,7 @@ When a player answers incorrectly, they see a **feedback overlay** that includes
 
 **Future Enhancement:** A "Review Mistakes" section in the results screen could show all words the player missed during that session, allowing them to study before playing again.
 
-#### 4.1.2 Blitz Mode
+#### 4.1.2 Blitz Mode (Coming Soon)
 
 | Attribute | Value |
 |-----------|-------|
@@ -1201,9 +1174,12 @@ When a player says the whole word instead of spelling it:
 
 | Decision | Choice |
 |----------|--------|
-| Providers | Google OAuth, Apple OAuth |
-| No passwords | Don't store credentials |
+| Library | **Better Auth** v1.4.x (edge-compatible OAuth) |
+| Providers | Google OAuth (Apple OAuth planned) |
+| No passwords | `emailAndPassword: { enabled: false }` — OAuth only |
 | No switching | Can't change auth provider after signup |
+| Cookie naming | Dev: `better-auth.session_token`, Prod: `__Secure-better-auth.session_token` |
+| Session | 7-day expiry, cookie cache disabled |
 
 ### 12.4 Word Data
 
@@ -1399,11 +1375,13 @@ When a player says the whole word instead of spelling it:
 
 | Service | Data Shared | Purpose |
 |---------|-------------|---------|
-| Google OAuth | Email, name | Authentication |
-| Apple OAuth | Email, name | Authentication |
-| Cloudflare | Request data, IP | Hosting, CDN |
-| PostHog | Anonymous usage events | Analytics |
-| Sentry | Error logs (no PII) | Error tracking |
+| Google OAuth (via Better Auth) | Email, name | Authentication |
+| Cloudflare Workers + D1 | Request data, IP, game data | Hosting, database |
+| Cloudflare R2 | Audio files | Object storage for word audio |
+| Railway | Audio stream (voice data) | Speech WebSocket server hosting |
+| Google Cloud Speech-to-Text | Voice audio (not stored) | Real-time letter recognition |
+| PostHog | Anonymous usage events | Analytics (planned) |
+| Sentry | Error logs (no PII) | Error tracking (planned) |
 
 ### 14.7 Language Scope
 
@@ -1507,7 +1485,7 @@ When a player says the whole word instead of spelling it:
 |------|------------|
 | **Crown Points** | Points earned by Royal Bees competing for Bee Keeper title |
 | **Track** | A specific combination of game mode + input method (4 total) |
-| **Placement Test** | Adaptive one-time assessment (~10-15 words) for new users to determine starting skill rating using Bayesian inference. See Section 2.2.2. |
+| **Placement Test** | Adaptive assessment (~10-15 words) using Bayesian inference. Currently reserved for future ranked/multiplayer — not part of onboarding. See Section 2.2.2. |
 | **Skill Rating (Hidden)** | Glicko-2 rating (1000-1900) used internally for word difficulty selection and matchmaking. Not visible to players. See ADR-012 in ADR.md. |
 | **Rating Deviation (RD)** | Glicko-2 uncertainty measure (30-350). High RD = uncertain skill, ratings change more. |
 | **Skeleton UI** | Shimmering placeholder shown while data is loading |
@@ -1518,6 +1496,7 @@ When a player says the whole word instead of spelling it:
 
 ## Appendix B: Future Features (Out of Scope for v1)
 
+- Apple OAuth sign-in
 - Guest mode for multiplayer
 - 2FA authentication
 - Free-text chat messaging
@@ -1526,7 +1505,6 @@ When a player says the whole word instead of spelling it:
 - Group chat
 - Tournaments/seasons
 - Achievement badges
-- Daily challenges
 
 ---
 

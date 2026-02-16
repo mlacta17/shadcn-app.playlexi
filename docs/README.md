@@ -22,6 +22,7 @@
 | **[COMPONENT_INVENTORY.md](COMPONENT_INVENTORY.md)** | UI component tracking, implementation status, patterns |
 | **[STYLE_GUIDE.md](STYLE_GUIDE.md)** | Design system, colors, typography, component styling |
 | **[ROADMAP.md](ROADMAP.md)** | Technical roadmap, Safari audio issues, phonetic learning system |
+| **[AUDIO-PIPELINE.md](AUDIO-PIPELINE.md)** | Audio file generation and delivery pipeline |
 
 ---
 
@@ -35,4 +36,4 @@
 
 ---
 
-*Last updated: February 13, 2026*
+*Last updated: February 15, 2026*

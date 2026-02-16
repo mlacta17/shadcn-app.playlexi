@@ -18,7 +18,7 @@ Browser (WebSocket) --> Speech Server (Node.js) --> Google Cloud (gRPC)
 
 ## Scaling Strategy
 
-> **Decision Date:** January 2025
+> **Decision Date:** January 2026
 >
 > **Strategy:** Start with Railway, migrate to Cloud Run when scaling requires it.
 
@@ -30,7 +30,7 @@ Browser (WebSocket) --> Speech Server (Node.js) --> Google Cloud (gRPC)
 | **Phase 2** | 1,000-10,000 DAU | Cloud Run | $100-500 | Better scaling, lower latency to Google APIs |
 | **Phase 3** | 10,000+ DAU | Cloud Run (scaled) | $500+ | Auto-scaling, multi-region if needed |
 
-### Platform Limits (Verified January 2025)
+### Platform Limits (Verified January 2026)
 
 **Railway:**
 - ~3,000 concurrent WebSocket connections max
