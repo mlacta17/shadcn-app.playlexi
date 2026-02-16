@@ -32,6 +32,7 @@ import { usePlayLexiUser } from "@/hooks/use-playlexi-user"
 import { Logo } from "@/components/ui/logo"
 import { Navbar } from "@/components/ui/navbar"
 import { AccountSettingsDialog } from "@/components/settings/account-settings-dialog"
+import { SignInDialog } from "@/components/auth/sign-in-dialog"
 
 export function ShellNavbar() {
   const router = useRouter()
@@ -39,6 +40,7 @@ export function ShellNavbar() {
   const { data: session, isPending: isSessionPending } = useSession()
   const { user: playLexiUser, isLoading: isUserLoading } = usePlayLexiUser()
   const [settingsOpen, setSettingsOpen] = React.useState(false)
+  const [signInOpen, setSignInOpen] = React.useState(false)
 
   // Navigation links with active state based on current path
   const navLinks = [
@@ -85,8 +87,8 @@ export function ShellNavbar() {
     router.push("/login")
   }
 
-  const handleSignUp = () => {
-    router.push("/login")
+  const handleSignIn = () => {
+    setSignInOpen(true)
   }
 
   const handleNotificationClick = () => {
@@ -123,7 +125,7 @@ export function ShellNavbar() {
         isLoggedIn={!!session}
         user={user}
         notificationCount={0}
-        onSignUp={handleSignUp}
+        onSignIn={handleSignIn}
         onSignOut={handleSignOut}
         onNotificationClick={handleNotificationClick}
         onProfileClick={handleProfileClick}
@@ -132,6 +134,10 @@ export function ShellNavbar() {
       <AccountSettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
+      />
+      <SignInDialog
+        open={signInOpen}
+        onOpenChange={setSignInOpen}
       />
     </>
   )

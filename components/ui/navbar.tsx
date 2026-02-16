@@ -94,8 +94,8 @@ export interface NavbarProps {
   }
   /** Notification count */
   notificationCount?: number
-  /** Callback when sign up is clicked */
-  onSignUp?: () => void
+  /** Callback when sign in is clicked (anonymous users) */
+  onSignIn?: () => void
   /** Callback when sign out is clicked */
   onSignOut?: () => void
   /** Callback when notification bell is clicked */
@@ -122,7 +122,7 @@ export interface NavbarProps {
  * // Logged out state
  * <Navbar
  *   logo={<img src="/logo.svg" />}
- *   onSignUp={() => openSignUpModal()}
+ *   onSignIn={() => openSignInModal()}
  * />
  *
  * // Logged in state
@@ -146,7 +146,7 @@ function Navbar({
   isLoggedIn = false,
   user,
   notificationCount = 0,
-  onSignUp,
+  onSignIn,
   onSignOut,
   onNotificationClick,
   onProfileClick,
@@ -257,8 +257,8 @@ function Navbar({
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <Button onClick={onSignUp} size="sm" className="hidden md:flex">
-              Sign up
+            <Button onClick={onSignIn} size="sm" className="hidden md:flex">
+              Sign in
             </Button>
           )}
         </div>
@@ -313,8 +313,8 @@ function Navbar({
                 </NavLink>
               </>
             ) : (
-              <Button onClick={onSignUp} className="w-full">
-                Sign up
+              <Button onClick={onSignIn} className="w-full">
+                Sign in
               </Button>
             )}
           </div>

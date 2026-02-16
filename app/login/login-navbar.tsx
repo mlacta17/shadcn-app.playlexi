@@ -1,11 +1,11 @@
 /**
  * Login Page Navbar — Client Component
  *
- * Wrapper for Navbar that handles the onSignUp callback.
+ * Wrapper for Navbar that handles the onSignIn callback.
  * Separated to keep the main login page as a server component.
  *
- * The "Sign up" button serves as the "Get Started" entry point for new users,
- * navigating them to the onboarding tutorial flow.
+ * The "Sign in" button on the login page navigates new users
+ * to the onboarding tutorial flow.
  */
 
 "use client"
@@ -27,7 +27,7 @@ export function LoginNavbar() {
         { label: "Learn", href: "/learn", badge: "PRO" },
       ]}
       isLoggedIn={false}
-      onSignUp={() => {
+      onSignIn={() => {
         // Navigate new users to onboarding tutorial
         router.push("/onboarding/tutorial")
       }}

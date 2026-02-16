@@ -1027,7 +1027,7 @@ function NavbarDemo() {
               L
             </div>
           }
-          onSignUp={() => alert("Sign up clicked")}
+          onSignIn={() => alert("Sign in clicked")}
           onNotificationClick={() => alert("Notifications clicked")}
         />
       </div>
@@ -1068,7 +1068,7 @@ function NavbarDemo() {
             { label: "Dashboard", href: "/dashboard" },
             { label: "Settings", href: "/settings" },
           ]}
-          onSignUp={() => alert("Sign up clicked")}
+          onSignIn={() => alert("Sign in clicked")}
         />
       </div>
 

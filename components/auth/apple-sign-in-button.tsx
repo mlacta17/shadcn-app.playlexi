@@ -115,10 +115,10 @@ export function AppleSignInButton({
   return (
     <Button
       variant="outline"
-      size="lg"
+      size="sm"
       onClick={handleSignIn}
       disabled={isLoading}
-      className={cn("w-full gap-3", className)}
+      className={cn("w-full gap-2", className)}
     >
       {isLoading ? (
         <LoadingSpinner />
