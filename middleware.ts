@@ -77,7 +77,8 @@ const PUBLIC_ROUTES = [
  * These use === instead of startsWith() to avoid matching sub-routes.
  */
 const PUBLIC_EXACT_ROUTES = [
-  "/", // Dashboard is the public landing page
+  "/",            // Dashboard is the public landing page
+  "/leaderboard", // Leaderboard is viewable by everyone
 ]
 
 /**
