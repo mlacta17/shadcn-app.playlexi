@@ -1,5 +1,6 @@
 "use client"
 
+import { CircleUserIcon } from "@/lib/icons"
 import {
   Dialog,
   DialogContent,
@@ -8,8 +9,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button"
-import { Button } from "@/components/ui/button"
-import { ShieldIcon } from "@/lib/icons"
+import { AppleSignInButton } from "@/components/auth/apple-sign-in-button"
 import type { GameModeConfig } from "@/lib/game-modes"
 
 interface SignUpPromptDialogProps {
@@ -18,45 +18,35 @@ interface SignUpPromptDialogProps {
   gameMode: GameModeConfig | null
 }
 
+/**
+ * Sign-up prompt shown when anonymous users tap a locked game card.
+ *
+ * Displays Google and Apple OAuth buttons in a centered dialog.
+ * Matches the Figma design at node 3097:49514.
+ *
+ * @see components/auth/sign-in-dialog.tsx for the navbar sign-in variant
+ */
 function SignUpPromptDialog({ open, onOpenChange, gameMode }: SignUpPromptDialogProps) {
   if (!gameMode) return null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-sm">
         <DialogHeader className="items-center text-center">
-          <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-full bg-muted">
-            <ShieldIcon className="size-6 text-muted-foreground" />
+          <div className="mx-auto mb-2 flex size-20 items-center justify-center rounded-full bg-secondary">
+            <div className="flex size-14 items-center justify-center rounded-full border bg-background">
+              <CircleUserIcon className="size-7 text-foreground" />
+            </div>
           </div>
-          <DialogTitle>Sign up to play {gameMode.title}</DialogTitle>
+          <DialogTitle className="text-2xl">Sign up to play {gameMode.title}</DialogTitle>
           <DialogDescription>
-            Create a free account to unlock all game modes and track your progress.
+            Create a free account to unlock all game modes and track your progress
           </DialogDescription>
         </DialogHeader>
 
-        <ul className="space-y-2 text-sm text-muted-foreground">
-          <li className="flex items-start gap-2">
-            <span className="mt-0.5 text-primary">&#10003;</span>
-            Track your stats and streaks across devices
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="mt-0.5 text-primary">&#10003;</span>
-            Play Endless, Blitz, and Multiplayer modes
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="mt-0.5 text-primary">&#10003;</span>
-            Compete on leaderboards with friends
-          </li>
-        </ul>
-
-        <div className="flex flex-col gap-2 pt-2">
+        <div className="flex flex-col gap-2">
           <GoogleSignInButton callbackURL="/auth/callback" />
-          <Button
-            variant="ghost"
-            onClick={() => onOpenChange(false)}
-          >
-            Maybe later
-          </Button>
+          <AppleSignInButton callbackURL="/auth/callback" />
         </div>
       </DialogContent>
     </Dialog>
