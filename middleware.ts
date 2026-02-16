@@ -9,9 +9,9 @@
  * ## Onboarding Flow (New Users)
  *
  * New users go through this flow:
- * 1. Tutorial → Placement → Rank Result (PUBLIC - before OAuth)
- * 2. OAuth Sign Up (creates Better Auth session)
- * 3. Profile Completion (PROTECTED - after OAuth)
+ * 1. See dashboard → Tap a game → Tutorial (first time only)
+ * 2. Sign up via OAuth (creates Better Auth session)
+ * 3. Profile Completion (username + avatar, PROTECTED)
  * 4. Dashboard
  *
  * ## Route Groups & Protection
@@ -23,8 +23,9 @@
  * | /onboarding/placement | No | Pre-auth onboarding |
  * | /onboarding/rank-result | No | Pre-auth onboarding (has OAuth buttons) |
  * | /onboarding/profile | Yes | Post-auth profile completion |
- * | /game/* | Yes | Gameplay |
- * | / | Yes | Dashboard |
+ * | /game/daily* | No | Daily game (anonymous play) |
+ * | /game/* | Yes | Other gameplay |
+ * | / | No | Dashboard (public landing) |
  *
  * ## Session Detection
  *
@@ -51,8 +52,7 @@ import type { NextRequest } from "next/server"
 // =============================================================================
 
 /**
- * Routes that don't require authentication.
- * These patterns are matched using startsWith().
+ * Routes that don't require authentication (prefix match via startsWith).
  */
 const PUBLIC_ROUTES = [
   "/login",
@@ -68,6 +68,16 @@ const PUBLIC_ROUTES = [
   "/onboarding/tutorial",
   "/onboarding/placement",
   "/onboarding/rank-result",
+  // Daily game is playable without an account (anonymous via localStorage)
+  "/game/daily",
+]
+
+/**
+ * Routes that don't require authentication (exact match).
+ * These use === instead of startsWith() to avoid matching sub-routes.
+ */
+const PUBLIC_EXACT_ROUTES = [
+  "/", // Dashboard is the public landing page
 ]
 
 /**
@@ -111,7 +121,9 @@ export function middleware(request: NextRequest) {
   // ---------------------------
   // 1. Allow public routes
   // ---------------------------
-  const isPublicRoute = PUBLIC_ROUTES.some((route) => pathname.startsWith(route))
+  const isPublicRoute =
+    PUBLIC_ROUTES.some((route) => pathname.startsWith(route)) ||
+    PUBLIC_EXACT_ROUTES.some((route) => pathname === route)
   if (isPublicRoute) {
     // Special case: redirect authenticated users away from /login
     if (pathname === "/login" && isAuthenticated) {

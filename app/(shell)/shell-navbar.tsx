@@ -103,7 +103,8 @@ export function ShellNavbar() {
   }
 
   // Loading state: show skeleton to prevent layout shift
-  if (isSessionPending || isUserLoading) {
+  // Only wait for user loading if a session exists (anonymous users resolve immediately)
+  if (isSessionPending || (!!session && isUserLoading)) {
     return (
       <nav className="relative flex h-16 w-full items-center justify-between border-b bg-background px-4 shadow-sm md:px-6">
         <div className="mx-auto flex h-full w-full max-w-[1280px] items-center justify-between">

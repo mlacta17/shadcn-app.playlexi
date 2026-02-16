@@ -38,6 +38,7 @@ interface CompleteProfileRequest {
   birthYear?: number
   avatarId?: number
   placement?: PlacementResult
+  hasCompletedTutorial?: boolean
 }
 
 // =============================================================================
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
 
     // Parse request body
     const body = await request.json() as CompleteProfileRequest
-    const { username, birthYear, avatarId, placement } = body
+    const { username, birthYear, avatarId, placement, hasCompletedTutorial } = body
 
     // Validate username format
     const formatValidation = validateUsernameFormat(username)
@@ -132,6 +133,7 @@ export async function POST(request: Request) {
     }
 
     // Create the PlayLexi user (using validated placement or undefined)
+    // If tutorial was completed anonymously, sync the flag in the same insert
     const newUser = await createUser(
       db,
       {
@@ -141,6 +143,7 @@ export async function POST(request: Request) {
         birthYear,
         authProvider: "google", // TODO: Detect from session when Apple is added
         avatarId: avatarId ?? 1,
+        hasCompletedTutorial: !!hasCompletedTutorial,
       },
       validatedPlacement
     )

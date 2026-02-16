@@ -53,6 +53,8 @@ export interface CreateUserInput {
   authProvider: AuthProvider
   /** Selected avatar preset (1-3) */
   avatarId?: number
+  /** Whether user completed the tutorial before signing up */
+  hasCompletedTutorial?: boolean
 }
 
 /**
@@ -97,6 +99,8 @@ export interface UpdateUserInput {
   emailSecurity?: boolean
   /** Receive marketing emails */
   emailMarketing?: boolean
+  /** Whether user has completed the tutorial */
+  hasCompletedTutorial?: boolean
 }
 
 // =============================================================================
@@ -184,6 +188,7 @@ export async function createUser(
       birthYear: input.birthYear,
       authProvider: input.authProvider,
       avatarId: input.avatarId ?? 1,
+      hasCompletedTutorial: input.hasCompletedTutorial ?? false,
     })
     .returning()
 
@@ -318,6 +323,7 @@ export async function updateUser(
       ...(input.emailSocial !== undefined && { emailSocial: input.emailSocial }),
       ...(input.emailSecurity !== undefined && { emailSecurity: input.emailSecurity }),
       ...(input.emailMarketing !== undefined && { emailMarketing: input.emailMarketing }),
+      ...(input.hasCompletedTutorial !== undefined && { hasCompletedTutorial: input.hasCompletedTutorial }),
     })
     .where(eq(schema.users.id, userId))
     .returning()

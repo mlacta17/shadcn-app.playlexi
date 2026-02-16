@@ -43,8 +43,10 @@
 
 import * as React from "react"
 import { motion } from "motion/react"
+import { useSession } from "@/lib/auth/client"
 
 import { GameModeCard } from "./game-mode-card"
+import { SignUpPromptDialog } from "./sign-up-prompt-dialog"
 import { Button } from "@/components/ui/button"
 import { ArrowLeftIcon, ArrowRightIcon } from "@/lib/icons"
 import type { GameModeConfig } from "@/lib/game-modes"
@@ -160,6 +162,17 @@ function GameModeCarousel({ modes }: GameModeCarouselProps) {
   const touchStartX = React.useRef(0)
   const cardOffset = useCardOffset()
 
+  // Auth state for locked card detection
+  const { data: session } = useSession()
+  const isAuthenticated = !!session
+
+  // Sign-up prompt dialog state
+  const [promptMode, setPromptMode] = React.useState<GameModeConfig | null>(null)
+
+  const handleLockedClick = React.useCallback((mode: GameModeConfig) => {
+    setPromptMode(mode)
+  }, [])
+
   // Track previous active index to detect wrap-around transitions
   React.useEffect(() => {
     prevActiveRef.current = activeIndex
@@ -269,7 +282,11 @@ function GameModeCarousel({ modes }: GameModeCarouselProps) {
                   cursor: isFocused ? "default" : "pointer",
                 }}
               >
-                <GameModeCard mode={mode} />
+                <GameModeCard
+                  mode={mode}
+                  isLocked={!!mode.requiresAuth && !isAuthenticated}
+                  onLockedClick={handleLockedClick}
+                />
               </div>
             </motion.div>
           )
@@ -295,6 +312,13 @@ function GameModeCarousel({ modes }: GameModeCarouselProps) {
           <ArrowRightIcon />
         </Button>
       </div>
+
+      {/* Sign-up prompt for locked game modes */}
+      <SignUpPromptDialog
+        open={!!promptMode}
+        onOpenChange={(open) => !open && setPromptMode(null)}
+        gameMode={promptMode}
+      />
     </div>
   )
 }

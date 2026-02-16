@@ -27,11 +27,13 @@ import * as React from "react"
 import { Suspense } from "react"
 import Image from "next/image"
 import { useRouter, useSearchParams } from "next/navigation"
+import { useSession } from "@/lib/auth/client"
 import { EyeIcon, EyeOffIcon } from "@/lib/icons"
 
 import { TopNavbar } from "@/components/ui/top-navbar"
 import { ActionCard } from "@/components/ui/action-card"
 import { Button } from "@/components/ui/button"
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button"
 import {
   Table,
   TableBody,
@@ -140,6 +142,8 @@ function DifficultyBar({ tier }: DifficultyBarProps) {
 function ResultContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { data: session } = useSession()
+  const isAuthenticated = !!session
 
   // Get params from URL
   const puzzleNumber = parseInt(searchParams.get("puzzleNumber") || "0", 10)
@@ -155,11 +159,18 @@ function ResultContent() {
   const [isChallengeDialogOpen, setIsChallengeDialogOpen] = React.useState(false)
   const [isShareDialogOpen, setIsShareDialogOpen] = React.useState(false)
 
-  // Fetch full result on mount
+  // Fetch full result on mount (include visitorId for anonymous users)
   React.useEffect(() => {
     async function fetchResult() {
       try {
-        const response = await fetch("/api/daily-spell")
+        let url = "/api/daily-spell"
+        if (!isAuthenticated) {
+          const visitorId = localStorage.getItem("playlexi_visitor_id")
+          if (visitorId) {
+            url += `?visitorId=${encodeURIComponent(visitorId)}`
+          }
+        }
+        const response = await fetch(url)
         if (response.ok) {
           const data = (await response.json()) as ApiResponse
           if (data.hasPlayed && data.userResult) {
@@ -181,7 +192,7 @@ function ResultContent() {
     }
 
     fetchResult()
-  }, [])
+  }, [isAuthenticated])
 
   // Toggle word reveal
   const handleToggleReveal = (index: number) => {
@@ -301,6 +312,19 @@ function ResultContent() {
               onClick={handleShare}
             />
           </div>
+
+          {/* Sign-up CTA for anonymous users */}
+          {!isAuthenticated && (
+            <div className="flex flex-col items-center gap-3 w-full max-w-sm rounded-xl border border-border bg-muted/30 p-6">
+              <p className="text-sm font-medium text-foreground text-center">
+                Create an account to track your stats
+              </p>
+              <p className="text-xs text-muted-foreground text-center">
+                Save your streaks, compete on leaderboards, and unlock all game modes.
+              </p>
+              <GoogleSignInButton callbackURL="/auth/callback" className="w-full" />
+            </div>
+          )}
 
           {/* Data Table - Uses standard Table component with hover states */}
           {/* Column order: [Show] [Correct Answer] [Your Answer] [Difficulty] [Status] */}

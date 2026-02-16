@@ -33,6 +33,8 @@ export interface GameModeConfig {
   href?: string
   /** Optional badge text (e.g., "Coming soon") */
   badge?: string
+  /** Whether this mode requires authentication to play */
+  requiresAuth?: boolean
 }
 
 // =============================================================================
@@ -57,6 +59,7 @@ export const GAME_MODES: GameModeConfig[] = [
     illustration: "/illustrations/game-cards/endless.png",
     accentColor: "#FF7301",
     href: "/game/endless",
+    requiresAuth: true,
   },
   {
     id: "blitz",

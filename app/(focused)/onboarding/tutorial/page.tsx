@@ -1,7 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Suspense } from "react"
+import { useSession } from "@/lib/auth/client"
 import { ArrowLeftIcon, ArrowRightIcon } from "@/lib/icons"
 
 import { TopNavbar } from "@/components/ui/top-navbar"
@@ -23,7 +25,7 @@ interface TutorialStep {
 
 /**
  * Tutorial content from PRD Section 2.2.1.
- * 4 steps teaching how to play before the placement test.
+ * 4 steps teaching how to play.
  */
 const TUTORIAL_STEPS: TutorialStep[] = [
   {
@@ -42,9 +44,9 @@ const TUTORIAL_STEPS: TutorialStep[] = [
   },
   {
     step: 3,
-    title: "First, a quick placement test",
+    title: "The game adapts to your skill level",
     description:
-      "We'll ask you 10-15 words to find your level. This is just calibration — don't worry about mistakes!",
+      "As you play, the difficulty adjusts automatically. Words get harder as you improve — no setup needed!",
     image: "/images/tutorial/step-3.png",
   },
   {
@@ -57,33 +59,71 @@ const TUTORIAL_STEPS: TutorialStep[] = [
 ]
 
 // =============================================================================
-// COMPONENT
+// CONTENT COMPONENT
 // =============================================================================
 
-/**
- * Onboarding Tutorial Page
- *
- * Teaches new users how to play before the placement test.
- * 4 steps with progress indicator, previous/next navigation.
- *
- * ## Flow
- * Tutorial (here) → Placement Test → Rank Result → OAuth → Profile
- *
- * ## Architecture Decision
- * Uses Card + Badge primitives instead of a TutorialCard component.
- * See COMPONENT_INVENTORY.md Architecture Decision #5.
- *
- * @see PRD.md Section 2.2.1 — Tutorial (4 Steps)
- * @see Figma node 2703:15700
- */
-export default function TutorialPage() {
+function TutorialContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const { data: session } = useSession()
+
+  // Read returnTo from URL or sessionStorage (backup for page refresh).
+  // Validated to prevent open redirect attacks — must be a relative path.
+  const returnTo = React.useMemo(() => {
+    const fallback = "/"
+
+    const raw = searchParams.get("returnTo")
+    if (raw && raw.startsWith("/") && !raw.startsWith("//")) {
+      // Safe relative path — store as backup for page refresh
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("playlexi_tutorial_returnTo", raw)
+      }
+      return raw
+    }
+
+    // No URL param or invalid — try sessionStorage backup
+    if (typeof window !== "undefined") {
+      const stored = sessionStorage.getItem("playlexi_tutorial_returnTo")
+      if (stored && stored.startsWith("/") && !stored.startsWith("//")) {
+        return stored
+      }
+    }
+
+    return fallback
+  }, [searchParams])
+
   const [currentStep, setCurrentStep] = React.useState(0)
 
   const step = TUTORIAL_STEPS[currentStep]
   const isFirstStep = currentStep === 0
   const isLastStep = currentStep === TUTORIAL_STEPS.length - 1
   const progressPercent = ((currentStep + 1) / TUTORIAL_STEPS.length) * 100
+
+  // ---------------------------------------------------------------------------
+  // Complete Tutorial Helper
+  // ---------------------------------------------------------------------------
+
+  const completeTutorial = React.useCallback(() => {
+    // Set localStorage flag (works for all users)
+    localStorage.setItem("playlexi_tutorial_complete", "true")
+
+    // If authenticated, also sync to server
+    if (session) {
+      fetch("/api/users/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hasCompletedTutorial: true }),
+      }).catch(() => {
+        // Non-critical — localStorage is the primary check
+      })
+    }
+
+    // Clean up sessionStorage
+    sessionStorage.removeItem("playlexi_tutorial_returnTo")
+
+    // Navigate to the return destination
+    router.push(returnTo)
+  }, [session, router, returnTo])
 
   // ---------------------------------------------------------------------------
   // Handlers
@@ -94,8 +134,7 @@ export default function TutorialPage() {
   }
 
   const handleSkip = () => {
-    // Skip directly to placement test
-    router.push("/onboarding/placement")
+    completeTutorial()
   }
 
   const handlePrevious = () => {
@@ -106,8 +145,7 @@ export default function TutorialPage() {
 
   const handleNext = () => {
     if (isLastStep) {
-      // Go to placement test
-      router.push("/onboarding/placement")
+      completeTutorial()
     } else {
       setCurrentStep((prev) => prev + 1)
     }
@@ -176,7 +214,7 @@ export default function TutorialPage() {
               variant="outline"
               size="icon-lg"
               onClick={handleNext}
-              aria-label={isLastStep ? "Start placement test" : "Next step"}
+              aria-label={isLastStep ? "Start playing" : "Next step"}
             >
               <ArrowRightIcon />
             </Button>
@@ -221,7 +259,7 @@ export default function TutorialPage() {
               variant="outline"
               size="icon-lg"
               onClick={handleNext}
-              aria-label={isLastStep ? "Start placement test" : "Next step"}
+              aria-label={isLastStep ? "Start playing" : "Next step"}
             >
               <ArrowRightIcon />
             </Button>
@@ -229,5 +267,36 @@ export default function TutorialPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+// =============================================================================
+// PAGE COMPONENT
+// =============================================================================
+
+/**
+ * Onboarding Tutorial Page
+ *
+ * Teaches new users how to play before their first game.
+ * 4 steps with progress indicator, previous/next navigation.
+ *
+ * Accepts `?returnTo=/game/daily` search param to redirect after completion.
+ * Sets `localStorage("playlexi_tutorial_complete")` on finish/skip.
+ * If authenticated, also PATCHes `/api/users/me` with `hasCompletedTutorial: true`.
+ *
+ * @see PRD.md Section 2.2.1 — Tutorial (4 Steps)
+ * @see Figma node 2703:15700
+ */
+export default function TutorialPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="bg-background flex min-h-screen items-center justify-center">
+          <div className="text-muted-foreground">Loading tutorial...</div>
+        </div>
+      }
+    >
+      <TutorialContent />
+    </Suspense>
   )
 }

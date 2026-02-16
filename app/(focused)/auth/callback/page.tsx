@@ -54,7 +54,7 @@ export default async function AuthCallbackPage() {
     redirect(`/?welcome=back&user=${encodeURIComponent(username)}`)
   } else {
     // New user - needs profile completion
-    // Note: Placement data should already be in sessionStorage from onboarding
+    // New user — complete profile (username + avatar)
     redirect("/onboarding/profile")
   }
 }

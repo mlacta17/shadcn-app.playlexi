@@ -23,9 +23,11 @@ import * as React from "react"
 import { Suspense } from "react"
 import Image from "next/image"
 import { useRouter, useSearchParams } from "next/navigation"
+import { useSession } from "@/lib/auth/client"
 
 import { TopNavbar } from "@/components/ui/top-navbar"
 import { Button } from "@/components/ui/button"
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button"
 import { CheckIcon } from "@/lib/icons"
 import { cn } from "@/lib/utils"
 
@@ -109,6 +111,8 @@ function WeekCalendar({ days }: WeekCalendarProps) {
 function StreakContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { data: session } = useSession()
+  const isAuthenticated = !!session
 
   // Get params from URL
   const puzzleId = searchParams.get("puzzleId") || ""
@@ -120,11 +124,18 @@ function StreakContent() {
   const [stats, setStats] = React.useState<StatsResponse | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
 
-  // Fetch stats on mount
+  // Fetch stats on mount (include visitorId for anonymous users)
   React.useEffect(() => {
     async function fetchStats() {
       try {
-        const response = await fetch("/api/daily-spell/stats")
+        let url = "/api/daily-spell/stats"
+        if (!isAuthenticated) {
+          const visitorId = localStorage.getItem("playlexi_visitor_id")
+          if (visitorId) {
+            url += `?visitorId=${encodeURIComponent(visitorId)}`
+          }
+        }
+        const response = await fetch(url)
         if (response.ok) {
           const data = (await response.json()) as StatsResponse
           setStats(data)
@@ -137,7 +148,7 @@ function StreakContent() {
     }
 
     fetchStats()
-  }, [])
+  }, [isAuthenticated])
 
   // Build week days from stats
   const weekDays = React.useMemo((): WeekDay[] => {
@@ -227,6 +238,16 @@ function StreakContent() {
 
           {/* Week Calendar */}
           {!isLoading && <WeekCalendar days={weekDays} />}
+
+          {/* Sign-up CTA for anonymous users */}
+          {!isAuthenticated && (
+            <div className="flex flex-col items-center gap-3 w-full max-w-[304px]">
+              <p className="text-sm text-muted-foreground text-center">
+                Sign up to save your streak across devices
+              </p>
+              <GoogleSignInButton callbackURL="/auth/callback" className="w-full" />
+            </div>
+          )}
 
           {/* Action Buttons - stacked, max-width constrained */}
           <div className="flex flex-col gap-2 items-center w-full max-w-[1280px] px-24">

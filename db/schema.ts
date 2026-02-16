@@ -195,6 +195,11 @@ export const users = sqliteTable(
       .notNull()
       .default(false),
 
+    // Tutorial completion tracking
+    hasCompletedTutorial: integer("has_completed_tutorial", { mode: "boolean" })
+      .notNull()
+      .default(false),
+
     // GDPR: Account deletion request
     deletionRequestedAt: integer("deletion_requested_at", { mode: "timestamp" }),
   },

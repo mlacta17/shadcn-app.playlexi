@@ -22,8 +22,9 @@
  *
  * ## Authentication
  *
- * All routes in (shell) require authentication.
- * Middleware redirects unauthenticated users to /login.
+ * Most routes in (shell) require authentication, but the dashboard (/)
+ * is public to allow anonymous users to see game modes.
+ * Middleware redirects unauthenticated users to /login for protected routes.
  *
  * @see app/(focused)/layout.tsx for focused experience layout
  * @see middleware.ts for route protection

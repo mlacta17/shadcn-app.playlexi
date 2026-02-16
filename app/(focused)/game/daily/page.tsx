@@ -32,6 +32,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
+import { useSession } from "@/lib/auth/client"
 
 import { TopNavbar } from "@/components/ui/top-navbar"
 import { GameTimer } from "@/components/game/game-timer"
@@ -49,13 +50,72 @@ import { usePhoneticLearning } from "@/hooks/use-phonetic-learning"
 import { formatTranscriptForDisplay, extractLettersFromVoice } from "@/lib/answer-validation"
 import { showErrorToast } from "@/lib/toast-utils"
 
+/** Get or create a persistent visitor ID for anonymous users */
+function getVisitorId(): string {
+  const key = "playlexi_visitor_id"
+  let id = localStorage.getItem(key)
+  if (!id) {
+    id = crypto.randomUUID()
+    localStorage.setItem(key, id)
+  }
+  return id
+}
+
 export default function DailySpellGamePage() {
   const router = useRouter()
+  const { data: session, isPending: isSessionPending } = useSession()
+
+  // ---------------------------------------------------------------------------
+  // Tutorial Intercept — show tutorial once on first-ever game tap
+  // ---------------------------------------------------------------------------
+  const [tutorialChecked, setTutorialChecked] = React.useState(false)
+
+  React.useEffect(() => {
+    // Wait for session to resolve before making any decisions.
+    // Without this, we'd see session=null while still loading and
+    // incorrectly treat an authenticated user as anonymous.
+    if (isSessionPending) return
+
+    const tutorialComplete = localStorage.getItem("playlexi_tutorial_complete")
+    if (tutorialComplete === "true") {
+      setTutorialChecked(true)
+      return
+    }
+
+    // If authenticated, check server-side flag
+    if (session) {
+      fetch("/api/users/me")
+        .then((res) => res.ok ? res.json() as Promise<{ hasCompletedTutorial?: boolean }> : null)
+        .then((data) => {
+          if (data?.hasCompletedTutorial) {
+            localStorage.setItem("playlexi_tutorial_complete", "true")
+            setTutorialChecked(true)
+          } else {
+            router.replace("/onboarding/tutorial?returnTo=/game/daily")
+          }
+        })
+        .catch(() => {
+          // On error, skip tutorial check to avoid blocking gameplay
+          setTutorialChecked(true)
+        })
+    } else {
+      // Anonymous user, no localStorage flag → show tutorial
+      router.replace("/onboarding/tutorial?returnTo=/game/daily")
+    }
+  }, [session, isSessionPending, router])
+
+  // For anonymous users, generate/retrieve a persistent visitor ID.
+  // Guarded with typeof check to avoid SSR crash (localStorage is browser-only).
+  const visitorId = React.useMemo(() => {
+    if (session) return undefined
+    if (typeof window === "undefined") return undefined
+    return getVisitorId()
+  }, [session])
 
   // ---------------------------------------------------------------------------
   // Daily Spell Session State
   // ---------------------------------------------------------------------------
-  const { state: gameState, actions: gameActions, computed, submitResultPromise } = useDailySpellSession()
+  const { state: gameState, actions: gameActions, computed, submitResultPromise } = useDailySpellSession(visitorId)
 
   // ---------------------------------------------------------------------------
   // Timer Hook
@@ -175,14 +235,15 @@ export default function DailySpellGamePage() {
   // Effects: Game Lifecycle
   // ---------------------------------------------------------------------------
 
-  // Auto-start game on mount
+  // Auto-start game on mount (only after tutorial check passes)
   React.useEffect(() => {
+    if (!tutorialChecked) return
     if (!hasStartedRef.current) {
       hasStartedRef.current = true
       fetchMappings()
       gameActions.startGame()
     }
-  }, [gameActions, fetchMappings])
+  }, [tutorialChecked, gameActions, fetchMappings])
 
   // Store timer methods in refs
   const timerRestartRef = React.useRef(timer.restart)
@@ -386,6 +447,18 @@ export default function DailySpellGamePage() {
     () => formatTranscriptForDisplay(transcript, userMappings),
     [transcript, userMappings]
   )
+
+  // ---------------------------------------------------------------------------
+  // Tutorial Check Loading State
+  // ---------------------------------------------------------------------------
+
+  if (!tutorialChecked) {
+    return (
+      <div className="bg-background flex min-h-screen items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    )
+  }
 
   // ---------------------------------------------------------------------------
   // Already Played State

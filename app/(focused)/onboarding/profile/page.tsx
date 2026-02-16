@@ -23,13 +23,6 @@ import { AvatarOption, AvatarPreview } from "@/components/ui/avatar-selector"
 import { showErrorToast } from "@/lib/toast-utils"
 
 // =============================================================================
-// CONSTANTS
-// =============================================================================
-
-/** SessionStorage key for placement test results (must match rank-result page) */
-const PLACEMENT_STORAGE_KEY = "playlexi_placement_result"
-
-// =============================================================================
 // TYPES
 // =============================================================================
 
@@ -39,17 +32,6 @@ interface ProfileFormData {
   username: string
   ageRange: AgeRangeValue | null
   avatarId: number
-}
-
-/** Placement result stored in sessionStorage after placement test */
-interface PlacementResult {
-  derivedTier: number
-  rating: number
-  ratingDeviation: number
-  correctCount: number
-  totalRounds: number
-  accuracy: number
-  timestamp: number
 }
 
 // =============================================================================
@@ -64,7 +46,7 @@ interface PlacementResult {
  * 2. Avatar Selection
  *
  * ## Flow
- * Tutorial → Placement Test → Rank Result → OAuth → **Profile Completion** → Dashboard
+ * OAuth → **Profile Completion** → Dashboard
  *
  * ## Architecture Decision
  * Single page with internal step state (not separate routes) because:
@@ -153,20 +135,8 @@ export default function ProfilePage() {
         ? birthYearFromAgeRange(formData.ageRange)
         : null
 
-      // Retrieve placement test results from sessionStorage
-      // These were stored by the rank-result page after placement test completion
-      let placement: PlacementResult | undefined
-      try {
-        const stored = sessionStorage.getItem(PLACEMENT_STORAGE_KEY)
-        if (stored) {
-          placement = JSON.parse(stored) as PlacementResult
-          // Clear sessionStorage after reading (one-time use)
-          sessionStorage.removeItem(PLACEMENT_STORAGE_KEY)
-        }
-      } catch (e) {
-        // Ignore parsing errors - proceed without placement data
-        console.warn("[ProfilePage] Could not parse placement data:", e)
-      }
+      // Check if tutorial was completed anonymously (sync to server)
+      const hasCompletedTutorial = localStorage.getItem("playlexi_tutorial_complete") === "true"
 
       // Call API to create PlayLexi user record
       const response = await fetch("/api/users/complete-profile", {
@@ -176,7 +146,7 @@ export default function ProfilePage() {
           username,
           birthYear,
           avatarId: formData.avatarId,
-          placement, // Include placement tier from sessionStorage
+          hasCompletedTutorial,
         }),
       })
 

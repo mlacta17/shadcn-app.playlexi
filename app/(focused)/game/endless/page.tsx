@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
+import { useSession } from "@/lib/auth/client"
 
 import { TopNavbar } from "@/components/ui/top-navbar"
 import { GameTimer } from "@/components/game/game-timer"
@@ -50,6 +51,44 @@ import { showErrorToast, showWarningToast } from "@/lib/toast-utils"
  */
 export default function EndlessGamePage() {
   const router = useRouter()
+  const { data: session, isPending: isSessionPending } = useSession()
+
+  // ---------------------------------------------------------------------------
+  // Tutorial Intercept — show tutorial once on first-ever game tap
+  // ---------------------------------------------------------------------------
+  const [tutorialChecked, setTutorialChecked] = React.useState(false)
+
+  React.useEffect(() => {
+    // Wait for session to resolve before making any decisions.
+    // Without this, we'd see session=null while still loading and
+    // incorrectly treat an authenticated user as anonymous.
+    if (isSessionPending) return
+
+    const tutorialComplete = localStorage.getItem("playlexi_tutorial_complete")
+    if (tutorialComplete === "true") {
+      setTutorialChecked(true)
+      return
+    }
+
+    // If authenticated, check server-side flag
+    if (session) {
+      fetch("/api/users/me")
+        .then((res) => res.ok ? res.json() as Promise<{ hasCompletedTutorial?: boolean }> : null)
+        .then((data) => {
+          if (data?.hasCompletedTutorial) {
+            localStorage.setItem("playlexi_tutorial_complete", "true")
+            setTutorialChecked(true)
+          } else {
+            router.replace("/onboarding/tutorial?returnTo=/game/endless")
+          }
+        })
+        .catch(() => {
+          setTutorialChecked(true)
+        })
+    } else {
+      router.replace("/onboarding/tutorial?returnTo=/game/endless")
+    }
+  }, [session, isSessionPending, router])
 
   // ---------------------------------------------------------------------------
   // User Tier (for word difficulty matching)
@@ -263,11 +302,11 @@ export default function EndlessGamePage() {
   // Effects: Coordinate game phase with timer and feedback
   // ---------------------------------------------------------------------------
 
-  // Auto-start game once tier is loaded (only once)
+  // Auto-start game once tier is loaded and tutorial check passes (only once)
   // Also fetch user's phonetic mappings for personalized recognition
   React.useEffect(() => {
-    // Wait for user tier to load before starting game
-    // This ensures word difficulty matches user's skill level
+    // Wait for tutorial check and user tier before starting game
+    if (!tutorialChecked) return
     if (isTierLoading) return
     if (!hasStartedRef.current) {
       hasStartedRef.current = true
@@ -275,7 +314,7 @@ export default function EndlessGamePage() {
       fetchMappings()
       gameActions.startGame()
     }
-  }, [gameActions, fetchMappings, isTierLoading])
+  }, [tutorialChecked, gameActions, fetchMappings, isTierLoading])
 
   // Store timer methods in refs to avoid dependency array issues during HMR
   const timerRestartRef = React.useRef(timer.restart)
@@ -537,6 +576,18 @@ export default function EndlessGamePage() {
     () => formatTranscriptForDisplay(transcript, userMappings),
     [transcript, userMappings]
   )
+
+  // ---------------------------------------------------------------------------
+  // Tutorial Check Loading State
+  // ---------------------------------------------------------------------------
+
+  if (!tutorialChecked) {
+    return (
+      <div className="bg-background flex min-h-screen items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    )
+  }
 
   // ---------------------------------------------------------------------------
   // Render

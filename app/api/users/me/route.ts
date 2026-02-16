@@ -55,6 +55,8 @@ export async function GET() {
       emailSocial: profile.emailSocial,
       emailSecurity: profile.emailSecurity,
       emailMarketing: profile.emailMarketing,
+      // Tutorial tracking
+      hasCompletedTutorial: profile.hasCompletedTutorial,
       // Include ranks for leaderboard display (XP-based)
       ranks: profile.ranks,
       // Include skill ratings for game difficulty matching (Glicko-2)
@@ -120,6 +122,9 @@ export async function PATCH(request: NextRequest) {
     }
     if (body.emailMarketing !== undefined) {
       updateData.emailMarketing = Boolean(body.emailMarketing)
+    }
+    if (body.hasCompletedTutorial !== undefined) {
+      updateData.hasCompletedTutorial = Boolean(body.hasCompletedTutorial)
     }
 
     // Check if there's anything to update

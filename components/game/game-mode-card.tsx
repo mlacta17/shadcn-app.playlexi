@@ -11,6 +11,7 @@
  * │  [Badge]                 │ ← Optional "Coming soon" badge
  * │                          │
  * │      Illustration        │ ← Fills top ~60%, over accent color
+ * │        [Lock]            │ ← Lock overlay if locked for anonymous users
  * │                          │
  * │ ░░░░ gradient fade ░░░░░ │ ← Dark gradient overlay
  * │                          │
@@ -30,10 +31,13 @@
  * @see Figma nodes 3021:14636, 3024:42384, 3021:14627, 3021:14616
  */
 
+"use client"
+
 import Link from "next/link"
 
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
+import { ShieldIcon } from "@/lib/icons"
 import type { GameModeConfig } from "@/lib/game-modes"
 
 // =============================================================================
@@ -58,17 +62,22 @@ interface GameModeCardProps {
   mode: GameModeConfig
   /** Additional class names for the card container */
   className?: string
+  /** Whether this card is locked (requires sign-up) */
+  isLocked?: boolean
+  /** Callback when a locked card is clicked */
+  onLockedClick?: (mode: GameModeConfig) => void
 }
 
 /**
  * A game mode card for the dashboard carousel.
  *
- * - Playable modes (with `href`) render as a Link for navigation
+ * - Playable modes (with `href` and not locked) render as a Link for navigation
+ * - Locked modes render as a button with grayscale + lock overlay
  * - Coming-soon modes render as a div with reduced opacity
  * - The illustration fills the top portion via `object-cover`
  * - The dark gradient ensures text readability over any background
  */
-function GameModeCard({ mode, className }: GameModeCardProps) {
+function GameModeCard({ mode, className, isLocked, onLockedClick }: GameModeCardProps) {
   const { title, description, illustration, accentColor, href, badge } = mode
   const isPlayable = !!href
 
@@ -92,6 +101,15 @@ function GameModeCard({ mode, className }: GameModeCardProps) {
             {badge}
           </Badge>
         )}
+
+        {/* Lock overlay for locked cards */}
+        {isLocked && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40">
+            <div className="flex size-14 items-center justify-center rounded-full bg-black/60">
+              <ShieldIcon className="size-7 text-white" />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Text Section — fixed height, white text on dark background */}
@@ -114,6 +132,8 @@ function GameModeCard({ mode, className }: GameModeCardProps) {
     "h-full w-full",
     // Disabled state for coming-soon modes
     !isPlayable && "pointer-events-none",
+    // Locked state: grayscale + reduced opacity
+    isLocked && "grayscale-[50%] opacity-80",
     className
   )
 
@@ -123,6 +143,27 @@ function GameModeCard({ mode, className }: GameModeCardProps) {
     backgroundImage: `${CARD_GRADIENT}, linear-gradient(90deg, ${accentColor} 0%, ${accentColor} 100%)`,
   }
 
+  // Locked: render as a button that triggers sign-up prompt
+  if (isPlayable && isLocked) {
+    return (
+      <button
+        type="button"
+        className={cn(
+          sharedClasses,
+          "pointer-events-auto cursor-pointer",
+          "transition-transform duration-200",
+          "hover:scale-[1.02] active:scale-[0.98]",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        )}
+        style={backgroundStyle}
+        onClick={() => onLockedClick?.(mode)}
+      >
+        {cardContent}
+      </button>
+    )
+  }
+
+  // Playable: render as a Link
   if (isPlayable) {
     return (
       <Link
@@ -141,6 +182,7 @@ function GameModeCard({ mode, className }: GameModeCardProps) {
     )
   }
 
+  // Coming soon: render as a disabled div
   return (
     <div
       className={sharedClasses}
