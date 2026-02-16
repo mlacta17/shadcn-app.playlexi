@@ -157,8 +157,12 @@ interface GameModeCarouselProps {
  * Uses Motion for spring-based animations. Loops infinitely.
  */
 function GameModeCarousel({ modes }: GameModeCarouselProps) {
-  const [activeIndex, setActiveIndex] = React.useState(0)
-  const prevActiveRef = React.useRef(activeIndex)
+  // Track both active and previous index in one state so wrap-around
+  // detection works without reading a ref during render.
+  const [{ activeIndex, prevIndex }, setNav] = React.useState({
+    activeIndex: 0,
+    prevIndex: 0,
+  })
   const touchStartX = React.useRef(0)
   const cardOffset = useCardOffset()
 
@@ -173,24 +177,29 @@ function GameModeCarousel({ modes }: GameModeCarouselProps) {
     setPromptMode(mode)
   }, [])
 
-  // Track previous active index to detect wrap-around transitions
-  React.useEffect(() => {
-    prevActiveRef.current = activeIndex
-  }, [activeIndex])
-
   // Navigation handlers (circular — always wraps)
+  // Each setter captures the outgoing activeIndex as prevIndex atomically.
   const goTo = React.useCallback(
-    (index: number) => setActiveIndex(index),
+    (index: number) =>
+      setNav((s) => ({ activeIndex: index, prevIndex: s.activeIndex })),
     []
   )
 
   const goNext = React.useCallback(
-    () => setActiveIndex((i) => (i + 1) % modes.length),
+    () =>
+      setNav((s) => ({
+        activeIndex: (s.activeIndex + 1) % modes.length,
+        prevIndex: s.activeIndex,
+      })),
     [modes.length]
   )
 
   const goPrev = React.useCallback(
-    () => setActiveIndex((i) => (i - 1 + modes.length) % modes.length),
+    () =>
+      setNav((s) => ({
+        activeIndex: (s.activeIndex - 1 + modes.length) % modes.length,
+        prevIndex: s.activeIndex,
+      })),
     [modes.length]
   )
 
@@ -233,7 +242,7 @@ function GameModeCarousel({ modes }: GameModeCarouselProps) {
           const offset = getCircularOffset(index, activeIndex, modes.length)
           const prevOffset = getCircularOffset(
             index,
-            prevActiveRef.current,
+            prevIndex,
             modes.length
           )
           const isFocused = offset === 0
@@ -253,6 +262,7 @@ function GameModeCarousel({ modes }: GameModeCarouselProps) {
                 x: -CARD_WIDTH / 2 + offset * cardOffset,
                 rotate: getRotation(offset),
                 zIndex: isFocused ? 20 : 10 - absOffset,
+                filter: isFocused ? "blur(0px)" : "blur(4px)",
               }}
               transition={didWrap ? INSTANT : SPRING}
               onClick={() => !isFocused && goTo(index)}
@@ -268,10 +278,11 @@ function GameModeCarousel({ modes }: GameModeCarouselProps) {
               }}
             >
               {/* White frost overlay — matches Figma rgba(255,255,255,0.56) */}
+              {/* Uses same spring as card position/blur so all effects settle together */}
               <motion.div
                 className="pointer-events-none absolute inset-0 z-10 rounded-3xl bg-white/[0.56]"
                 animate={{ opacity: isFocused ? 0 : 1 }}
-                transition={didWrap ? INSTANT : { duration: 0.3 }}
+                transition={didWrap ? INSTANT : SPRING}
               />
 
               {/* Card content */}
