@@ -1,5 +1,6 @@
 "use client"
 
+import * as React from "react"
 import { useRouter } from "next/navigation"
 import { CircleUserIcon } from "@/lib/icons"
 import { Button } from "@/components/ui/button"
@@ -24,14 +25,28 @@ interface SignInDialogProps {
  * Displays Google and Apple OAuth buttons in a centered dialog.
  * Matches the Figma design at node 3097:49442.
  *
- * "Sign up" link routing:
- * - If `localStorage("playlexi_tutorial_complete")` is set → `/login`
- * - Otherwise → `/onboarding/tutorial?returnTo=/login` (tutorial first, then OAuth)
+ * For users who haven't completed the tutorial, a "Sign up" link is shown
+ * that routes through the tutorial first, then returns to the dashboard
+ * with `?signIn=true` to auto-reopen this dialog.
+ *
+ * Once the tutorial is complete, the "Sign up" link is hidden since the
+ * OAuth buttons handle both sign-in and sign-up identically.
  *
  * @see components/game/sign-up-prompt-dialog.tsx for the locked-game-card variant
  */
 function SignInDialog({ open, onOpenChange }: SignInDialogProps) {
   const router = useRouter()
+
+  // Check tutorial completion to conditionally show "Sign up" link.
+  // Re-check each time the dialog opens (user may have completed tutorial since last open).
+  const [showSignUp, setShowSignUp] = React.useState(false)
+  React.useEffect(() => {
+    if (open) {
+      const tutorialComplete =
+        localStorage.getItem("playlexi_tutorial_complete") === "true"
+      setShowSignUp(!tutorialComplete)
+    }
+  }, [open])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -57,28 +72,27 @@ function SignInDialog({ open, onOpenChange }: SignInDialogProps) {
           </AppleSignInButton>
         </div>
 
-        <div className="flex items-center justify-center gap-1 text-sm">
-          <span className="text-muted-foreground">Don&apos;t have an account?</span>
-          <Button
-            variant="link"
-            className="h-auto p-0 text-sm font-medium"
-            onClick={() => {
-              onOpenChange(false)
-              // New users who haven't seen the tutorial get it first,
-              // then land on /login for OAuth. Users who already completed
-              // the tutorial skip straight to OAuth.
-              const tutorialComplete =
-                localStorage.getItem("playlexi_tutorial_complete") === "true"
-              if (tutorialComplete) {
-                router.push("/login")
-              } else {
-                router.push("/onboarding/tutorial?returnTo=/login")
-              }
-            }}
-          >
-            Sign up
-          </Button>
-        </div>
+        {/* Show "Sign up" only for users who haven't completed the tutorial.
+            Once tutorial is done, OAuth buttons handle both sign-in and sign-up. */}
+        {showSignUp && (
+          <div className="flex items-center justify-center gap-1 text-sm">
+            <span className="text-muted-foreground">Don&apos;t have an account?</span>
+            <Button
+              variant="link"
+              className="h-auto p-0 text-sm font-medium"
+              onClick={() => {
+                onOpenChange(false)
+                // Route through tutorial first, then return to dashboard
+                // with ?signIn=true to auto-reopen this dialog for OAuth
+                router.push(
+                  `/onboarding/tutorial?returnTo=${encodeURIComponent("/?signIn=true")}`
+                )
+              }}
+            >
+              Sign up
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )

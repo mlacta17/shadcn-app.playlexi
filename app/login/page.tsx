@@ -1,88 +1,19 @@
 /**
- * Login Page — PlayLexi
+ * Login Page — DEPRECATED
  *
- * Sign-in page with OAuth providers.
- * Full-page layout with navbar, centered card, and footer.
+ * The standalone login page has been replaced by the SignInDialog modal
+ * on the dashboard. This route redirects to / for backwards compatibility
+ * (bookmarks, shared links, etc.).
  *
- * ## OAuth Providers
- * - Google: Enabled (configured in lib/auth/index.ts)
- * - Apple: Coming soon (requires Apple Developer setup)
+ * The middleware also redirects /login → / before this page renders,
+ * so this server-side redirect is a safety net only.
  *
- * @see Figma: Playlexi.com > Login (node-id=2683-12521)
+ * @see components/auth/sign-in-dialog.tsx for the current sign-in UI
+ * @see middleware.ts for the primary /login → / redirect
  */
 
-import { UserIcon } from "@/lib/icons"
-import { Logo } from "@/components/ui/logo"
-import { GoogleSignInButton } from "@/components/auth"
-import { LoginNavbar } from "./login-navbar"
-
-// =============================================================================
-// PAGE COMPONENT
-// =============================================================================
+import { redirect } from "next/navigation"
 
 export default function LoginPage() {
-  return (
-    <div className="flex min-h-screen flex-col bg-background">
-      {/* Navbar - Client component wrapper to handle onSignUp */}
-      <LoginNavbar />
-
-      {/* Main Content */}
-      <main className="flex flex-1 flex-col items-center justify-center px-6 pb-20 pt-6">
-        {/* Login Card */}
-        <div className="w-full max-w-[394px] rounded-3xl border border-border bg-card px-6 py-10">
-          {/* User Icon */}
-          <div className="flex justify-center">
-            <div className="flex size-20 items-center justify-center rounded-full bg-secondary p-3">
-              <div className="flex size-full items-center justify-center rounded-full border border-border bg-background">
-                <UserIcon className="size-7 text-foreground" />
-              </div>
-            </div>
-          </div>
-
-          {/* Text Content */}
-          <div className="mt-6 space-y-2 text-center">
-            <h1 className="text-2xl font-bold text-card-foreground">
-              Sign into your account
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Log in to unlock tailored content and stay connected with your community.
-            </p>
-          </div>
-
-          {/* Sign-in Buttons */}
-          <div data-slot="sign-in-buttons" className="mt-6 space-y-2">
-            {/*
-              OAuth callback routes to /auth/callback which checks:
-              - If user has PlayLexi profile → Dashboard (/)
-              - If no profile → Profile completion (/onboarding/profile)
-
-              @see app/(focused)/auth/callback/page.tsx
-            */}
-            <GoogleSignInButton callbackURL="/auth/callback">
-              Sign in with Google
-            </GoogleSignInButton>
-            {/*
-              Apple Sign-In: Coming soon
-              Requires Apple Developer account setup:
-              1. Create App ID with Sign in with Apple capability
-              2. Create Services ID with domain verification
-              3. Generate private key for client secret
-              4. Add Apple provider to lib/auth/index.ts
-
-              <AppleSignInButton callbackURL="/onboarding/tutorial">
-                Sign in with Apple
-              </AppleSignInButton>
-            */}
-          </div>
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="flex h-16 items-center justify-center border-t border-border bg-background px-6 shadow-sm">
-        <p className="text-xs text-muted-foreground">
-          All rights reserved © 2026 PlayLexi
-        </p>
-      </footer>
-    </div>
-  )
+  redirect("/")
 }

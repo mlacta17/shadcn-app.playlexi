@@ -94,8 +94,8 @@ function RankResultContent() {
   }
 
   const handleSignIn = () => {
-    // Existing users can sign in
-    router.push("/login")
+    // Existing users can sign in — dashboard opens the SignInDialog via ?signIn=true
+    router.push("/?signIn=true")
   }
 
   return (

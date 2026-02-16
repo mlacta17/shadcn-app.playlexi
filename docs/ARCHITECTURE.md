@@ -1743,7 +1743,7 @@ The middleware does **manual cookie checking** — it does not export from the a
 | Route | Auth Required | Purpose |
 |-------|--------------|---------|
 | `/` | No | Dashboard (public landing page) |
-| `/login` | No | Sign in page |
+| `/login` | No | Redirects to `/` (legacy route — sign-in now uses SignInDialog modal on dashboard) |
 | `/game/daily*` | No | Daily game (anonymous via localStorage) |
 | `/onboarding/tutorial` | No | Tutorial (pre-auth) |
 | `/onboarding/placement` | No | Placement test (pre-auth, reserved for future) |

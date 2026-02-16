@@ -39,9 +39,9 @@ export default async function AuthCallbackPage() {
     query: { disableCookieCache: true },
   })
 
-  // If no session, redirect to login
+  // If no session, redirect to dashboard (user can sign in via modal)
   if (!session?.user) {
-    redirect("/login")
+    redirect("/")
   }
 
   // Check if user has a PlayLexi profile

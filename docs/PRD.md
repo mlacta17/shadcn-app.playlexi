@@ -56,7 +56,7 @@ The app dashboard (`/`) is public — no account required to see game modes or p
 | Button | Destination | Flow |
 |--------|-------------|------|
 | "Get Started" | `app.playlexi.com/` | Public dashboard with game carousel |
-| "I Have an Account" | `app.playlexi.com/login` | Existing user flow |
+| "I Have an Account" | `app.playlexi.com/` | Opens SignInDialog modal on dashboard (existing user flow) |
 
 **App (app.playlexi.com):**
 | Element | Destination | Flow |
@@ -66,8 +66,8 @@ The app dashboard (`/`) is public — no account required to see game modes or p
 | Daily Spell card | `/game/daily` | Playable anonymously (localStorage persistence) |
 | Locked game card (e.g., Endless) | Sign-up modal | Modal with Google and Apple OAuth buttons |
 | Navbar "Sign in" button | Sign-in dialog | Modal with Google and Apple OAuth buttons + "Sign up" link |
-| "Sign up" link in dialog | Tutorial or `/login` | Checks tutorial status: if not done → tutorial first, then `/login`; if done → `/login` directly |
-| OAuth buttons on `/login` | OAuth → Dashboard | Existing user flow |
+| "Sign up" link in dialog | Tutorial → `/?signIn=true` | Only shown when tutorial not complete. Routes to `/onboarding/tutorial?returnTo=/?signIn=true` (tutorial first, then back to dashboard with auto-open dialog). Hidden when tutorial is complete (OAuth buttons handle both sign-in and sign-up). |
+| OAuth buttons in SignInDialog | OAuth → Dashboard | Existing user flow (sign-in and sign-up via modal) |
 
 **Why the dashboard is public:**
 - Reduces friction — users see the game immediately
@@ -151,18 +151,18 @@ If the user completed the tutorial anonymously before signing up, the `hasComple
 ### 2.3 Existing User Flow
 
 ```
-Entry: Dashboard (/) → Navbar "Sign in" OR /login
+Entry: Dashboard (/) → Navbar "Sign in" (opens SignInDialog modal)
                                ↓
-                         OAuth Login (Google)
+                         OAuth Login (Google) via SignInDialog
                                ↓
                          Dashboard (all modes unlocked)
 ```
 
-- Direct to OAuth via `/login` page
+- Direct to OAuth via SignInDialog modal on dashboard
 - No tutorial (already completed — flag in DB)
 - Straight to dashboard with all game modes unlocked
 
-**Cross-linking:** Login page has "New here? Get Started" link.
+**Legacy route:** `/login` redirects to `/` (deprecated).
 
 **Detection Logic (auth callback):** After OAuth, check if `users` record exists for `auth_user.id`:
 - If exists → redirect to `/` (returning user)

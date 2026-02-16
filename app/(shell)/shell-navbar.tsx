@@ -81,10 +81,20 @@ export function ShellNavbar() {
       }
     : undefined
 
+  // Auto-open sign-in dialog when returning from tutorial with ?signIn=true
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("signIn") === "true") {
+      setSignInOpen(true)
+      // Clean up URL so the param doesn't persist on refresh
+      window.history.replaceState({}, "", "/")
+    }
+  }, [])
+
   // Event handlers
   const handleSignOut = async () => {
     await signOut()
-    router.push("/login")
+    router.push("/")
   }
 
   const handleSignIn = () => {

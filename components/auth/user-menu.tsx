@@ -125,7 +125,7 @@ export function UserMenu({ compact = false }: UserMenuProps) {
     if (compact) {
       return (
         <Button variant="outline" size="sm" asChild>
-          <a href="/login">Sign In</a>
+          <a href="/">Sign In</a>
         </Button>
       )
     }

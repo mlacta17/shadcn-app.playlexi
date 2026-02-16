@@ -2,8 +2,8 @@
  * Next.js Middleware — PlayLexi
  *
  * Handles authentication-based routing:
- * 1. Protects authenticated routes — redirects to /login if not signed in
- * 2. Redirects authenticated users away from /login
+ * 1. Redirects legacy /login to / (sign-in is handled by the SignInDialog modal)
+ * 2. Protects authenticated routes — redirects to / if not signed in
  * 3. Routes new users through onboarding flow
  *
  * ## Onboarding Flow (New Users)
@@ -18,15 +18,15 @@
  *
  * | Route | Auth Required | Purpose |
  * |-------|---------------|---------|
- * | /login | No | Sign in page |
+ * | / | No | Dashboard (public landing) |
+ * | /leaderboard | No | Public leaderboard |
  * | /onboarding/tutorial | No | Pre-auth onboarding |
  * | /onboarding/placement | No | Pre-auth onboarding |
  * | /onboarding/rank-result | No | Pre-auth onboarding (has OAuth buttons) |
  * | /onboarding/profile | Yes | Post-auth profile completion |
  * | /game/daily* | No | Daily game (anonymous play) |
  * | /game/* | Yes | Other gameplay |
- * | / | No | Dashboard (public landing) |
- * | /leaderboard | No | Public leaderboard |
+ * | /login | Redirects → / | Legacy route (sign-in uses modal now) |
  *
  * ## Session Detection
  *
@@ -56,13 +56,12 @@ import type { NextRequest } from "next/server"
  * Routes that don't require authentication (prefix match via startsWith).
  */
 const PUBLIC_ROUTES = [
-  "/login",
   "/api/",
   "/_next/",
   "/favicon.ico",
   "/showcase",
   // OAuth callback — this page handles its own session check and redirects
-  // to /login if no session exists. Must be public so the middleware doesn't
+  // to / if no session exists. Must be public so the middleware doesn't
   // block the first request after OAuth (before the cookie is fully available).
   "/auth/callback",
   // Pre-auth onboarding (before OAuth)
@@ -113,6 +112,15 @@ const SECURE_SESSION_COOKIE_NAME = "__Secure-better-auth.session_token"
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
+  // ---------------------------
+  // 0. Legacy /login redirect
+  // ---------------------------
+  // The /login page has been replaced by the SignInDialog modal on the
+  // dashboard. Redirect for backwards compatibility (bookmarks, old links).
+  if (pathname === "/login") {
+    return NextResponse.redirect(new URL("/", request.url))
+  }
+
   // Check if user has a session cookie (lightweight auth check)
   // Better Auth uses "__Secure-" prefix in production, so check both names
   const sessionToken =
@@ -127,10 +135,6 @@ export function middleware(request: NextRequest) {
     PUBLIC_ROUTES.some((route) => pathname.startsWith(route)) ||
     PUBLIC_EXACT_ROUTES.some((route) => pathname === route)
   if (isPublicRoute) {
-    // Special case: redirect authenticated users away from /login
-    if (pathname === "/login" && isAuthenticated) {
-      return NextResponse.redirect(new URL("/", request.url))
-    }
     return NextResponse.next()
   }
 
@@ -141,7 +145,7 @@ export function middleware(request: NextRequest) {
   if (isOnboardingRoute) {
     // Must be authenticated to access onboarding
     if (!isAuthenticated) {
-      return NextResponse.redirect(new URL("/login", request.url))
+      return NextResponse.redirect(new URL("/", request.url))
     }
     return NextResponse.next()
   }
@@ -150,10 +154,8 @@ export function middleware(request: NextRequest) {
   // 3. Protect all other routes
   // ---------------------------
   if (!isAuthenticated) {
-    // Store the original URL to redirect back after login
-    const loginUrl = new URL("/login", request.url)
-    loginUrl.searchParams.set("callbackUrl", pathname)
-    return NextResponse.redirect(loginUrl)
+    // Redirect to dashboard — user can sign in via the SignInDialog modal
+    return NextResponse.redirect(new URL("/", request.url))
   }
 
   // User is authenticated, allow access
