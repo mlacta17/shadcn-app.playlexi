@@ -127,12 +127,16 @@ For user profile and settings.
 
 ---
 
-## 7. Onboarding Components
+## 7. Auth & Onboarding Components
 
-For new user flow.
+For authentication dialogs and new user flow.
 
 | Component | Description | Design Status | Implementation Status | Notes |
 |-----------|-------------|---------------|----------------------|-------|
+| **SignInDialog** | Navbar sign-in modal with OAuth | Done | Done | Modal triggered by navbar "Sign in" button. Shows Google + Apple OAuth buttons. "Sign up" link checks `localStorage("playlexi_tutorial_complete")`: if set → `/login`, else → tutorial first. Located at `components/auth/sign-in-dialog.tsx`. Figma: node `3097:49442`. |
+| **SignUpPromptDialog** | Locked-game sign-up modal | Done | Done | Modal triggered when anonymous users tap locked game cards. CircleUserIcon in double-circle pattern, Google + Apple OAuth buttons. Dynamic title: "Sign up to play {game}". Located at `components/game/sign-up-prompt-dialog.tsx`. Figma: node `3097:49514`. |
+| **GoogleSignInButton** | Branded Google OAuth button | Done | Done | Triggers Google OAuth via Better Auth. Loading state while redirecting. Located at `components/auth/google-sign-in-button.tsx`. |
+| **AppleSignInButton** | Branded Apple OAuth button | Done | Done | Triggers Apple OAuth via Better Auth. Loading state while redirecting. Located at `components/auth/apple-sign-in-button.tsx`. |
 | ~~**TutorialCard**~~ | ~~Step card with illustration~~ | N/A | N/A | **Not needed.** Use `Card` + `Badge size="number"` + content. See Architecture Decision #5 below. |
 | ~~**TutorialStep**~~ | ~~Individual step content~~ | N/A | N/A | **Not needed.** Just content inside Card — title, image, description. |
 | **ProfileCompletionForm** | Username, birth year, avatar form | Done | Done | **Implemented as page.** Two-step form: Step 1 (username + optional age range), Step 2 (avatar selection). Debounced username validation, age stored as birth year. Located at `app/(focused)/onboarding/profile/page.tsx`. Uses `useUsernameCheck` hook. |

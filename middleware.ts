@@ -26,6 +26,7 @@
  * | /game/daily* | No | Daily game (anonymous play) |
  * | /game/* | Yes | Other gameplay |
  * | / | No | Dashboard (public landing) |
+ * | /leaderboard | No | Public leaderboard |
  *
  * ## Session Detection
  *

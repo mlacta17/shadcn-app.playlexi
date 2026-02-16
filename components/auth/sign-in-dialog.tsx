@@ -24,6 +24,10 @@ interface SignInDialogProps {
  * Displays Google and Apple OAuth buttons in a centered dialog.
  * Matches the Figma design at node 3097:49442.
  *
+ * "Sign up" link routing:
+ * - If `localStorage("playlexi_tutorial_complete")` is set → `/login`
+ * - Otherwise → `/onboarding/tutorial?returnTo=/login` (tutorial first, then OAuth)
+ *
  * @see components/game/sign-up-prompt-dialog.tsx for the locked-game-card variant
  */
 function SignInDialog({ open, onOpenChange }: SignInDialogProps) {

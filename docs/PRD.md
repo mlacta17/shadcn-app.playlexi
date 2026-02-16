@@ -61,10 +61,12 @@ The app dashboard (`/`) is public — no account required to see game modes or p
 **App (app.playlexi.com):**
 | Element | Destination | Flow |
 |---------|-------------|------|
-| `/` (landing page) | Dashboard | Public — game carousel, navbar shows "Sign up" for anonymous |
+| `/` (landing page) | Dashboard | Public — game carousel, navbar shows "Sign in" for anonymous |
+| `/leaderboard` | Leaderboard | Public — viewable by everyone, auth optional |
 | Daily Spell card | `/game/daily` | Playable anonymously (localStorage persistence) |
-| Locked game card (e.g., Endless) | Sign-up modal | Modal with Google sign-in button |
-| Navbar "Sign up" button | `/login` | OAuth sign-up flow |
+| Locked game card (e.g., Endless) | Sign-up modal | Modal with Google and Apple OAuth buttons |
+| Navbar "Sign in" button | Sign-in dialog | Modal with Google and Apple OAuth buttons + "Sign up" link |
+| "Sign up" link in dialog | Tutorial or `/login` | Checks tutorial status: if not done → tutorial first, then `/login`; if done → `/login` directly |
 | OAuth buttons on `/login` | OAuth → Dashboard | Existing user flow |
 
 **Why the dashboard is public:**
