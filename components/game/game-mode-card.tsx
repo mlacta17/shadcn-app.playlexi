@@ -37,7 +37,6 @@ import Link from "next/link"
 
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
-import { ShieldIcon } from "@/lib/icons"
 import type { GameModeConfig } from "@/lib/game-modes"
 
 // =============================================================================
@@ -72,7 +71,7 @@ interface GameModeCardProps {
  * A game mode card for the dashboard carousel.
  *
  * - Playable modes (with `href` and not locked) render as a Link for navigation
- * - Locked modes render as a button with grayscale + lock overlay
+ * - Locked modes render as a button with dark overlay + lock icon (Figma node 3103:50678)
  * - Coming-soon modes render as a div with reduced opacity
  * - The illustration fills the top portion via `object-cover`
  * - The dark gradient ensures text readability over any background
@@ -89,7 +88,10 @@ function GameModeCard({ mode, className, isLocked, onLockedClick }: GameModeCard
         <img
           src={illustration}
           alt={`${title} illustration`}
-          className="absolute inset-0 h-full w-full object-cover pointer-events-none"
+          className={cn(
+            "absolute inset-0 h-full w-full object-cover pointer-events-none",
+            isLocked && "opacity-[0.24]"
+          )}
         />
 
         {/* "Coming soon" badge — positioned top-left over the illustration */}
@@ -102,18 +104,27 @@ function GameModeCard({ mode, className, isLocked, onLockedClick }: GameModeCard
           </Badge>
         )}
 
-        {/* Lock overlay for locked cards */}
+        {/* Lock illustration for locked cards — centered over illustration */}
         {isLocked && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40">
-            <div className="flex size-14 items-center justify-center rounded-full bg-black/60">
-              <ShieldIcon className="size-7 text-white" />
-            </div>
+          <div className="absolute inset-0 z-10 flex items-center justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/illustrations/lock.svg"
+              alt=""
+              className="size-20"
+              aria-hidden="true"
+            />
           </div>
         )}
       </div>
 
+      {/* Dark overlay for locked cards — covers entire card (Figma: rgba(0,0,0,0.56)) */}
+      {isLocked && (
+        <div className="pointer-events-none absolute inset-0 z-[5] rounded-3xl bg-black/[0.56]" />
+      )}
+
       {/* Text Section — fixed height, white text on dark background */}
-      <div className="flex shrink-0 flex-col gap-2 px-7 pb-8 pt-6 text-center text-white">
+      <div className="relative z-10 flex shrink-0 flex-col gap-2 px-7 pb-8 pt-6 text-center text-white">
         <h3 className="truncate text-xl font-semibold leading-7">
           {title}
         </h3>
@@ -132,8 +143,6 @@ function GameModeCard({ mode, className, isLocked, onLockedClick }: GameModeCard
     "h-full w-full",
     // Disabled state for coming-soon modes
     !isPlayable && "pointer-events-none",
-    // Locked state: grayscale + reduced opacity
-    isLocked && "grayscale-[50%] opacity-80",
     className
   )
 

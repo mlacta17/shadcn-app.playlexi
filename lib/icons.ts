@@ -104,6 +104,9 @@ export { IconChevronLeftOutline24 as ChevronLeftIcon } from "nucleo-core-outline
 // export { IconEnvelopeOutline24 as MailIcon } from "nucleo-core-outline-24"
 // export { IconMessage2ContentOutline24 as MessageIcon } from "nucleo-core-outline-24"
 
+// Game card states
+export { IconLockOutline24 as LockIcon } from "nucleo-core-outline-24"
+
 // Profile/Settings features (P3)
 export { IconShield2Outline24 as ShieldIcon } from "nucleo-core-outline-24"
 export { IconColorPaletteOutline24 as PaletteIcon } from "nucleo-core-outline-24"
