@@ -38,7 +38,7 @@ export function ShellNavbar() {
   const router = useRouter()
   const pathname = usePathname()
   const { data: session, isPending: isSessionPending } = useSession()
-  const { user: playLexiUser, isLoading: isUserLoading } = usePlayLexiUser()
+  const { user: playLexiUser, isLoading: isUserLoading, refetch: refetchUser } = usePlayLexiUser()
   const [settingsOpen, setSettingsOpen] = React.useState(false)
   const [signInOpen, setSignInOpen] = React.useState(false)
 
@@ -144,6 +144,7 @@ export function ShellNavbar() {
       <AccountSettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
+        onSaveSuccess={refetchUser}
       />
       <SignInDialog
         open={signInOpen}

@@ -78,6 +78,10 @@ export function usePlayLexiUser(): UsePlayLexiUserReturn {
   const [error, setError] = React.useState<string | null>(null)
   const [needsProfile, setNeedsProfile] = React.useState(false)
 
+  /**
+   * Initial fetch — shows loading skeleton while data loads.
+   * Used on mount and when the session changes.
+   */
   const fetchUser = React.useCallback(async () => {
     // Don't fetch if no session
     if (!session?.user) {
@@ -119,6 +123,24 @@ export function usePlayLexiUser(): UsePlayLexiUserReturn {
     }
   }, [session?.user])
 
+  /**
+   * Background refetch — silently updates user data without showing loading state.
+   * Used after saves (e.g., avatar change in settings dialog) so the UI
+   * updates in-place without unmounting components that depend on isLoading.
+   */
+  const refetch = React.useCallback(async () => {
+    if (!session?.user) return
+
+    try {
+      const response = await fetch("/api/users/me")
+      if (!response.ok) return
+      const data = await response.json() as PlayLexiUser
+      setUser(data)
+    } catch {
+      // Silent failure — don't disrupt UI for a background refresh
+    }
+  }, [session?.user])
+
   // Fetch user data when session changes
   React.useEffect(() => {
     // Wait for session to load first
@@ -132,6 +154,6 @@ export function usePlayLexiUser(): UsePlayLexiUserReturn {
     isLoading: isSessionPending || isLoading,
     error,
     needsProfile,
-    refetch: fetchUser,
+    refetch,
   }
 }

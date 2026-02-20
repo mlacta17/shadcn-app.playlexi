@@ -93,6 +93,8 @@ interface UserSettings {
 interface AccountSettingsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Called after a successful save so the parent can refresh user data */
+  onSaveSuccess?: () => void
 }
 
 // =============================================================================
@@ -143,6 +145,7 @@ const TABS: TabConfig[] = [
 export function AccountSettingsDialog({
   open,
   onOpenChange,
+  onSaveSuccess,
 }: AccountSettingsDialogProps) {
   const { data: session } = useSession()
   const { theme: currentTheme, setTheme } = useTheme()
@@ -232,6 +235,7 @@ export function AccountSettingsDialog({
 
       if (response.ok) {
         setHasChanges(false)
+        onSaveSuccess?.()
         // TODO: Show success toast
       } else {
         const data = (await response.json()) as { error?: string }

@@ -166,9 +166,13 @@ function GameModeCarousel({ modes }: GameModeCarouselProps) {
   const touchStartX = React.useRef(0)
   const cardOffset = useCardOffset()
 
-  // Auth state for locked card detection
-  const { data: session } = useSession()
-  const isAuthenticated = !!session
+  // Auth state for locked card detection.
+  // IMPORTANT: Use `isPending` to defer auth-dependent rendering until after
+  // the session resolves. During SSR the server has no session, so locked cards
+  // render as <button>. If the client immediately used a cached session, they'd
+  // render as <Link> — causing a <button>-vs-<a> hydration mismatch.
+  const { data: session, isPending } = useSession()
+  const isAuthenticated = !isPending && !!session
 
   // Sign-up prompt dialog state
   const [promptMode, setPromptMode] = React.useState<GameModeConfig | null>(null)
