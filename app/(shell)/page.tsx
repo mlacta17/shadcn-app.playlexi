@@ -31,7 +31,7 @@ export default function DashboardPage() {
   return (
     <main className="flex flex-1 flex-col">
       {/* Hero Section */}
-      <section className="flex flex-col items-center justify-center gap-2 px-6 pt-8 pb-6 text-center">
+      <section className="flex flex-col items-center justify-center gap-6 px-6 pt-8 pb-6 text-center">
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
           Ready to spell?
         </h1>
@@ -41,7 +41,7 @@ export default function DashboardPage() {
       </section>
 
       {/* Game Mode Carousel — no horizontal padding so cards bleed to viewport edges */}
-      <section className="flex-1 pb-8">
+      <section className="flex-1 pt-8 pb-8">
         <GameModeCarousel modes={GAME_MODES} />
       </section>
     </main>
