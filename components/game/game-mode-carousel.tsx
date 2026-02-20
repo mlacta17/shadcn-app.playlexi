@@ -49,6 +49,7 @@ import { GameModeCard } from "./game-mode-card"
 import { SignUpPromptDialog } from "./sign-up-prompt-dialog"
 import { Button } from "@/components/ui/button"
 import { ArrowLeftIcon, ArrowRightIcon } from "@/lib/icons"
+import { useGameSounds } from "@/hooks/use-game-sounds"
 import type { GameModeConfig } from "@/lib/game-modes"
 
 // =============================================================================
@@ -165,6 +166,17 @@ function GameModeCarousel({ modes }: GameModeCarouselProps) {
   })
   const touchStartX = React.useRef(0)
   const cardOffset = useCardOffset()
+  const { playCard } = useGameSounds({ volume: 0.5 })
+
+  // Play card sound when active card changes (skip initial render)
+  const isFirstRender = React.useRef(true)
+  React.useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
+    playCard()
+  }, [activeIndex, playCard])
 
   // Auth state for locked card detection.
   // IMPORTANT: Use `isPending` to defer auth-dependent rendering until after

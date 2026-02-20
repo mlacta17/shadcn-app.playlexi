@@ -8,6 +8,7 @@ import * as React from "react"
  * Current files:
  * - CorrectAnswerFeedback_sound.mp3 - played on correct answer
  * - WrongAnswerFeedback_sound.mp3 - played on wrong answer
+ * - card.mp3 - played on card focus change (carousel navigation)
  *
  * Optional future sounds:
  * - tick.mp3     (~10KB) - timer warning tick
@@ -16,6 +17,7 @@ import * as React from "react"
 const SOUND_PATHS = {
   correct: "/sounds/CorrectAnswerFeedback_sound.mp3",
   wrong: "/sounds/WrongAnswerFeedback_sound.mp3",
+  card: "/sounds/card.mp3",
 } as const
 
 export type SoundName = keyof typeof SOUND_PATHS
@@ -32,6 +34,8 @@ export interface UseGameSoundsReturn {
   playCorrect: () => void
   /** Play the wrong answer sound */
   playWrong: () => void
+  /** Play the card navigation sound */
+  playCard: () => void
   /** Play any sound by name */
   play: (sound: SoundName) => void
   /** Whether sounds are ready to play */
@@ -172,6 +176,7 @@ function useGameSounds(options: UseGameSoundsOptions = {}): UseGameSoundsReturn 
   // Convenience methods
   const playCorrect = React.useCallback(() => play("correct"), [play])
   const playWrong = React.useCallback(() => play("wrong"), [play])
+  const playCard = React.useCallback(() => play("card"), [play])
 
   /**
    * Unlock audio playback by triggering a silent play on user interaction.
@@ -211,6 +216,7 @@ function useGameSounds(options: UseGameSoundsOptions = {}): UseGameSoundsReturn 
     () => ({
       playCorrect,
       playWrong,
+      playCard,
       play,
       isReady,
       isUnlocked,
@@ -218,7 +224,7 @@ function useGameSounds(options: UseGameSoundsOptions = {}): UseGameSoundsReturn 
       setEnabled,
       setVolume,
     }),
-    [playCorrect, playWrong, play, isReady, isUnlocked, unlock, setEnabled, setVolume]
+    [playCorrect, playWrong, playCard, play, isReady, isUnlocked, unlock, setEnabled, setVolume]
   )
 }
 
