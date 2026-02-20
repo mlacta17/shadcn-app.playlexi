@@ -4,6 +4,11 @@
  * Modal dialog for managing user account settings.
  * Opens when user clicks "Account Settings" from the user menu dropdown.
  *
+ * ## Responsive Layout (3-tier)
+ * - **Desktop (lg+, 1024px+)**: Centered 980×680 dialog with sidebar navigation (Figma 2582:6142)
+ * - **Tablet (md–lg, 768–1023px)**: Centered auto-sized dialog with dropdown tab selector, vertical content
+ * - **Mobile (<md, <768px)**: Bottom sheet with dropdown tab selector (Figma 3102:49858)
+ *
  * ## Tabs
  * 1. **Profile** - Avatar, username, bio
  * 2. **Privacy & Security** - Google account, 2FA
@@ -15,8 +20,10 @@
  * - Notification toggles apply immediately (no save required)
  * - Profile changes require clicking "Save Changes"
  * - Privacy changes are handled via external flows (Google auth, 2FA)
+ * - On mobile, "Discard" also closes the dialog (no X button)
  *
- * @see Figma node 2582:6142 (Settings Dialog)
+ * @see Figma node 2582:6142 (Desktop Settings Dialog)
+ * @see Figma node 3102:49858 (Mobile Settings — Profile)
  * @see db/schema.ts users table for editable fields
  */
 
@@ -27,22 +34,31 @@ import { useTheme } from "next-themes"
 
 import { cn } from "@/lib/utils"
 import { useSession } from "@/lib/auth/client"
-import { AVATARS, getAvatarById, type AvatarConfig } from "@/lib/avatar-utils"
+import { useMediaQuery } from "@/hooks/use-media-query"
+import { AVATARS } from "@/lib/avatar-utils"
 import {
   CircleUserIcon,
   ShieldIcon,
   PaletteIcon,
   BellIcon,
   ChevronRightIcon,
+  ChevronDownIcon,
+  XIcon,
 } from "@/lib/icons"
 
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+} from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -121,12 +137,8 @@ const TABS: TabConfig[] = [
 /**
  * Account Settings Dialog.
  *
- * Features:
- * - Sidebar navigation with 4 tabs
- * - Profile settings (avatar, username, bio)
- * - Privacy & Security (Google account, 2FA)
- * - Appearance (theme switcher)
- * - Notifications (email preferences)
+ * Renders as a centered dialog on desktop (with sidebar navigation)
+ * and a bottom sheet on mobile (with dropdown tab selector).
  */
 export function AccountSettingsDialog({
   open,
@@ -134,6 +146,7 @@ export function AccountSettingsDialog({
 }: AccountSettingsDialogProps) {
   const { data: session } = useSession()
   const { theme: currentTheme, setTheme } = useTheme()
+  const isDesktop = useMediaQuery("(min-width: 768px)")
 
   // ---------------------------------------------------------------------------
   // State
@@ -192,13 +205,12 @@ export function AccountSettingsDialog({
         })
         setHasChanges(false)
       } else if (response.status === 404) {
-        // User has no PlayLexi profile yet - they need to complete onboarding
         setError("Please complete your profile setup first.")
       } else {
         setError("Failed to load settings. Please try again.")
       }
-    } catch (error) {
-      console.error("[AccountSettings] Failed to load settings:", error)
+    } catch (err) {
+      console.error("[AccountSettings] Failed to load settings:", err)
       setError("Failed to load settings. Please try again.")
     } finally {
       setIsLoading(false)
@@ -226,8 +238,8 @@ export function AccountSettingsDialog({
         console.error("[AccountSettings] Save failed:", data.error)
         // TODO: Show error toast
       }
-    } catch (error) {
-      console.error("[AccountSettings] Save error:", error)
+    } catch (err) {
+      console.error("[AccountSettings] Save error:", err)
       // TODO: Show error toast
     } finally {
       setIsSaving(false)
@@ -236,6 +248,12 @@ export function AccountSettingsDialog({
 
   const handleDiscard = () => {
     loadUserSettings()
+  }
+
+  /** On mobile, Discard also closes the dialog (no X button per Figma) */
+  const handleMobileDiscard = () => {
+    loadUserSettings()
+    onOpenChange(false)
   }
 
   const handleAvatarSelect = (avatarId: number) => {
@@ -253,17 +271,12 @@ export function AccountSettingsDialog({
     setHasChanges(true)
   }
 
-  // Theme changes immediately (applies visually via ThemeProvider + persists to DB)
   const handleThemeChange = (newTheme: "light" | "dark") => {
-    // Update local state
     setFormData((prev) => ({ ...prev, theme: newTheme }))
-    // Apply theme immediately via next-themes
     setTheme(newTheme)
-    // Persist to server
     updateSetting("theme", newTheme)
   }
 
-  // Notification toggles change immediately
   const handleNotificationChange = async (
     key: "emailSocial" | "emailSecurity" | "emailMarketing",
     value: boolean
@@ -272,19 +285,15 @@ export function AccountSettingsDialog({
     await updateSetting(key, value)
   }
 
-  // Update a single setting immediately (for theme and notifications)
-  const updateSetting = async (
-    key: string,
-    value: boolean | string
-  ) => {
+  const updateSetting = async (key: string, value: boolean | string) => {
     try {
       await fetch("/api/users/me", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ [key]: value }),
       })
-    } catch (error) {
-      console.error("[AccountSettings] Failed to update setting:", error)
+    } catch (err) {
+      console.error("[AccountSettings] Failed to update setting:", err)
     }
   }
 
@@ -298,26 +307,60 @@ export function AccountSettingsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="w-[980px] max-w-[980px] sm:max-w-[980px] h-[680px] p-0 gap-0 overflow-hidden rounded-3xl ring-0 shadow-[var(--shadow-dialog)]"
+        className={cn(
+          // ---------------------------------------------------------------
+          // Override base dialog styles (flex instead of grid, reset spacing)
+          // ---------------------------------------------------------------
+          "flex flex-col p-0 gap-0 overflow-hidden ring-0 shadow-[var(--shadow-dialog)]",
+
+          // ---------------------------------------------------------------
+          // Mobile-first defaults: bottom sheet anchored to screen bottom
+          // Overrides base dialog's centered positioning (top-1/2 left-1/2)
+          // ---------------------------------------------------------------
+          "top-auto bottom-0 left-0 right-0",
+          "translate-x-0 translate-y-0",
+          "w-full max-w-full sm:max-w-full",
+          "rounded-t-3xl rounded-b-none max-h-[85vh]",
+
+          // ---------------------------------------------------------------
+          // Tablet (md+): centered dialog with 40px margin on each side
+          // Re-applies centered positioning that mobile defaults override
+          // ---------------------------------------------------------------
+          "md:top-1/2 md:left-1/2 md:right-auto md:bottom-auto",
+          "md:-translate-x-1/2 md:-translate-y-1/2",
+          "md:max-w-[calc(100%-5rem)] md:rounded-3xl md:max-h-[80vh]",
+
+          // ---------------------------------------------------------------
+          // Desktop (lg+): fixed-size centered dialog with sidebar
+          // ---------------------------------------------------------------
+          "lg:w-[980px] lg:max-w-[980px] lg:h-[680px]"
+        )}
       >
-        <div className="flex h-full">
-          {/* Sidebar */}
+        {/* Tab selector — visible on mobile + tablet, hidden at lg+ (Figma 3102:49895) */}
+        <MobileTabHeader
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+        />
+
+        {/* Main layout: sidebar (desktop) + content */}
+        <div className="flex flex-1 min-h-0">
+          {/* Desktop: sidebar navigation (hidden on mobile) */}
           <SettingsSidebar
             activeTab={activeTab}
             onTabChange={setActiveTab}
           />
 
-          {/* Content */}
+          {/* Content area */}
           <div className="flex-1 flex flex-col min-w-0">
-            {/* Header */}
+            {/* Content header: title + description */}
             <SettingsHeader
               title={activeTabConfig.title}
               description={activeTabConfig.description}
               onClose={() => onOpenChange(false)}
             />
 
-            {/* Tab Content - 24px padding per Figma */}
-            <div className="flex-1 overflow-y-auto p-6 bg-background">
+            {/* Scrollable tab content */}
+            <div className="flex-1 overflow-y-auto p-5 md:p-6 bg-background">
               {isLoading ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="size-8 animate-spin rounded-full border-4 border-muted-foreground border-t-transparent" />
@@ -342,9 +385,7 @@ export function AccountSettingsDialog({
                     />
                   )}
                   {activeTab === "privacy" && (
-                    <PrivacyTabContent
-                      email={session?.user?.email}
-                    />
+                    <PrivacyTabContent email={session?.user?.email} />
                   )}
                   {activeTab === "appearance" && (
                     <AppearanceTabContent
@@ -364,12 +405,13 @@ export function AccountSettingsDialog({
               )}
             </div>
 
-            {/* Footer */}
+            {/* Footer: Discard + Save */}
             <SettingsFooter
-              onDiscard={handleDiscard}
+              onDiscard={isDesktop ? handleDiscard : handleMobileDiscard}
               onSave={handleSave}
               isSaving={isSaving}
               hasChanges={hasChanges}
+              isMobile={!isDesktop}
             />
           </div>
         </div>
@@ -379,7 +421,57 @@ export function AccountSettingsDialog({
 }
 
 // =============================================================================
-// SIDEBAR COMPONENT
+// MOBILE TAB HEADER (Figma 3102:49895)
+// =============================================================================
+
+interface MobileTabHeaderProps {
+  activeTab: SettingsTab
+  onTabChange: (tab: SettingsTab) => void
+}
+
+/**
+ * Dropdown tab selector shown at the top of the dialog.
+ * Displays the active tab's icon + label with a dropdown chevron.
+ * Tapping opens a radio-style dropdown to switch tabs.
+ *
+ * Visible on mobile and tablet. Hidden on desktop (lg+) where the sidebar
+ * provides navigation.
+ */
+function MobileTabHeader({ activeTab, onTabChange }: MobileTabHeaderProps) {
+  const activeTabConfig = TABS.find((t) => t.id === activeTab)!
+  const Icon = activeTabConfig.icon
+
+  return (
+    <div className="shrink-0 lg:hidden">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className="flex w-full items-center gap-3.5 border-b border-border bg-background px-5 py-4">
+            <Icon className="size-6 shrink-0" />
+            <span className="flex-1 truncate text-left text-lg font-medium leading-7 text-foreground">
+              {activeTabConfig.label}
+            </span>
+            <ChevronDownIcon className="size-4 shrink-0 text-foreground" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuRadioGroup
+            value={activeTab}
+            onValueChange={(v) => onTabChange(v as SettingsTab)}
+          >
+            {TABS.map((tab) => (
+              <DropdownMenuRadioItem key={tab.id} value={tab.id}>
+                {tab.label}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  )
+}
+
+// =============================================================================
+// SIDEBAR COMPONENT (Desktop only)
 // =============================================================================
 
 interface SettingsSidebarProps {
@@ -387,9 +479,10 @@ interface SettingsSidebarProps {
   onTabChange: (tab: SettingsTab) => void
 }
 
+/** Desktop sidebar navigation. Hidden on mobile/tablet, visible at lg+ (1024px). */
 function SettingsSidebar({ activeTab, onTabChange }: SettingsSidebarProps) {
   return (
-    <div className="w-[256px] shrink-0 border-r border-border bg-background h-full">
+    <div className="hidden lg:flex w-[256px] shrink-0 border-r border-border bg-background h-full flex-col">
       <div className="p-4 flex flex-col gap-2">
         {/* Label - 32px height, 12px text, 70% opacity per Figma */}
         <div className="h-8 flex items-center px-2">
@@ -446,27 +539,14 @@ function SettingsHeader({ title, description, onClose }: SettingsHeaderProps) {
           {description}
         </DialogDescription>
       </div>
-      {/* Close button: 36px, transparent bg per Figma */}
+      {/* Close button: tablet + desktop (mobile bottom sheet uses Discard to close) */}
       <Button
         variant="ghost"
         size="icon-sm"
         onClick={onClose}
-        className="shrink-0 size-9"
+        className="hidden md:flex shrink-0 size-9"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M18 6 6 18" />
-          <path d="m6 6 12 12" />
-        </svg>
+        <XIcon />
         <span className="sr-only">Close</span>
       </Button>
     </div>
@@ -482,6 +562,8 @@ interface SettingsFooterProps {
   onSave: () => void
   isSaving: boolean
   hasChanges: boolean
+  /** When true, Discard is always enabled (acts as dialog close on mobile) */
+  isMobile: boolean
 }
 
 function SettingsFooter({
@@ -489,19 +571,31 @@ function SettingsFooter({
   onSave,
   isSaving,
   hasChanges,
+  isMobile,
 }: SettingsFooterProps) {
   return (
-    <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-4">
+    <div
+      className={cn(
+        // Mobile-first: stacked full-width buttons, primary action on top
+        // (flex-col-reverse flips DOM order so Save appears above Discard)
+        "flex flex-col-reverse gap-2 border-t border-border px-5 py-4",
+        // Tablet/Desktop (md+): horizontal row, right-aligned
+        "md:flex-row md:items-center md:justify-end md:gap-3 md:px-6"
+      )}
+    >
       <Button
         variant="outline"
         onClick={onDiscard}
-        disabled={!hasChanges || isSaving}
+        // On mobile: always enabled (acts as close). On desktop: only when changes exist.
+        disabled={isMobile ? isSaving : !hasChanges || isSaving}
+        className="w-full md:w-auto"
       >
         Discard
       </Button>
       <Button
         onClick={onSave}
         disabled={!hasChanges || isSaving}
+        className="w-full md:w-auto"
       >
         {isSaving ? "Saving..." : "Save Changes"}
       </Button>
@@ -561,7 +655,7 @@ function ProfileTabContent({
           value={username}
           onChange={onUsernameChange}
           placeholder="Username"
-          className="max-w-[280px]"
+          className="lg:max-w-[280px]"
         />
       </SettingsRow>
 
@@ -595,7 +689,6 @@ interface PrivacyTabContentProps {
 }
 
 function PrivacyTabContent({ email }: PrivacyTabContentProps) {
-  // Mask email for display
   const maskedEmail = email
     ? email.replace(/(.{2})(.*)(@.*)/, "$1*****$3")
     : "****@gmail.com"
@@ -648,7 +741,7 @@ function AppearanceTabContent({
           Select the theme for the dashboard.
         </p>
       </div>
-      <div className="flex gap-6 pt-2">
+      <div className="flex gap-4 lg:gap-6 pt-2">
         <ThemeCard
           label="Light"
           isSelected={theme === "light"}
@@ -676,19 +769,14 @@ interface ThemeCardProps {
 function ThemeCard({ label, isSelected, onClick, variant }: ThemeCardProps) {
   const isLight = variant === "light"
 
-  // Static preview colors (intentionally not theme-aware - these show what each theme looks like)
-  // Using Tailwind zinc scale for consistency:
-  // Light: zinc-100 bg, white cards, zinc-200 skeletons
-  // Dark: zinc-950 bg, zinc-900 cards, zinc-700 skeletons
-
   return (
     <button
       onClick={onClick}
-      className="flex flex-col gap-2.5 items-center group"
+      className="flex flex-1 lg:flex-initial flex-col gap-2.5 items-center group"
     >
       <div
         className={cn(
-          "w-[250px] p-1.5 rounded-md border-2 transition-all",
+          "w-full lg:w-[250px] p-1.5 rounded-md border-2 transition-all",
           isSelected
             ? "border-primary ring-2 ring-primary/20"
             : "border-transparent hover:border-muted-foreground/20"
@@ -707,18 +795,8 @@ function ThemeCard({ label, isSelected, onClick, variant }: ThemeCardProps) {
               isLight ? "bg-white" : "bg-zinc-900"
             )}
           >
-            <div
-              className={cn(
-                "h-2 w-16 rounded-full",
-                isLight ? "bg-zinc-200" : "bg-zinc-700"
-              )}
-            />
-            <div
-              className={cn(
-                "h-2 w-24 rounded-full",
-                isLight ? "bg-zinc-200" : "bg-zinc-700"
-              )}
-            />
+            <div className={cn("h-2 w-16 rounded-full", isLight ? "bg-zinc-200" : "bg-zinc-700")} />
+            <div className={cn("h-2 w-24 rounded-full", isLight ? "bg-zinc-200" : "bg-zinc-700")} />
           </div>
           {/* Mock card 2 */}
           <div
@@ -727,18 +805,8 @@ function ThemeCard({ label, isSelected, onClick, variant }: ThemeCardProps) {
               isLight ? "bg-white" : "bg-zinc-900"
             )}
           >
-            <div
-              className={cn(
-                "size-4 rounded-full",
-                isLight ? "bg-zinc-200" : "bg-zinc-700"
-              )}
-            />
-            <div
-              className={cn(
-                "h-2 w-28 rounded-full",
-                isLight ? "bg-zinc-200" : "bg-zinc-700"
-              )}
-            />
+            <div className={cn("size-4 rounded-full", isLight ? "bg-zinc-200" : "bg-zinc-700")} />
+            <div className={cn("h-2 w-28 rounded-full", isLight ? "bg-zinc-200" : "bg-zinc-700")} />
           </div>
           {/* Mock card 3 */}
           <div
@@ -747,25 +815,19 @@ function ThemeCard({ label, isSelected, onClick, variant }: ThemeCardProps) {
               isLight ? "bg-white" : "bg-zinc-900"
             )}
           >
-            <div
-              className={cn(
-                "size-4 rounded-full",
-                isLight ? "bg-zinc-200" : "bg-zinc-700"
-              )}
-            />
-            <div
-              className={cn(
-                "h-2 w-28 rounded-full",
-                isLight ? "bg-zinc-200" : "bg-zinc-700"
-              )}
-            />
+            <div className={cn("size-4 rounded-full", isLight ? "bg-zinc-200" : "bg-zinc-700")} />
+            <div className={cn("h-2 w-28 rounded-full", isLight ? "bg-zinc-200" : "bg-zinc-700")} />
           </div>
         </div>
       </div>
-      <span className={cn(
-        "text-sm font-medium transition-colors",
-        isSelected ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"
-      )}>{label}</span>
+      <span
+        className={cn(
+          "text-sm font-medium transition-colors",
+          isSelected ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"
+        )}
+      >
+        {label}
+      </span>
     </button>
   )
 }
@@ -854,15 +916,21 @@ interface SettingsRowProps {
   children: React.ReactNode
 }
 
+/**
+ * Settings row layout.
+ * - Desktop (lg+): horizontal two-column (label left, content right)
+ * - Mobile + tablet: vertical stack (label top, content below)
+ */
 function SettingsRow({ title, description, children }: SettingsRowProps) {
   return (
-    <div className="flex items-center gap-6">
-      {/* Text column: 4px gap per Figma */}
-      <div className="flex-1 flex flex-col gap-1">
+    <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
+      {/* Text column */}
+      <div className="flex flex-col gap-1 lg:flex-1">
         <p className="text-sm font-medium leading-5 text-foreground">{title}</p>
         <p className="text-sm leading-5 text-muted-foreground">{description}</p>
       </div>
-      <div className="flex-1">{children}</div>
+      {/* Content column */}
+      <div className="lg:flex-1">{children}</div>
     </div>
   )
 }
