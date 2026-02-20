@@ -52,6 +52,12 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
+import { Separator } from "@/components/ui/separator"
+import { AvatarOption } from "@/components/ui/avatar-selector"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -59,12 +65,6 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Switch } from "@/components/ui/switch"
-import { Separator } from "@/components/ui/separator"
-import { AvatarOption } from "@/components/ui/avatar-selector"
 
 // =============================================================================
 // TYPES
@@ -337,7 +337,7 @@ export function AccountSettingsDialog({
         )}
       >
         {/* Tab selector — visible on mobile + tablet, hidden at lg+ (Figma 3102:49895) */}
-        <MobileTabHeader
+        <TabSelectorHeader
           activeTab={activeTab}
           onTabChange={setActiveTab}
         />
@@ -421,48 +421,72 @@ export function AccountSettingsDialog({
 }
 
 // =============================================================================
-// MOBILE TAB HEADER (Figma 3102:49895)
+// TAB SELECTOR HEADER (mobile + tablet)
 // =============================================================================
 
-interface MobileTabHeaderProps {
+interface TabSelectorHeaderProps {
   activeTab: SettingsTab
   onTabChange: (tab: SettingsTab) => void
 }
 
 /**
- * Dropdown tab selector shown at the top of the dialog.
- * Displays the active tab's icon + label with a dropdown chevron.
- * Tapping opens a radio-style dropdown to switch tabs.
+ * Combobox-style tab selector for mobile + tablet.
+ *
+ * Styled to match our form control conventions (Input, SelectTrigger):
+ * - `border border-input` for the border
+ * - `bg-input/30` for the background
+ * - `rounded-lg` for the border radius
+ * - `h-10` for the height
+ *
+ * The trigger is inset from dialog edges via container padding (px-5 / md:px-6),
+ * which aligns with the content area's padding. The dropdown matches the trigger
+ * width automatically via `w-(--radix-dropdown-menu-trigger-width)`.
  *
  * Visible on mobile and tablet. Hidden on desktop (lg+) where the sidebar
  * provides navigation.
  */
-function MobileTabHeader({ activeTab, onTabChange }: MobileTabHeaderProps) {
+function TabSelectorHeader({ activeTab, onTabChange }: TabSelectorHeaderProps) {
   const activeTabConfig = TABS.find((t) => t.id === activeTab)!
-  const Icon = activeTabConfig.icon
+  const ActiveIcon = activeTabConfig.icon
 
   return (
-    <div className="shrink-0 lg:hidden">
+    <div className="shrink-0 border-b border-border px-3 py-4 md:px-3 lg:hidden">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="flex w-full items-center gap-3.5 border-b border-border bg-background px-5 py-4">
-            <Icon className="size-6 shrink-0" />
-            <span className="flex-1 truncate text-left text-lg font-medium leading-7 text-foreground">
+          <button
+            className={cn(
+              "group/trigger flex w-full items-center gap-3.5 rounded-lg px-3 h-10",
+              "transition-colors",
+              "hover:bg-input/50",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            )}
+          >
+            <ActiveIcon className="size-6 shrink-0 text-muted-foreground" />
+            <span className="flex-1 truncate text-left text-lg font-medium">
               {activeTabConfig.label}
             </span>
-            <ChevronDownIcon className="size-4 shrink-0 text-foreground" />
+            <ChevronDownIcon
+              className={cn(
+                "size-4 shrink-0 text-muted-foreground transition-transform duration-200",
+                "group-data-[state=open]/trigger:rotate-180"
+              )}
+            />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
+        <DropdownMenuContent>
           <DropdownMenuRadioGroup
             value={activeTab}
-            onValueChange={(v) => onTabChange(v as SettingsTab)}
+            onValueChange={(val) => onTabChange(val as SettingsTab)}
           >
-            {TABS.map((tab) => (
-              <DropdownMenuRadioItem key={tab.id} value={tab.id}>
-                {tab.label}
-              </DropdownMenuRadioItem>
-            ))}
+            {TABS.map((tab) => {
+              const TabIcon = tab.icon
+              return (
+                <DropdownMenuRadioItem key={tab.id} value={tab.id}>
+                  <TabIcon className="size-4 shrink-0 text-muted-foreground" />
+                  {tab.label}
+                </DropdownMenuRadioItem>
+              )
+            })}
           </DropdownMenuRadioGroup>
         </DropdownMenuContent>
       </DropdownMenu>
