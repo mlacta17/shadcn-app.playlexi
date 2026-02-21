@@ -2,11 +2,11 @@
  * Speech Recognition Service
  *
  * Provider selection with automatic fallback:
- * 1. Google Cloud Speech-to-Text (PRIMARY) - WebSocket streaming via speech-server
+ * 1. Wispr Flow (PRIMARY) - WebSocket streaming via speech-server
  * 2. Web Speech API (FALLBACK) - Browser built-in, no setup required
  *
  * ## Setup
- * - For Google: Run `npm run dev:speech` to start WebSocket server on port 3002
+ * - For Wispr: Run `npm run dev:speech` to start WebSocket server on port 3002
  * - Web Speech API works out of the box in supported browsers
  *
  * ## Architecture
@@ -19,17 +19,15 @@
  * │                             │                                       │
  * │           ┌─────────────────┴─────────────────┐                     │
  * │           ▼                                   ▼                     │
- * │     Google (PRIMARY)                   WebSpeech (FALLBACK)         │
- * │     WebSocket + gRPC                   Browser built-in             │
+ * │     Wispr (PRIMARY)                    WebSpeech (FALLBACK)         │
+ * │     WebSocket streaming                Browser built-in             │
  * └─────────────────────────────────────────────────────────────────────┘
  * ```
  *
- * ## Anti-Cheat Word Timing
- * Google provides word-level timestamps for anti-cheat:
- * - Spelling "C-A-T": Multiple word segments with gaps (~100-500ms)
- * - Saying "cat": Single continuous word segment
- *
- * @see https://cloud.google.com/speech-to-text/docs
+ * ## Anti-Cheat
+ * Wispr does not provide word-level timestamps. The anti-cheat system
+ * defaults to trusting the user (looksLikeSpellingFromAudio: true)
+ * via the fallback path in use-speech-recognition.ts.
  */
 
 // =============================================================================
@@ -39,18 +37,18 @@
 /**
  * Available speech recognition providers.
  *
- * - "google": Google Cloud Speech-to-Text (PRIMARY - best letter-by-letter detection)
+ * - "wispr": Wispr Flow (PRIMARY - best accuracy with dictionary context)
  * - "web-speech": Browser built-in (fallback - free, lower accuracy, no anti-cheat)
  */
-export type SpeechProvider = "web-speech" | "google"
+export type SpeechProvider = "web-speech" | "wispr"
 
 /**
  * Word-level timing data from speech recognition.
  * Contains start/end timestamps from the actual audio, not transcript arrival time.
  *
- * This is the KEY to reliable anti-cheat:
- * - Spelling "C-A-T": Three separate word segments with gaps in audio
- * - Saying "cat": One continuous word segment
+ * Note: Wispr does not provide word-level timing. This type is kept for
+ * compatibility with the hook interface, but will contain empty arrays
+ * when using the Wispr provider.
  */
 export interface WordTimingData {
   /** The recognized word/letter */
@@ -74,9 +72,8 @@ export interface SpeechRecognitionConfig {
   /**
    * Callback for word-level timing data.
    * Provides actual audio timestamps for each recognized word.
-   * Used for anti-cheat detection (spelling vs saying).
    *
-   * Supported by Google provider only.
+   * Not supported by Wispr provider (no word-level data available).
    */
   onWordTiming?: (words: WordTimingData[]) => void
   /** Callback for errors */
@@ -125,7 +122,7 @@ export interface ISpeechRecognitionProvider {
 
 /**
  * Keywords to boost for spelling recognition.
- * Used by Google's speech context for better letter recognition.
+ * Used by Wispr's dictionary context for better letter recognition.
  */
 export const SPELLING_KEYWORDS: string[] = [
   "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
@@ -139,7 +136,7 @@ export const SPELLING_KEYWORDS: string[] = [
 /**
  * Web Speech API provider (browser built-in).
  *
- * Used as a fallback when Google is not configured.
+ * Used as a fallback when Wispr is not configured.
  * Lower accuracy (~70-80%) but free and requires no setup.
  *
  * NOTE: This provider does NOT support word-level timing,
@@ -281,37 +278,37 @@ declare global {
 // PROVIDER FACTORY
 // =============================================================================
 
-// Lazy import Google provider to keep the main bundle smaller
-let googleProviderModule: typeof import("./providers/google-speech-provider") | null = null
+// Lazy import Wispr provider to keep the main bundle smaller
+let wisprProviderModule: typeof import("./providers/wispr-speech-provider") | null = null
 
-async function getGoogleProvider() {
-  if (!googleProviderModule) {
-    googleProviderModule = await import("./providers/google-speech-provider")
+async function getWisprProvider() {
+  if (!wisprProviderModule) {
+    wisprProviderModule = await import("./providers/wispr-speech-provider")
   }
-  return googleProviderModule.getGoogleSpeechProvider()
+  return wisprProviderModule.getWisprSpeechProvider()
 }
 
 // Singleton instance for WebSpeech provider
 let webSpeechProvider: WebSpeechProvider | null = null
 
 /**
- * Check if Google Speech WebSocket server is available.
+ * Check if Wispr Speech WebSocket server is available.
  *
- * The Google Speech provider uses a dedicated WebSocket server
- * (speech-server) for real-time gRPC streaming. This function
- * checks if that server is running and accepting connections.
+ * The Wispr Speech provider uses a dedicated WebSocket server
+ * (speech-server) for streaming. This function checks if that
+ * server is running and accepting connections.
  */
-let googleConfigured: boolean | null = null
+let wisprConfigured: boolean | null = null
 
 /**
- * WebSocket server URL for Google Speech.
+ * WebSocket server URL for speech recognition.
  * Uses environment variable in production, falls back to localhost for development.
  */
-const GOOGLE_SPEECH_WS_URL: string =
+const SPEECH_WS_URL: string =
   process.env.NEXT_PUBLIC_SPEECH_SERVER_URL || "ws://localhost:3002"
 
-async function isGoogleConfigured(): Promise<boolean> {
-  if (googleConfigured !== null) return googleConfigured
+async function isWisprConfigured(): Promise<boolean> {
+  if (wisprConfigured !== null) return wisprConfigured
 
   // Skip check on server-side
   if (typeof window === "undefined") {
@@ -320,7 +317,7 @@ async function isGoogleConfigured(): Promise<boolean> {
 
   try {
     // Try to connect to the WebSocket server
-    const wsUrl = GOOGLE_SPEECH_WS_URL
+    const wsUrl = SPEECH_WS_URL
     const ws = new WebSocket(wsUrl)
 
     const result = await new Promise<boolean>((resolve) => {
@@ -341,11 +338,11 @@ async function isGoogleConfigured(): Promise<boolean> {
       }
     })
 
-    googleConfigured = result
-    console.log(`[SpeechRecognition] Google Speech server ${result ? "available ✅" : "not available ❌"} at ${wsUrl}`)
+    wisprConfigured = result
+    console.log(`[SpeechRecognition] Wispr speech server ${result ? "available" : "not available"} at ${wsUrl}`)
     return result
   } catch {
-    googleConfigured = false
+    wisprConfigured = false
     return false
   }
 }
@@ -353,14 +350,14 @@ async function isGoogleConfigured(): Promise<boolean> {
 /**
  * Get the best available speech recognition provider (sync version).
  *
- * NOTE: This sync version cannot check Google (requires async).
+ * NOTE: This sync version cannot check Wispr (requires async).
  * Always prefer getSpeechProviderAsync() which checks all providers.
  *
  * @returns The best available sync provider (WebSpeech only)
  * @throws Error if no provider is available
  */
 export function getSpeechProvider(): ISpeechRecognitionProvider {
-  // NOTE: Google is checked async in getSpeechProviderAsync().
+  // NOTE: Wispr is checked async in getSpeechProviderAsync().
   // This sync function is only used for initial isSupported check.
 
   // Fall back to Web Speech API (free, works in most browsers)
@@ -370,7 +367,7 @@ export function getSpeechProvider(): ISpeechRecognitionProvider {
   if (webSpeechProvider.isSupported()) {
     console.warn(
       "[SpeechRecognition] Sync check: Web Speech API available as fallback. " +
-      "Google will be checked async when recording starts."
+      "Wispr will be checked async when recording starts."
     )
     return webSpeechProvider
   }
@@ -382,30 +379,30 @@ export function getSpeechProvider(): ISpeechRecognitionProvider {
  * Get the best available speech recognition provider (async version).
  *
  * This is the PRIMARY function for getting a speech provider.
- * It checks Google first (best for letter-by-letter detection with anti-cheat).
+ * It checks Wispr first (best accuracy with dictionary context).
  *
  * Priority:
- * 1. Google (if speech server running) — BEST for letter-by-letter word timing + anti-cheat
+ * 1. Wispr (if speech server running) — BEST accuracy with dictionary context
  * 2. Web Speech API (fallback) — free but lower accuracy, NO anti-cheat
  *
  * @returns The best available provider
  * @throws Error if no provider is available
  */
 export async function getSpeechProviderAsync(): Promise<ISpeechRecognitionProvider> {
-  // Try Google first (BEST for letter-by-letter detection + anti-cheat)
-  if (await isGoogleConfigured()) {
-    const googleProvider = await getGoogleProvider()
-    if (googleProvider.isSupported()) {
-      console.log("[SpeechRecognition] Using Google Cloud Speech-to-Text ✅")
-      return googleProvider
+  // Try Wispr first (BEST accuracy with dictionary context)
+  if (await isWisprConfigured()) {
+    const wisprProvider = await getWisprProvider()
+    if (wisprProvider.isSupported()) {
+      console.log("[SpeechRecognition] Using Wispr Flow")
+      return wisprProvider
     }
   }
 
-  // Google not available - warn and fall back to Web Speech API
+  // Wispr not available - warn and fall back to Web Speech API
   console.warn(
-    "[SpeechRecognition] Google Speech server not available! " +
-    "Falling back to Web Speech API. Anti-cheat word timing will NOT be available. " +
-    "Run 'npm run dev:speech' to start the Google Speech server."
+    "[SpeechRecognition] Wispr speech server not available! " +
+    "Falling back to Web Speech API. " +
+    "Run 'npm run dev:speech' to start the speech server."
   )
 
   // Fall back to Web Speech API
@@ -418,14 +415,14 @@ export async function getSpeechProviderAsync(): Promise<ISpeechRecognitionProvid
 
   throw new Error(
     "No speech recognition provider available. " +
-    "Please start the Google Speech server with 'npm run dev:speech'."
+    "Please start the speech server with 'npm run dev:speech'."
   )
 }
 
 /**
  * Check which providers are available.
  *
- * NOTE: Google availability requires async check and defaults to false here.
+ * NOTE: Wispr availability requires async check and defaults to false here.
  * Use getAvailableProvidersAsync() for accurate status.
  *
  * @returns Object with availability status for each provider
@@ -434,7 +431,7 @@ export function getAvailableProviders(): Record<SpeechProvider, boolean> {
   if (!webSpeechProvider) webSpeechProvider = new WebSpeechProvider()
 
   return {
-    google: googleConfigured ?? false,
+    wispr: wisprConfigured ?? false,
     "web-speech": webSpeechProvider.isSupported(),
   }
 }
@@ -442,17 +439,17 @@ export function getAvailableProviders(): Record<SpeechProvider, boolean> {
 /**
  * Check which providers are available (async version).
  *
- * This version accurately checks Google availability.
+ * This version accurately checks Wispr availability.
  *
  * @returns Object with availability status for each provider
  */
 export async function getAvailableProvidersAsync(): Promise<Record<SpeechProvider, boolean>> {
   if (!webSpeechProvider) webSpeechProvider = new WebSpeechProvider()
 
-  const googleAvailable = await isGoogleConfigured()
+  const wisprAvailable = await isWisprConfigured()
 
   return {
-    google: googleAvailable,
+    wispr: wisprAvailable,
     "web-speech": webSpeechProvider.isSupported(),
   }
 }

@@ -1,6 +1,6 @@
 # Speech Server
 
-A dedicated WebSocket server for real-time speech recognition using Google Cloud Speech-to-Text.
+A dedicated WebSocket server for real-time speech recognition using Wispr Flow.
 
 > **Deployment:** See [DEPLOYMENT.md](./DEPLOYMENT.md) for production deployment instructions.
 >
@@ -18,12 +18,13 @@ A dedicated WebSocket server for real-time speech recognition using Google Cloud
 │  Next.js App                                          Speech Server          │
 │  (localhost:3000)                                     (localhost:3002)       │
 │  - Game UI                                            - WebSocket endpoint   │
-│  - Static pages                                       - gRPC to Google       │
-│  - API routes                                         - Real-time streaming  │
+│  - Static pages                                       - WebSocket to Wispr   │
+│  - API routes                                         - Audio buffering +    │
+│                                                         WAV encoding         │
 │                                                               │              │
 │                                                               ▼              │
-│                                                    Google Cloud Speech       │
-│                                                    (gRPC bidirectional)      │
+│                                                    Wispr Flow API            │
+│                                                    (WebSocket streaming)     │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -32,26 +33,14 @@ A dedicated WebSocket server for real-time speech recognition using Google Cloud
 1. **Next.js App Router doesn't support WebSockets** - Route handlers can't maintain
    persistent connections.
 
-2. **gRPC requires bidirectional streaming** - Google's Speech API uses gRPC, not REST,
-   for real-time streaming. This requires a persistent server-side connection.
+2. **Credential shielding** - The `WISPR_API_KEY` stays on the server, never exposed
+   to the browser.
 
-3. **Separation of Concerns** - The Next.js app handles HTTP/rendering, this server
-   handles real-time audio streaming. Each does one thing well.
+3. **Protocol translation** - Browser sends raw PCM audio; the server buffers it,
+   converts to base64 WAV, and sends JSON packets to Wispr.
 
 4. **Scalability** - This server can be scaled independently. No Redis/state sync needed
    because each session is stateless and isolated.
-
-## Scaling Strategy
-
-| Phase | Scale | Platform | Monthly Cost |
-|-------|-------|----------|--------------|
-| Phase 1 | 0-1K DAU | Railway | $5-50 |
-| Phase 2 | 1K-10K DAU | Cloud Run | $65-500 |
-| Phase 3 | 10K+ DAU | Cloud Run (scaled) | $500+ |
-
-**When to migrate:** Connection errors, latency complaints, or costs exceeding $50-100/mo on Railway.
-
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed instructions.
 
 ## Protocol
 
@@ -61,22 +50,18 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed instructions.
 
 ### Server → Client (JSON)
 ```typescript
-// Interim result (as user speaks)
+// Interim result
 {
   "type": "interim",
   "transcript": "c a",
   "timestamp": 1234567890
 }
 
-// Final result (when speech ends)
+// Final result (words array is empty — Wispr has no word-level timing)
 {
   "type": "final",
   "transcript": "c a t",
-  "words": [
-    { "word": "c", "startTime": 0.1, "endTime": 0.3 },
-    { "word": "a", "startTime": 0.5, "endTime": 0.7 },
-    { "word": "t", "startTime": 0.9, "endTime": 1.1 }
-  ],
+  "words": [],
   "confidence": 0.95
 }
 
@@ -100,14 +85,13 @@ cd speech-server && npx ts-node index.ts
 ## Environment Variables
 
 Uses the same `.env.local` as the main app:
-- `GOOGLE_CLOUD_PROJECT_ID`
-- `GOOGLE_CLOUD_CLIENT_EMAIL`
-- `GOOGLE_CLOUD_PRIVATE_KEY`
+- `WISPR_API_KEY` — Your Wispr Flow API key
 
 ## Files
 
-- `index.ts` - Server entry point, WebSocket handling
-- `google-streaming.ts` - Google Cloud Speech gRPC streaming logic
-- `types.ts` - TypeScript interfaces
-- `package.json` - Dependencies for standalone deployment
-- `DEPLOYMENT.md` - Production deployment guide
+- `index.ts` — Server entry point, WebSocket handling
+- `wispr-streaming.ts` — Wispr Flow WebSocket streaming logic
+- `wav-encoder.ts` — PCM-to-WAV header utility (Wispr requires base64 WAV)
+- `types.ts` — TypeScript interfaces
+- `package.json` — Dependencies for standalone deployment
+- `DEPLOYMENT.md` — Production deployment guide

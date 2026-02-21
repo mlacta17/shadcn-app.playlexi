@@ -1,7 +1,7 @@
 {
   "name": "playlexi-speech-server",
   "version": "1.0.0",
-  "description": "WebSocket server for PlayLexi speech recognition using Google Cloud Speech-to-Text",
+  "description": "WebSocket server for PlayLexi speech recognition using Wispr Flow",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
@@ -9,7 +9,6 @@
     "dev": "ts-node index.ts"
   },
   "dependencies": {
-    "@google-cloud/speech": "^7.2.1",
     "dotenv": "^16.4.5",
     "ws": "^8.18.0"
   },

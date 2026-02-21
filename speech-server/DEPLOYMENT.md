@@ -4,22 +4,20 @@ This guide covers deploying the PlayLexi speech recognition server to production
 
 ## Overview
 
-The speech server is a Node.js WebSocket server that bridges the browser to Google Cloud Speech-to-Text via gRPC. It must run separately from the Next.js app because:
+The speech server is a Node.js WebSocket server that bridges the browser to Wispr Flow. It must run separately from the Next.js app because:
 
 1. **Next.js App Router doesn't support WebSockets**
-2. **Google Speech API requires gRPC** (not REST)
+2. **Credential shielding** — keeps `WISPR_API_KEY` off the client
 3. **Real-time streaming needs persistent connections**
 
 ```
-Browser (WebSocket) --> Speech Server (Node.js) --> Google Cloud (gRPC)
+Browser (WebSocket) --> Speech Server (Node.js) --> Wispr Flow (WebSocket)
 ```
 
 ---
 
 ## Scaling Strategy
 
-> **Decision Date:** January 2026
->
 > **Strategy:** Start with Railway, migrate to Cloud Run when scaling requires it.
 
 ### Why This Phased Approach?
@@ -27,25 +25,8 @@ Browser (WebSocket) --> Speech Server (Node.js) --> Google Cloud (gRPC)
 | Phase | Scale | Platform | Monthly Cost | Rationale |
 |-------|-------|----------|--------------|-----------|
 | **Phase 1** | 0-1,000 DAU | Railway | $5-50 | Simple deployment, no cold starts, focus on product |
-| **Phase 2** | 1,000-10,000 DAU | Cloud Run | $100-500 | Better scaling, lower latency to Google APIs |
+| **Phase 2** | 1,000-10,000 DAU | Cloud Run | $100-500 | Better scaling, lower latency |
 | **Phase 3** | 10,000+ DAU | Cloud Run (scaled) | $500+ | Auto-scaling, multi-region if needed |
-
-### Platform Limits (Verified January 2026)
-
-**Railway:**
-- ~3,000 concurrent WebSocket connections max
-- 15-minute HTTP request timeout
-- No sticky sessions (not needed for our stateless sessions)
-- No auto-scaling (manual replica management)
-- **Good for:** Up to ~36,000 hourly active users (8% concurrency ratio)
-
-**Cloud Run:**
-- 1,000 concurrent connections per instance
-- Up to 1,000 instances (1M concurrent theoretical max)
-- 60-minute WebSocket timeout
-- Auto-scaling based on concurrency
-- Session stickiness within single WebSocket connection
-- **Good for:** Virtually unlimited scale
 
 ### When to Migrate to Cloud Run
 
@@ -54,14 +35,6 @@ Monitor these signals on Railway:
 2. **Latency complaints**: Users noticing delay in transcription
 3. **Memory usage**: Approaching Railway's limits
 4. **Monthly costs**: Exceeding $50-100 consistently
-
-### Migration Effort: ~2 Hours
-
-The migration from Railway to Cloud Run requires:
-1. Deploy same code to Cloud Run
-2. Update `NEXT_PUBLIC_SPEECH_SERVER_URL` environment variable
-3. Test
-4. Done (no code changes needed)
 
 ---
 
@@ -82,9 +55,7 @@ The migration from Railway to Cloud Run requires:
 
 4. **Add environment variables** in Railway dashboard:
    ```
-   GOOGLE_CLOUD_PROJECT_ID=your-project-id
-   GOOGLE_CLOUD_CLIENT_EMAIL=your-service-account@project.iam.gserviceaccount.com
-   GOOGLE_CLOUD_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n
+   WISPR_API_KEY=your-wispr-api-key
    NODE_ENV=production
    ```
 
@@ -143,9 +114,7 @@ The migration from Railway to Cloud Run requires:
      --memory=512Mi \
      --cpu=1 \
      --set-env-vars="NODE_ENV=production" \
-     --set-env-vars="GOOGLE_CLOUD_PROJECT_ID=your-project-id" \
-     --set-env-vars="GOOGLE_CLOUD_CLIENT_EMAIL=your-email" \
-     --set-secrets="GOOGLE_CLOUD_PRIVATE_KEY=playlexi-speech-key:latest"
+     --set-secrets="WISPR_API_KEY=wispr-api-key:latest"
    ```
 
 3. **Get your URL** from the deployment output (e.g., `playlexi-speech-xxxxx.run.app`)
@@ -155,71 +124,15 @@ The migration from Railway to Cloud Run requires:
    NEXT_PUBLIC_SPEECH_SERVER_URL=wss://playlexi-speech-xxxxx.run.app
    ```
 
-### Cloud Run Configuration Explained
-
-| Flag | Value | Rationale |
-|------|-------|-----------|
-| `--min-instances=1` | 1 | Eliminates cold starts (~$65/month cost) |
-| `--max-instances=100` | 100 | Handles up to 10,000 concurrent connections |
-| `--concurrency=100` | 100 | Connections per instance (conservative) |
-| `--timeout=300` | 5 minutes | Max WebSocket session length |
-| `--memory=512Mi` | 512MB | Sufficient for WebSocket + gRPC |
-| `--cpu=1` | 1 vCPU | Single CPU is enough for I/O-bound work |
-
-### Cloud Run Cost Breakdown
-
-With `min-instances=1` (1 vCPU, 512MB, 24/7):
-- **CPU**: ~$62/month
-- **Memory**: ~$3/month
-- **Total base cost**: ~$65/month
-
-Additional scaling instances billed per-second of usage.
-
----
-
-## Other Platforms (Not Recommended)
-
-### Render
-
-**Why not recommended:**
-- Free tier WebSocket connections disconnect after 5 minutes
-- Free tier sleeps after 15 minutes of inactivity (30+ second cold starts)
-- Not suitable for real-time speech recognition
-
-### Fly.io
-
-**Why not recommended for Phase 1:**
-- No free tier for new organizations
-- More complex setup than Railway
-- Inconsistent WebSocket timeout behavior reported
-
-**May be suitable for Phase 2** if you need multi-region deployment before Cloud Run scale.
-
 ---
 
 ## Environment Variables Reference
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `GOOGLE_CLOUD_PROJECT_ID` | Your GCP project ID | Yes |
-| `GOOGLE_CLOUD_CLIENT_EMAIL` | Service account email | Yes |
-| `GOOGLE_CLOUD_PRIVATE_KEY` | Service account private key | Yes |
+| `WISPR_API_KEY` | Your Wispr Flow API key | Yes |
 | `SPEECH_SERVER_PORT` | Server port (default: 3002) | No |
 | `NODE_ENV` | Set to "production" | Recommended |
-
-### Private Key Formatting
-
-The `GOOGLE_CLOUD_PRIVATE_KEY` must include the literal `\n` characters:
-
-```bash
-# Correct
-GOOGLE_CLOUD_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n"
-
-# Wrong (actual newlines won't work in most platforms)
-GOOGLE_CLOUD_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
-MIIEvg...
------END PRIVATE KEY-----"
-```
 
 ---
 
@@ -264,7 +177,7 @@ You should see "Connected!" followed by a `{"type":"ready",...}` message.
 2. Start a game in voice mode
 3. Click the microphone button
 4. Speak some letters
-5. Verify you see real-time transcription
+5. Verify you see transcription after stopping
 
 ---
 
@@ -276,11 +189,10 @@ You should see "Connected!" followed by a `{"type":"ready",...}` message.
 - Verify the speech server is running (check platform logs)
 - Ensure no firewall is blocking WebSocket connections
 
-### "Google API error: invalid_grant"
+### "Wispr API error"
 
-- The service account credentials may have expired
-- Re-download the JSON key from Google Cloud Console
-- Update the environment variables
+- Verify `WISPR_API_KEY` is set correctly
+- Check that the API key is valid and has not expired
 
 ### "Connection timeout"
 
@@ -295,37 +207,8 @@ You should see "Connected!" followed by a `{"type":"ready",...}` message.
 
 ---
 
-## Architecture Notes
-
-### Why No Redis/State Synchronization Needed
-
-Unlike chat applications, the speech server sessions are **stateless and isolated**:
-
-- Each user's spelling session is independent
-- No cross-user communication
-- No shared state between sessions
-- Each WebSocket connection = one Google gRPC stream
-
-This means you can scale horizontally without Redis Pub/Sub or other coordination mechanisms. Each instance handles its own connections independently.
-
-### Scaling Math
-
-| Concurrent Users | Platform | Instances | Monthly Cost |
-|------------------|----------|-----------|--------------|
-| 100 | Railway | 1 | $5-20 |
-| 1,000 | Railway | 1 | $20-50 |
-| 3,000+ | Cloud Run | 1+ | $65+ |
-| 10,000 | Cloud Run | ~100 | ~$1,000 |
-
-**Note:** "Concurrent" means actively recording at the same moment. With 8% concurrency ratio:
-- 1,000 concurrent = ~12,500 hourly active users
-- 3,000 concurrent = ~37,500 hourly active users
-
----
-
 ## Security Notes
 
-1. **Never commit credentials** - Use environment variables or secrets management
-2. **Restrict service account permissions** - Only grant Speech-to-Text access
-3. **Consider API key restrictions** - Limit by IP or referrer in production
-4. **Use WSS (WebSocket Secure)** - Always use `wss://` in production
+1. **Never commit credentials** — Use environment variables or secrets management
+2. **Use WSS (WebSocket Secure)** — Always use `wss://` in production
+3. **API key stays server-side** — The `WISPR_API_KEY` is never sent to the browser

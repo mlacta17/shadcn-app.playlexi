@@ -86,7 +86,8 @@ export type ServerMessage =
 // =============================================================================
 
 /**
- * Word-level timing information from Google Speech.
+ * Word-level timing information.
+ * Kept in the protocol for compatibility; Wispr sends empty arrays.
  */
 export interface WordTiming {
   word: string
@@ -96,50 +97,65 @@ export interface WordTiming {
 }
 
 // =============================================================================
-// GOOGLE SPEECH API TYPES
+// WISPR FLOW API TYPES
 // =============================================================================
 
 /**
- * Google Speech streaming configuration.
+ * Wispr config/auth message sent after WebSocket connection opens.
  */
-export interface StreamingConfig {
-  languageCode: string
-  sampleRateHertz: number
-  encoding: "LINEAR16" | "WEBM_OPUS"
-  enableWordTimeOffsets: boolean
-  enableAutomaticPunctuation: boolean
-  model: string
-  useEnhanced: boolean
-  speechContexts?: Array<{
-    phrases: string[]
-    boost?: number
-  }>
+export interface WisprConfigMessage {
+  status: "config"
+  language: string
+  dictionary_context: string[]
 }
 
 /**
- * Parsed word timing from Google's protobuf response.
+ * Wispr append message — sends a chunk of base64-encoded WAV audio.
  */
-export interface GoogleWordInfo {
-  word?: string
-  startTime?: {
-    seconds?: string | number
-    nanos?: number
-  }
-  endTime?: {
-    seconds?: string | number
-    nanos?: number
-  }
+export interface WisprAppendMessage {
+  status: "append"
+  audio: string // base64-encoded WAV
+  position: number // monotonically incrementing packet counter
 }
 
 /**
- * Parsed result from Google's streaming response.
+ * Wispr commit message — signals end of audio stream.
  */
-export interface GoogleStreamingResult {
-  alternatives?: Array<{
-    transcript?: string
-    confidence?: number
-    words?: GoogleWordInfo[]
-  }>
-  isFinal?: boolean
-  stability?: number
+export interface WisprCommitMessage {
+  status: "commit"
+  position: number // total packet count
 }
+
+/**
+ * Wispr text response — interim or final transcription result.
+ */
+export interface WisprTextResponse {
+  status: "text"
+  text: string
+  final: boolean
+  confidence?: number
+}
+
+/**
+ * Wispr auth/config acknowledgement response.
+ */
+export interface WisprAuthResponse {
+  status: "auth" | "config_ok"
+}
+
+/**
+ * Wispr error response.
+ */
+export interface WisprErrorResponse {
+  status: "error"
+  message?: string
+  error?: string
+}
+
+/**
+ * Union of all Wispr server responses.
+ */
+export type WisprServerMessage =
+  | WisprTextResponse
+  | WisprAuthResponse
+  | WisprErrorResponse

@@ -23,7 +23,7 @@
  * This hook handles complex anti-cheat detection that requires:
  *
  * 1. **Timing correlation**: Letter appearance times must match audio timestamps
- * 2. **Provider abstraction**: Google Cloud vs Web Speech API differences
+ * 2. **Provider abstraction**: Wispr Flow vs Web Speech API differences
  * 3. **Audio pipeline state**: MediaStream, AudioContext, AnalyserNode lifecycle
  * 4. **Metrics calculation**: Multiple timing signals computed at stop time
  *
@@ -34,18 +34,18 @@
  *
  * Two methods to detect if user spelled or said the word:
  *
- * 1. **Transcript timing** (less reliable): When letters appear in transcript
- * 2. **Audio word timing** (more reliable): Google's word-level timestamps
+ * 1. **Transcript timing**: When letters appear in transcript
+ * 2. **Audio word timing**: Word-level timestamps (when available)
  *
- * Spelling "C-A-T": Multiple word segments with ~200ms gaps
- * Saying "cat": Single continuous word segment, no gaps
+ * Note: Wispr Flow does not provide word-level timestamps.
+ * Anti-cheat defaults to trusting the user (looksLikeSpellingFromAudio: true).
  *
  * ## Related Files
  *
  * - lib/speech-recognition-service.ts — Provider abstraction layer
- * - lib/providers/google-speech-provider.ts — Google Cloud implementation
+ * - lib/providers/wispr-speech-provider.ts — Wispr Flow implementation
  * - lib/answer-validation.ts — extractLettersFromVoice, validateAnswer
- * - speech-server/ — WebSocket server for Google Speech streaming
+ * - speech-server/ — WebSocket server for Wispr Flow streaming
  *
  * @see ADR-011 — Speech Recognition Provider Selection
  */
@@ -99,15 +99,13 @@ export interface LetterTiming {
 }
 
 /**
- * Audio-level word timing from Google Cloud Speech-to-Text.
- * This is the RELIABLE anti-cheat signal because it's based on actual audio,
+ * Audio-level word timing from speech recognition.
+ * When available, this is a reliable anti-cheat signal based on actual audio,
  * not transcript arrival time (which depends on provider buffering).
  *
- * The key insight:
- * - **Spelling "C-A-T"**: Multiple word segments with gaps in the audio
- *   e.g., "c" at 0.1-0.3s, "a" at 0.5-0.7s, "t" at 0.9-1.1s (gaps of 0.2s)
- * - **Saying "cat"**: One continuous word segment
- *   e.g., "cat" at 0.1-0.5s (no gaps)
+ * Note: Wispr Flow does not provide word-level timestamps.
+ * This data will be empty when using the Wispr provider, and anti-cheat
+ * defaults to trusting the user.
  */
 export interface AudioWordTiming {
   /** The word/letter recognized */
@@ -129,13 +127,13 @@ export interface AudioWordTiming {
  * Tracks when letters appear in the transcript. Problem: Some providers buffer
  * spelled letters and return complete words, so all letters appear at once.
  *
- * ### 2. Audio Word Timing (More Reliable)
- * Uses Google Cloud Speech-to-Text's word-level timestamps from the actual audio.
+ * ### 2. Audio Word Timing (When Available)
+ * Uses word-level timestamps from the actual audio (provider-dependent).
  * - Spelling produces multiple word segments with gaps
  * - Saying produces one continuous word segment
  *
- * The audio-based approach is PROVIDER-INDEPENDENT because it measures
- * the actual sound, not how the provider chooses to assemble the transcript.
+ * Note: Wispr Flow does not provide word-level timestamps. When empty,
+ * anti-cheat defaults to trusting the user (looksLikeSpellingFromAudio: true).
  */
 export interface StopRecordingMetrics {
   /** Speech duration in milliseconds (first to last speech) */
@@ -254,16 +252,16 @@ export interface UseSpeechRecognitionReturn {
  * Speech recognition hook with provider abstraction.
  *
  * Automatically selects the best available provider:
- * 1. Google Cloud Speech-to-Text (if speech server running) — ~95-98% accuracy with speech context boosting
+ * 1. Wispr Flow (if speech server running) — best accuracy with dictionary context
  * 2. Web Speech API (fallback) — ~70-80% accuracy, no anti-cheat support
  *
  * ## Features
  * - Real-time transcript updates with optional throttling
  * - Audio visualization via analyserNode (shared with provider)
- * - Automatic keyword boosting for spelling (Google speech context)
+ * - Automatic keyword boosting for spelling (dictionary context)
  * - Graceful fallback between providers
  * - Zero duplicate media streams (reuses provider's audio pipeline)
- * - Async provider detection (Google requires WebSocket server check)
+ * - Async provider detection (Wispr requires WebSocket server check)
  *
  * ## Usage
  * ```tsx
@@ -320,7 +318,7 @@ export function useSpeechRecognition(
   const onErrorRef = React.useRef(onError)
 
   // Final transcript ref - stores the FINAL result from the provider
-  // This is critical because Google sends interim results in chunks, and the
+  // This is critical because providers send interim results in chunks, and the
   // interim result at any moment may be incomplete (e.g., "a t" instead of "c a t")
   // The final result is authoritative and should be used for answer validation.
   const finalTranscriptRef = React.useRef<string | null>(null)
@@ -341,12 +339,11 @@ export function useSpeechRecognition(
   const letterTimingsRef = React.useRef<LetterTiming[]>([])
   const lastLetterCountRef = React.useRef<number>(0)
 
-  // Audio word timing tracking (Google - MORE RELIABLE than transcript timing)
+  // Audio word timing tracking (when available — more reliable than transcript timing)
   // This tracks the actual audio timestamps, not transcript arrival
   const audioWordTimingsRef = React.useRef<AudioWordTiming[]>([])
 
-  // Provider-based anti-cheat detection
-  // Google uses multi-signal analysis (word count, gaps, duration per letter)
+  // Provider-based anti-cheat detection (empty with Wispr — defaults to trust)
   const providerBasedIsSpelledOutRef = React.useRef<boolean | null>(null)
   const lexicalValueRef = React.useRef<string>("")
 
@@ -362,15 +359,15 @@ export function useSpeechRecognition(
   }, [onTranscript, onError])
 
   // Check if supported - at minimum, sync providers are always checked
-  // Google support is determined at startRecording time via getSpeechProviderAsync
+  // Wispr support is determined at startRecording time via getSpeechProviderAsync
   const isSupported = React.useMemo(() => {
     try {
       // This checks sync providers (WebSpeech)
-      // Google availability is determined when we check the WebSocket server
+      // Wispr availability is determined when we check the WebSocket server
       const speechProvider = getSpeechProvider()
       return speechProvider.isSupported()
     } catch {
-      // Even if sync providers fail, Google might still be available
+      // Even if sync providers fail, Wispr might still be available
       // Return true to allow the async check in startRecording
       return true
     }
@@ -406,7 +403,7 @@ export function useSpeechRecognition(
     // The final result callback will resolve this promise.
     //
     // PERFORMANCE: Reduced timeout from 2000ms to 500ms because:
-    // 1. Google typically sends FINAL within 200-400ms after we send "stop"
+    // 1. Provider typically sends FINAL within 200-400ms after we send "stop"
     // 2. If FINAL doesn't arrive in 500ms, something is wrong anyway
     // 3. The interim transcript is usually accurate enough for validation
     // 4. Anti-cheat falls back to transcript-based timing if no audio data
@@ -477,7 +474,7 @@ export function useSpeechRecognition(
       averageLetterGapMs >= MIN_GAP_FOR_SPELLING // Multiple letters with gaps = spelling
 
     // =========================================================================
-    // Audio Word Timing Analysis (Google - More Reliable)
+    // Audio Word Timing Analysis (when available)
     // =========================================================================
     // Calculate gaps between words in the actual audio
     const audioWordTimings = [...audioWordTimingsRef.current]
@@ -491,23 +488,21 @@ export function useSpeechRecognition(
     // ==========================================================================
     // ANTI-CHEAT: Provider-Based Detection
     // ==========================================================================
-    // The speech provider (Google) analyzes word timing and sets
-    // _isSpelledOut based on multi-signal detection:
+    // The speech provider analyzes word timing (when available) and sets
+    // _isSpelledOut based on multi-signal detection.
     //
-    // Google Multi-signal analysis:
-    //   - Word count vs letter count
-    //   - Single-letter word ratio
-    //   - Gaps between words
-    //   - Total speech duration per letter
+    // Note: Wispr Flow does not provide word-level timestamps.
+    // When using Wispr, providerBasedIsSpelledOutRef stays null and
+    // the system defaults to trusting the user.
     //
     // Priority order:
-    // 1. Provider-based detection (Google) - PRIMARY
+    // 1. Provider-based detection - PRIMARY (if available)
     // 2. Audio timing fallback - if provider didn't set flag
     // 3. Default to trust - if no data available
 
     let looksLikeSpellingFromAudio = true // Default: trust the user
 
-    // PRIMARY: Use provider-based detection (Google)
+    // PRIMARY: Use provider-based detection (if available)
     if (providerBasedIsSpelledOutRef.current !== null) {
       looksLikeSpellingFromAudio = providerBasedIsSpelledOutRef.current
 
@@ -626,8 +621,8 @@ export function useSpeechRecognition(
       // Reset final transcript tracking
       finalTranscriptRef.current = null
 
-      // Get provider using async version to properly check Google availability
-      // Google requires an async check because it needs to verify the WebSocket server
+      // Get provider using async version to properly check Wispr availability
+      // Wispr requires an async check because it needs to verify the WebSocket server
       const speechProvider = await getSpeechProviderAsync()
       setProvider(speechProvider.name)
 
@@ -641,10 +636,9 @@ export function useSpeechRecognition(
         // =========================================================================
         // Word Timing Callback (for anti-cheat)
         // =========================================================================
-        // This is the KEY to reliable anti-cheat detection.
-        // Google returns actual audio timestamps for each word.
-        // - Spelling "C-A-T": Three separate words with gaps in audio
-        // - Saying "cat": One continuous word
+        // When available, providers return actual audio timestamps for each word.
+        // Note: Wispr Flow does not provide word timing; this callback
+        // will not be invoked, and anti-cheat defaults to trust.
         onWordTiming: (words) => {
           // Process incoming word timing data and calculate gaps
           // Words come in with start/end times from the actual audio
@@ -665,12 +659,8 @@ export function useSpeechRecognition(
           // =================================================================
           // Extract provider-based anti-cheat metadata
           // =================================================================
-          // Google attaches _isSpelledOut (boolean) and _lexical (string)
-          // to the first word timing entry using multi-signal analysis:
-          // - Word count vs letter count
-          // - Single-letter word ratio
-          // - Gaps between words
-          // - Duration per letter (min 0.15s)
+          // Provider attaches _isSpelledOut (boolean) and _lexical (string)
+          // to the first word timing entry (when word-level data is available).
           const firstWord = words[0] as typeof words[0] & {
             _isSpelledOut?: boolean
             _lexical?: string

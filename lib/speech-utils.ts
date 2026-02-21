@@ -4,10 +4,10 @@
  * Shared functions and constants used across speech providers.
  * Centralizes common operations to ensure consistency and reduce duplication.
  *
- * ## Relationship to speech-server/google-streaming.ts
+ * ## Relationship to speech-server/wispr-streaming.ts
  *
  * The LETTER_PHRASES and PHONETIC_LETTER_NAMES constants are also defined
- * in speech-server/google-streaming.ts for the standalone speech server.
+ * in speech-server/wispr-streaming.ts for the standalone speech server.
  *
  * **Why two copies?** The speech-server deploys independently to Railway/Cloud Run
  * with its own package.json. It can't import from this file because:
@@ -15,9 +15,9 @@
  * 2. It has extended disambiguation phrases not needed client-side
  *
  * **If you modify LETTER_PHRASES or PHONETIC_LETTER_NAMES, also update:**
- * - speech-server/google-streaming.ts (SPEECH_CONTEXT.phrases)
+ * - speech-server/wispr-streaming.ts (DICTIONARY_CONTEXT)
  *
- * @see speech-server/google-streaming.ts for the server-side version
+ * @see speech-server/wispr-streaming.ts for the server-side version
  */
 
 // =============================================================================
@@ -103,10 +103,9 @@ export const PHONETIC_LETTER_NAMES = [
 ] as const
 
 /**
- * Combined speech context for Google Cloud Speech-to-Text.
- * Includes both letter names and phonetic pronunciations with boost factor.
+ * Combined speech context for speech recognition.
+ * Includes both letter names and phonetic pronunciations.
  */
-export const GOOGLE_SPEECH_CONTEXT = {
+export const SPEECH_CONTEXT = {
   phrases: [...LETTER_PHRASES, ...PHONETIC_LETTER_NAMES],
-  boost: 20,
 } as const

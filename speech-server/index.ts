@@ -1,21 +1,21 @@
 /**
  * Speech Recognition WebSocket Server
  *
- * A dedicated server for real-time speech recognition using Google Cloud Speech-to-Text.
+ * A dedicated server for real-time speech recognition using Wispr Flow.
  *
  * ## Why a Separate Server?
  *
  * Next.js App Router doesn't support WebSockets in route handlers. To achieve
  * true real-time streaming, we need a persistent WebSocket connection that can
- * maintain a gRPC stream to Google.
+ * maintain a connection to Wispr Flow.
  *
  * ## How It Works
  *
  * 1. Client connects via WebSocket
  * 2. Client sends "start" message with language preference
- * 3. Server creates a gRPC stream to Google Speech
+ * 3. Server creates a WebSocket connection to Wispr Flow
  * 4. Client sends audio data as binary frames
- * 5. Server forwards audio to Google and streams results back
+ * 5. Server buffers audio, converts to WAV, and sends to Wispr
  * 6. Client sends "stop" message when done
  *
  * ## Running
@@ -35,8 +35,9 @@ import * as path from "path"
 import {
   createStreamingSession,
   validateCredentials,
+  warmupWispr,
   type StreamingSession,
-} from "./google-streaming"
+} from "./wispr-streaming"
 import type { ClientMessage, ServerMessage } from "./types"
 
 // =============================================================================
@@ -94,7 +95,7 @@ function startServer(): void {
   // Validate credentials before starting
   const creds = validateCredentials()
   if (!creds.valid) {
-    console.error("❌ Missing Google Cloud credentials:")
+    console.error("Missing Wispr Flow credentials:")
     creds.missing.forEach((field) => console.error(`   - ${field}`))
     console.error("\nSet these in your .env.local file.")
     process.exit(1)
@@ -107,14 +108,19 @@ function startServer(): void {
 ┌─────────────────────────────────────────────────────┐
 │           Speech Recognition Server                  │
 ├─────────────────────────────────────────────────────┤
-│  Status:    ✅ Running                               │
+│  Status:    Running                                  │
 │  Port:      ${PORT}                                      │
 │  Protocol:  WebSocket                                │
-│  Provider:  Google Cloud Speech-to-Text              │
+│  Provider:  Wispr Flow                               │
 ├─────────────────────────────────────────────────────┤
 │  Connect:   ws://localhost:${PORT}                       │
 └─────────────────────────────────────────────────────┘
 `)
+
+  // Non-blocking warm-up call to reduce first-request latency
+  warmupWispr().catch(() => {
+    // Warm-up failures are non-blocking; logged inside warmupWispr
+  })
 
   // Handle new connections
   wss.on("connection", (ws: WebSocket) => {
@@ -162,39 +168,33 @@ function startServer(): void {
 
           const language = message.language || "en-US"
           // Safari sends 44100 Hz to avoid sample rate switching latency.
-          // Others use 16000 Hz (Google's preferred rate for voice).
+          // Others use 16000 Hz (Wispr's preferred rate for voice).
           const sampleRate = message.sampleRate || 16000
           if (isDev) {
             console.log(`[Server] Starting session (language: ${language}, sampleRate: ${sampleRate}Hz)`)
           }
 
-          // Create new streaming session with client's sample rate
+          const apiKey = process.env.WISPR_API_KEY!
+
+          // Create new streaming session
           session = createStreamingSession(
+            apiKey,
             {
-              projectId: creds.projectId!,
-              clientEmail: creds.clientEmail!,
-              privateKey: process.env.GOOGLE_CLOUD_PRIVATE_KEY!.replace(/\\n/g, "\n"),
-            },
-            {
-              onInterimResult: (transcript, stability) => {
+              onInterimResult: (transcript) => {
                 const cleaned = cleanTranscript(transcript)
                 sendMessage(ws, {
                   type: "interim",
                   transcript: cleaned,
-                  stability,
                   timestamp: Date.now(),
                 })
               },
 
-              onFinalResult: (transcript, words, confidence) => {
+              onFinalResult: (transcript, confidence) => {
                 const cleaned = cleanTranscript(transcript)
                 sendMessage(ws, {
                   type: "final",
                   transcript: cleaned,
-                  words: words.map((w) => ({
-                    ...w,
-                    word: w.word.replace(/[.,!?;:'"]/g, "").trim(),
-                  })),
+                  words: [], // Wispr doesn't provide word-level timing
                   confidence,
                   timestamp: Date.now(),
                 })

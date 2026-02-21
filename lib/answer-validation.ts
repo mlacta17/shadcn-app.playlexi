@@ -62,14 +62,10 @@ export interface ValidationResult {
 // =============================================================================
 // ANTI-CHEAT NOTES
 // =============================================================================
-// Anti-cheat is now handled at the provider level (Google Cloud Speech-to-Text).
-// The provider uses multi-signal analysis:
-// 1. Word count vs letter count
-// 2. Single-letter word ratio
-// 3. Gaps between words
-// 4. Duration per letter (min 0.15s/letter)
-//
-// See lib/providers/google-speech-provider.ts for implementation.
+// Anti-cheat: Wispr Flow does not provide word-level timestamps.
+// When using Wispr, the system defaults to trusting the user
+// (looksLikeSpellingFromAudio: true) via the fallback path in
+// use-speech-recognition.ts. Transcript-based heuristics still apply.
 // =============================================================================
 
 /**
