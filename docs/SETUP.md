@@ -21,23 +21,19 @@ You'll need accounts with the following services:
 
 **Cost**: Free tier is generous (100k requests/day, 5GB D1 storage, 10GB R2)
 
-### 2. Google Cloud Platform (Required for Voice)
+### 2. Wispr Flow (Required for Voice)
 
 **Purpose**: Speech-to-Text API for voice recognition
 
-**Create account**: https://console.cloud.google.com
+**Get API key**: https://wisprflow.ai
 
 **Setup steps**:
-1. Create a new project (e.g., "playlexi")
-2. Enable the **Cloud Speech-to-Text API**
-3. Create a **Service Account** with Speech-to-Text permissions
-4. Download the JSON key file
-5. Extract these values for environment variables:
-   - `GOOGLE_CLOUD_PROJECT_ID` — Your project ID
-   - `GOOGLE_CLOUD_CLIENT_EMAIL` — Service account email
-   - `GOOGLE_CLOUD_PRIVATE_KEY` — Private key from JSON (keep the `\n` characters)
+1. Create a Wispr Flow account
+2. Generate an API key
+3. Add to environment variables:
+   - `WISPR_API_KEY` — Your Wispr Flow API key
 
-**Cost**: $0.006 per 15 seconds of audio. First 60 minutes/month free.
+**Cost**: See Wispr Flow pricing at https://wisprflow.ai
 
 ### 3. Merriam-Webster (Required for Words)
 
@@ -83,10 +79,8 @@ Key variables for local development:
 ```bash
 # .env.local
 
-# Google Cloud Speech-to-Text
-GOOGLE_CLOUD_PROJECT_ID=your-project-id
-GOOGLE_CLOUD_CLIENT_EMAIL=your-service-account@project.iam.gserviceaccount.com
-GOOGLE_CLOUD_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+# Wispr Flow (for voice recognition)
+WISPR_API_KEY=your-wispr-api-key
 
 # Merriam-Webster Dictionary API (two separate keys)
 MERRIAM_WEBSTER_LEARNERS_KEY=your-learners-api-key
@@ -170,7 +164,7 @@ npm run dev:all
 npm run dev
 ```
 
-**Terminal 2 — Speech server** (for Google Speech-to-Text):
+**Terminal 2 — Speech server** (for Wispr Flow voice recognition):
 ```bash
 npm run dev:speech
 ```
@@ -389,12 +383,11 @@ npm run db:seed
 
 This ensures a clean slate with a single database file.
 
-### "Google Speech API error"
+### "Wispr API error"
 
 Check that:
-1. The Speech-to-Text API is enabled in GCP
-2. Your service account has the correct permissions
-3. The private key includes newline characters (`\n`)
+1. `WISPR_API_KEY` is set correctly in `.env.local`
+2. Your API key is valid and has not expired
 
 ### "Speech server not connecting"
 
@@ -541,8 +534,8 @@ Without these secrets, the migration check is skipped (tests and build still run
          │                    │
          ▼                    ▼
 ┌──────────────────┐ ┌──────────────────┐
-│  Cloudflare D1   │ │  Google Speech   │
-│  (SQLite Edge)   │ │  API (gRPC)      │
+│  Cloudflare D1   │ │  Wispr Flow      │
+│  (SQLite Edge)   │ │  (WebSocket)     │
 └──────────────────┘ └──────────────────┘
 ```
 
@@ -594,11 +587,11 @@ If you use [Claude Code](https://claude.ai/code) and want to fetch designs direc
 | Cloudflare Workers | Free |
 | Cloudflare D1 | Free (under 5GB) |
 | Cloudflare R2 | ~$0.50 (10GB storage) |
-| Google Speech-to-Text | ~$20-50 (depending on usage) |
+| Wispr Flow | See Wispr pricing |
 | Merriam-Webster API | Free (non-commercial) |
 | Speech Server (Railway) | $5-50 |
 
-**Total**: ~$25-100/month for 1,000 DAU
+**Total**: Depends on Wispr usage + ~$5-50/month infrastructure
 
 ### Phase 2: 1,000-10,000 DAU (Cloud Run)
 
@@ -607,15 +600,15 @@ If you use [Claude Code](https://claude.ai/code) and want to fetch designs direc
 | Cloudflare Workers | Free |
 | Cloudflare D1 | ~$5-20 |
 | Cloudflare R2 | ~$1-5 |
-| Google Speech-to-Text | ~$50-400 |
+| Wispr Flow | See Wispr pricing |
 | Merriam-Webster API | Free (non-commercial) |
 | Speech Server (Cloud Run) | $65-200 |
 
-**Total**: ~$120-625/month for 1,000-10,000 DAU
+**Total**: Depends on Wispr usage + ~$70-225/month infrastructure
 
 ### Cost Optimization Notes
 
 - Words are pre-cached (zero runtime MW API calls)
 - Audio files are served from R2 (cheap object storage)
-- Google Speech only used during active voice input
+- Wispr Flow only used during active voice input
 - Speech server scales with actual usage

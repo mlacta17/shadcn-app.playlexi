@@ -11,12 +11,12 @@
  * 4. Wispr sends back interim and final text results
  * 5. Results are forwarded to the client via WebSocket
  *
- * ## Key Differences from Google
+ * ## Wispr Protocol
  *
- * - Audio sent as base64 WAV in JSON (not raw binary gRPC)
- * - No word-level timestamps (anti-cheat defaults to trust-the-user)
- * - WebSocket closes after final result (each session = one connection)
- * - Dictionary context as string array (not speechContexts with boost)
+ * Client → Wispr messages use `type` as discriminator: "auth", "append", "commit"
+ * Wispr → Client responses use `status` as discriminator: "auth", "text", "error", "info"
+ *
+ * @see https://api-docs.wisprflow.ai/websocket_api
  */
 
 import WebSocket from "ws"
@@ -35,7 +35,7 @@ const WISPR_WS_BASE = "wss://platform-api.wisprflow.ai/api/v1/dash/ws"
  * ## Relationship to lib/speech-utils.ts
  *
  * The base letter and phonetic phrases are duplicated from lib/speech-utils.ts.
- * See speech-server/wav-encoder.ts header comment for rationale on duplication.
+ * The speech-server deploys independently with its own package.json.
  *
  * **If you modify the base 26 letters or phonetic names, update both:**
  * - lib/speech-utils.ts (LETTER_PHRASES, PHONETIC_LETTER_NAMES)
@@ -53,11 +53,18 @@ const DICTIONARY_CONTEXT = [
 ]
 
 /**
+ * Packet duration in seconds.
+ * Each flush produces one packet of this duration.
+ * At 16kHz mono 16-bit: 0.032s = 1024 bytes (32ms chunks).
+ */
+const PACKET_DURATION_S = 0.032
+const BYTES_PER_PACKET = 1024 // 16000 Hz * 2 bytes * 0.032s
+
+/**
  * Flush interval in milliseconds.
- * At 16kHz mono 16-bit, 100ms = 3200 bytes.
+ * We flush accumulated packets at this interval.
  */
 const FLUSH_INTERVAL_MS = 100
-const BYTES_PER_FLUSH = 3200 // 16000 Hz * 2 bytes * 0.1s
 
 // =============================================================================
 // TYPES
@@ -108,11 +115,14 @@ export function createStreamingSession(
 ): StreamingSession {
   const { onInterimResult, onFinalResult, onError } = callbacks
 
+  // Consistent dev check — matches index.ts (true when NODE_ENV is undefined or "development")
+  const isDev = process.env.NODE_ENV !== "production"
+
   // Track state
   let isStreamActive = true
   let hasEnded = false
   let isAuthenticated = false
-  let packetPosition = 0
+  let totalPacketsSent = 0
   let pcmBuffer = Buffer.alloc(0)
   let flushTimer: ReturnType<typeof setInterval> | null = null
 
@@ -132,74 +142,115 @@ export function createStreamingSession(
   }
 
   /**
-   * Flush buffered PCM as a base64 WAV packet.
+   * Split PCM buffer into fixed-size packets and send as base64 WAV.
+   * Each packet is PACKET_DURATION_S seconds of audio.
+   * Wispr expects consistent packet durations.
    */
   function flushBuffer(): void {
     if (pcmBuffer.length === 0 || !isStreamActive) return
 
-    const chunk = pcmBuffer
-    pcmBuffer = Buffer.alloc(0)
+    // Split buffer into fixed-size packets
+    const packets: string[] = []
+    const volumes: number[] = []
 
-    const audioBase64 = pcmToBase64Wav(chunk, sampleRate)
-    packetPosition++
+    while (pcmBuffer.length >= BYTES_PER_PACKET) {
+      const chunk = pcmBuffer.subarray(0, BYTES_PER_PACKET)
+      pcmBuffer = pcmBuffer.subarray(BYTES_PER_PACKET)
+
+      packets.push(pcmToBase64Wav(Buffer.from(chunk), sampleRate))
+
+      // Calculate simple RMS volume for this chunk
+      let sumSquares = 0
+      for (let i = 0; i < chunk.length - 1; i += 2) {
+        const sample = chunk.readInt16LE(i) / 32768
+        sumSquares += sample * sample
+      }
+      volumes.push(Math.sqrt(sumSquares / (chunk.length / 2)))
+    }
+
+    if (packets.length === 0) return
+
+    // position = starting index of this batch (cumulative count BEFORE adding)
+    // e.g., first flush of 8 packets → position: 0, next flush → position: 8
+    const position = totalPacketsSent
+    totalPacketsSent += packets.length
 
     sendToWispr({
-      status: "append",
-      audio: audioBase64,
-      position: packetPosition,
+      type: "append",
+      position,
+      audio_packets: {
+        packets,
+        volumes,
+        packet_duration: PACKET_DURATION_S,
+        audio_encoding: "wav",
+        byte_encoding: "base64",
+      },
     })
   }
 
   // Handle Wispr WebSocket events
   wisprWs.on("open", () => {
-    if (process.env.NODE_ENV === "development") {
-      console.log("[WisprStreaming] Connected to Wispr Flow")
-    }
+    console.log("[WisprStreaming] Connected to Wispr Flow")
 
-    // Send authentication/config message
+    // Extract language code (Wispr expects array like ["en"])
+    const langCode = language.split("-")[0]
+
+    // Send auth message with dictionary context
     sendToWispr({
-      status: "config",
-      language,
-      dictionary_context: DICTIONARY_CONTEXT,
+      type: "auth",
+      language: [langCode],
+      context: {
+        app: { name: "PlayLexi", type: "other" },
+        dictionary_context: DICTIONARY_CONTEXT,
+      },
     })
+    console.log("[WisprStreaming] Auth message sent")
   })
 
   wisprWs.on("message", (data: WebSocket.Data) => {
     try {
       const message = JSON.parse(data.toString())
 
-      if (message.status === "auth" || message.status === "config_ok") {
-        // Wispr accepted our config
+      if (isDev) {
+        console.log("[WisprStreaming] Received:", JSON.stringify(message).slice(0, 200))
+      }
+
+      if (message.status === "auth") {
+        // Wispr accepted our auth
         isAuthenticated = true
 
         // Start the flush timer now that we're authenticated
         flushTimer = setInterval(flushBuffer, FLUSH_INTERVAL_MS)
 
-        if (process.env.NODE_ENV === "development") {
-          console.log("[WisprStreaming] Authenticated and ready")
-        }
+        console.log("[WisprStreaming] Authenticated — flush timer started")
       } else if (message.status === "text") {
-        const transcript = message.text || ""
+        // Transcript is inside body.text
+        const transcript = message.body?.text || ""
 
         if (message.final) {
           // Final result — Wispr closes WS after this
-          if (process.env.NODE_ENV === "development") {
-            console.log(`[WisprStreaming] FINAL: "${transcript}"`)
-          }
+          console.log(`[WisprStreaming] FINAL: "${transcript}"`)
           isStreamActive = false
-          onFinalResult(transcript, message.confidence || 0.9)
+          onFinalResult(transcript, 0.9)
         } else {
           // Interim result
-          if (process.env.NODE_ENV === "development") {
+          if (isDev) {
             console.log(`[WisprStreaming] interim: "${transcript}"`)
           }
           onInterimResult(transcript)
+        }
+      } else if (message.status === "info") {
+        if (isDev) {
+          console.log("[WisprStreaming] Info:", message.message?.event || message.message)
         }
       } else if (message.status === "error") {
         const errorMsg = message.message || message.error || "Wispr API error"
         console.error("[WisprStreaming] Error from Wispr:", errorMsg)
         isStreamActive = false
-        onError(new Error(errorMsg))
+        onError(new Error(typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg)))
+      } else {
+        // Unrecognized message — always log so we catch protocol changes
+        console.warn("[WisprStreaming] Unrecognized message:", JSON.stringify(message).slice(0, 300))
       }
     } catch (err) {
       console.error("[WisprStreaming] Failed to parse message:", err)
@@ -213,9 +264,7 @@ export function createStreamingSession(
   })
 
   wisprWs.on("close", () => {
-    if (process.env.NODE_ENV === "development") {
-      console.log("[WisprStreaming] WebSocket closed")
-    }
+    console.log("[WisprStreaming] WebSocket closed")
     isStreamActive = false
     if (flushTimer) {
       clearInterval(flushTimer)
@@ -238,28 +287,34 @@ export function createStreamingSession(
       if (hasEnded) return
       hasEnded = true
 
+      console.log(`[WisprStreaming] end() called — authenticated=${isAuthenticated}, buffer=${pcmBuffer.length}bytes, packets=${totalPacketsSent}`)
+
       // Stop the flush timer
       if (flushTimer) {
         clearInterval(flushTimer)
         flushTimer = null
       }
 
-      // Flush any remaining buffered audio
+      // Flush ALL remaining buffered audio, including partial packets.
+      // Pad the final partial packet with silence so Wispr receives a complete
+      // stream before the commit marker.
       if (pcmBuffer.length > 0 && isAuthenticated) {
+        if (pcmBuffer.length < BYTES_PER_PACKET) {
+          const padding = Buffer.alloc(BYTES_PER_PACKET - pcmBuffer.length)
+          pcmBuffer = Buffer.concat([pcmBuffer, padding])
+        }
         flushBuffer()
       }
 
       // Send commit to signal end of audio
       if (isAuthenticated && wisprWs.readyState === WebSocket.OPEN) {
-        packetPosition++
         sendToWispr({
-          status: "commit",
-          position: packetPosition,
+          type: "commit",
+          total_packets: totalPacketsSent,
         })
-
-        if (process.env.NODE_ENV === "development") {
-          console.log(`[WisprStreaming] Committed (${packetPosition} packets)`)
-        }
+        console.log(`[WisprStreaming] Committed (${totalPacketsSent} packets)`)
+      } else {
+        console.warn(`[WisprStreaming] Cannot commit — authenticated=${isAuthenticated}, wsState=${wisprWs.readyState}`)
       }
 
       // Give Wispr time to send final result, then close
@@ -271,7 +326,7 @@ export function createStreamingSession(
         } catch {
           // Ignore close errors
         }
-      }, 5000)
+      }, 10_000)
     },
 
     isActive: () => isStreamActive && !hasEnded,

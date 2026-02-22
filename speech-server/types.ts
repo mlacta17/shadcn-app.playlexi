@@ -99,48 +99,83 @@ export interface WordTiming {
 // =============================================================================
 // WISPR FLOW API TYPES
 // =============================================================================
+//
+// Client → Wispr messages use `type` as the discriminator.
+// Wispr → Client responses use `status` as the discriminator.
+//
+// @see https://api-docs.wisprflow.ai/websocket_api
+
+// --- Client → Wispr ---
 
 /**
- * Wispr config/auth message sent after WebSocket connection opens.
+ * Wispr auth message sent after WebSocket connection opens.
+ * Uses `type: "auth"` with language array and context object.
  */
-export interface WisprConfigMessage {
-  status: "config"
-  language: string
-  dictionary_context: string[]
+export interface WisprAuthMessage {
+  type: "auth"
+  language: string[] // e.g. ["en"]
+  context: {
+    app: { name: string; type: string }
+    dictionary_context: string[]
+  }
 }
 
 /**
- * Wispr append message — sends a chunk of base64-encoded WAV audio.
+ * Wispr append message — sends batched base64-encoded WAV audio packets.
  */
 export interface WisprAppendMessage {
-  status: "append"
-  audio: string // base64-encoded WAV
-  position: number // monotonically incrementing packet counter
+  type: "append"
+  position: number // starting index of this batch (cumulative packets sent before this append)
+  audio_packets: {
+    packets: string[] // base64-encoded WAV chunks
+    volumes: number[] // RMS volume per packet
+    packet_duration: number // seconds per packet (e.g. 0.032)
+    audio_encoding: "wav"
+    byte_encoding: "base64"
+  }
 }
 
 /**
  * Wispr commit message — signals end of audio stream.
  */
 export interface WisprCommitMessage {
-  status: "commit"
-  position: number // total packet count
+  type: "commit"
+  total_packets: number
 }
+
+/**
+ * Union of all client → Wispr messages.
+ */
+export type WisprClientMessage =
+  | WisprAuthMessage
+  | WisprAppendMessage
+  | WisprCommitMessage
+
+// --- Wispr → Client ---
 
 /**
  * Wispr text response — interim or final transcription result.
+ * Transcript is nested inside `body.text`.
  */
 export interface WisprTextResponse {
   status: "text"
-  text: string
+  body: { text: string }
   final: boolean
-  confidence?: number
 }
 
 /**
- * Wispr auth/config acknowledgement response.
+ * Wispr auth acknowledgement response.
  */
 export interface WisprAuthResponse {
-  status: "auth" | "config_ok"
+  status: "auth"
+}
+
+/**
+ * Wispr info response (e.g., commit_received).
+ */
+export interface WisprInfoResponse {
+  status: "info"
+  message?: { event: string } | string
 }
 
 /**
@@ -148,14 +183,15 @@ export interface WisprAuthResponse {
  */
 export interface WisprErrorResponse {
   status: "error"
-  message?: string
+  message?: string | Record<string, unknown>
   error?: string
 }
 
 /**
- * Union of all Wispr server responses.
+ * Union of all Wispr → Client responses.
  */
 export type WisprServerMessage =
   | WisprTextResponse
   | WisprAuthResponse
+  | WisprInfoResponse
   | WisprErrorResponse

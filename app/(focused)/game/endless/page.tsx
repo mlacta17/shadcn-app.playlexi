@@ -128,8 +128,8 @@ export default function EndlessGamePage() {
   // ---------------------------------------------------------------------------
   // Voice Recording
   // ---------------------------------------------------------------------------
-  // Uses provider abstraction: Google Cloud Speech (~95%+) > Web Speech API (fallback)
-  // Google is selected automatically if speech server is running (npm run dev:speech)
+  // Uses provider abstraction: Wispr Flow > Web Speech API (fallback)
+  // Wispr is selected automatically if speech server is running (npm run dev:speech)
   const {
     isRecording,
     startRecording,
@@ -203,7 +203,6 @@ export default function EndlessGamePage() {
   const submitCurrentAnswer = React.useCallback(async () => {
     // Prevent double-submission
     if (hasSubmittedRef.current) return
-    if (!transcript) return
     if (gameState.phase !== "playing") return
 
     hasSubmittedRef.current = true
@@ -214,18 +213,24 @@ export default function EndlessGamePage() {
       autoSubmitTimeoutRef.current = null
     }
 
-    // Stop recording and wait for FINAL result (with word timing)
-    // This is critical for anti-cheat: we MUST wait for the final result
-    // because word timing data only arrives with the final recognition result
+    // Stop recording and wait for FINAL result.
+    // IMPORTANT: Always stop first, even if transcript is currently empty.
+    // Wispr Flow sends its FINAL result only after we commit (via stop),
+    // so the transcript may arrive during this await.
     const metrics = await stopRecording()
 
+    // Use the authoritative final transcript from stopRecording.
+    // This includes any FINAL result that arrived after the commit signal.
+    // Fall back to the React state transcript (from interim results).
+    const finalText = metrics.finalTranscript || transcript
+    if (!finalText) return // Truly no transcript (Wispr heard nothing)
+
     // Store transcript for logging after validation
-    lastSubmittedTranscriptRef.current = transcript
+    lastSubmittedTranscriptRef.current = finalText
 
     // Submit answer with timing data for anti-cheat validation
-    // Priority: audio timing (from Google word timestamps) > letter timing (fallback)
     // Also pass user-specific phonetic mappings for personalized recognition
-    gameActions.submitAnswer(transcript, {
+    gameActions.submitAnswer(finalText, {
       // PRIMARY: Audio-level timing from speech provider (more reliable)
       audioTiming: {
         wordCount: metrics.audioWordCount,

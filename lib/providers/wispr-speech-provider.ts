@@ -143,64 +143,49 @@ export class WisprSpeechProvider implements ISpeechRecognitionProvider {
     let lastTranscript = ""
 
     /**
-     * Cleanup all resources safely.
+     * Stop audio capture (mic, processor, audio context).
+     * Called immediately on stop() so we don't keep sending audio,
+     * but the WebSocket stays open to receive the final result from Wispr.
+     */
+    const stopAudioCapture = () => {
+      if (scriptProcessor) {
+        try { scriptProcessor.disconnect() } catch { /* ignore */ }
+        scriptProcessor = null
+      }
+      if (analyserNode) {
+        try { analyserNode.disconnect() } catch { /* ignore */ }
+      }
+      if (audioContext && audioContext.state !== "closed") {
+        try { audioContext.close() } catch { /* ignore */ }
+        audioContext = null
+      }
+      if (mediaStream) {
+        try { mediaStream.getTracks().forEach((track) => track.stop()) } catch { /* ignore */ }
+        mediaStream = null
+      }
+    }
+
+    /**
+     * Final cleanup — close the WebSocket and release all resources.
+     * Called after the final result arrives or on safety timeout.
      */
     const cleanup = () => {
       if (isClosed) return
       isClosed = true
       isActive = false
 
-      // Close WebSocket
+      // Close WebSocket (don't re-send "stop" — already sent in stop())
       if (ws) {
         try {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: "stop" }))
+          if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
             ws.close()
           }
-        } catch {
-          // Ignore
-        }
+        } catch { /* ignore */ }
         ws = null
       }
 
-      // Stop audio processing
-      if (scriptProcessor) {
-        try {
-          scriptProcessor.disconnect()
-        } catch {
-          // Ignore
-        }
-        scriptProcessor = null
-      }
-
-      // Stop analyser
-      if (analyserNode) {
-        try {
-          analyserNode.disconnect()
-        } catch {
-          // Ignore
-        }
-      }
-
-      // Close audio context
-      if (audioContext && audioContext.state !== "closed") {
-        try {
-          audioContext.close()
-        } catch {
-          // Ignore
-        }
-        audioContext = null
-      }
-
-      // Stop media stream
-      if (mediaStream) {
-        try {
-          mediaStream.getTracks().forEach((track) => track.stop())
-        } catch {
-          // Ignore
-        }
-        mediaStream = null
-      }
+      // Stop any remaining audio resources
+      stopAudioCapture()
     }
 
     try {
@@ -269,14 +254,18 @@ export class WisprSpeechProvider implements ISpeechRecognitionProvider {
                 // via the fallback path in use-speech-recognition.ts
                 onFinalResult?.(text)
               }
+              // Final result received — safe to close the WebSocket now
+              cleanup()
               break
 
-            case "error":
+            case "error": {
               console.error("[Wispr] Server error:", message.message)
               const friendlyError = toSpeechFriendlyError(message.message || "Recognition error")
               console.error("[Wispr] Technical details:", friendlyError.technicalDetails)
               onError?.(new Error(friendlyError.title))
+              cleanup()
               break
+            }
           }
         } catch (err) {
           console.error("[Wispr] Failed to parse message:", err)
@@ -363,13 +352,18 @@ export class WisprSpeechProvider implements ISpeechRecognitionProvider {
             console.log("[Wispr] Stopping session")
           }
 
-          // Send stop message to get final results
+          // Send stop to server (triggers Wispr commit)
           if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: "stop" }))
           }
 
-          // Wait a moment for final results then cleanup
-          setTimeout(cleanup, 500)
+          // Stop audio capture immediately (no more data to send)
+          // but keep the WebSocket OPEN to receive the final result from Wispr.
+          stopAudioCapture()
+
+          // Safety timeout: if Wispr doesn't respond within 10s, cleanup anyway.
+          // Normal path: cleanup is called from onmessage when "final" arrives.
+          setTimeout(cleanup, 10_000)
         },
         get isActive() {
           return isActive && !isClosed

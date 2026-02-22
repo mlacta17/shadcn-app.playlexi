@@ -136,6 +136,8 @@ export interface AudioWordTiming {
  * anti-cheat defaults to trusting the user (looksLikeSpellingFromAudio: true).
  */
 export interface StopRecordingMetrics {
+  /** The final transcript text (may arrive after stop via Wispr's FINAL result) */
+  finalTranscript: string
   /** Speech duration in milliseconds (first to last speech) */
   durationMs: number
   /** Number of interim results received (spelling = more results) */
@@ -400,19 +402,17 @@ export function useSpeechRecognition(
     }
 
     // Wait for FINAL result to arrive (with timeout)
-    // The final result callback will resolve this promise.
+    // The onFinalResult or onWordTiming callback will resolve this promise early.
     //
-    // PERFORMANCE: Reduced timeout from 2000ms to 500ms because:
-    // 1. Provider typically sends FINAL within 200-400ms after we send "stop"
-    // 2. If FINAL doesn't arrive in 500ms, something is wrong anyway
-    // 3. The interim transcript is usually accurate enough for validation
-    // 4. Anti-cheat falls back to transcript-based timing if no audio data
-    const MAX_WAIT_MS = 500 // Reduced from 2000ms for better responsiveness
+    // Wispr Flow processes audio batch-style after receiving the commit message,
+    // so the final result typically arrives 1-3 seconds after stop. The promise
+    // resolves immediately when the final arrives — MAX_WAIT_MS is only a safety net.
+    const MAX_WAIT_MS = 5000
     const finalResultReceived = providerBasedIsSpelledOutRef.current !== null
 
     if (!finalResultReceived) {
       if (process.env.NODE_ENV === "development") {
-        console.log("[Speech] Waiting for FINAL result (max 500ms)...")
+        console.log(`[Speech] Waiting for FINAL result (max ${MAX_WAIT_MS}ms)...`)
       }
 
       await new Promise<void>((resolve) => {
@@ -567,6 +567,10 @@ export function useSpeechRecognition(
       }
     }
 
+    // Capture final transcript before resetting refs.
+    // This may have been set by onFinalResult during the FINAL-wait above.
+    const finalTranscript = finalTranscriptRef.current || ""
+
     // Session was already stopped at the beginning of cleanup()
     sessionRef.current = null
 
@@ -585,12 +589,13 @@ export function useSpeechRecognition(
     setIsRecording(false)
 
     return {
+      finalTranscript,
       durationMs: speechDuration,
       interimCount: finalInterimCount,
       letterTimings,
       averageLetterGapMs,
       looksLikeSpelling,
-      // NEW: Audio-level timing (more reliable)
+      // Audio-level timing (more reliable when available)
       audioWordTimings,
       audioWordCount,
       avgAudioGapSec,
@@ -600,6 +605,15 @@ export function useSpeechRecognition(
 
   // Start recording
   const startRecording = React.useCallback(async () => {
+    // Prevent double-start: if a session is already active, don't create another.
+    // This avoids orphaned Wispr sessions that never receive a stop/commit.
+    if (sessionRef.current) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn("[Speech] startRecording called while session already active — ignoring")
+      }
+      return
+    }
+
     try {
       setError(null)
       setTranscript("")
@@ -678,8 +692,8 @@ export function useSpeechRecognition(
               )
             }
 
-            // Resolve the promise waiting for final results
-            // This allows stopRecording() to return with valid anti-cheat data
+            // Resolve the promise waiting for final results (word-timing path).
+            // For providers with word timing, this fires before onFinalResult.
             if (finalResultResolverRef.current) {
               if (process.env.NODE_ENV === "development") {
                 console.log("[Speech] FINAL result received, resolving stopRecording promise")
@@ -780,6 +794,18 @@ export function useSpeechRecognition(
           setTranscript(text)
           // Use ref for stable callback reference
           onTranscriptRef.current?.(text)
+
+          // Resolve the stopRecording promise so it can proceed with validation.
+          // This is the primary resolution path for providers like Wispr Flow
+          // that don't send word-level timing (onWordTiming never fires).
+          if (finalResultResolverRef.current) {
+            if (process.env.NODE_ENV === "development") {
+              console.log("[Speech] FINAL result received (onFinalResult), resolving stopRecording promise")
+            }
+            const resolver = finalResultResolverRef.current
+            finalResultResolverRef.current = null
+            resolver()
+          }
         },
         onError: (err) => {
           setError(err)
